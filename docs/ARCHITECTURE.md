@@ -47,7 +47,7 @@ refs/                 # 用户提供的布局参考图
 - 端点：`{base}/v1/images/generations` 与 `{base}/v1/images/edits`（multipart：image[] 多参考图）。
 - 鉴权：`Authorization: Bearer $OPENAI_API_KEY`；base 取 `$OPENAI_BASE_URL`（默认 `https://api.openai.com`）。**凭证只从环境读，不存储。**
 - 响应：`b64_json` 优先；失败重试（429/5xx 指数退避，最多 3 次）；错误要带 HTTP 状态与响应体摘要。
-- 生成参数映射：`model=gpt-image-2`、`size`、`quality`（默认 high）、`n`、`thinking`（默认 medium，字段以服务端实际接受为准，做可选透传）、`seed`（可选）。
+- 生成参数映射：`model=gpt-image-2`、`size`、`quality`（默认 low，探索档；high 需显式）、`n`、`thinking`（默认 medium，字段以服务端实际接受为准，做可选透传）、`seed`（省略时自动生成并随 plan/lineage/候选/manifest 记录，保证可复现）。
 - **DryRun 模式**：`ImageClient::dry_run` 只返回将要发送的 URL、参数 JSON、multipart 结构，不发请求。CLI 默认 dry-run，`--yes` 才真实调用；桌面端真实调用。
 - 超时：生成 300s；测试环境可注入 mock server。
 
@@ -60,22 +60,25 @@ refs/                 # 用户提供的布局参考图
 ## 6. CLI 命令集（rudder-cli）
 ```
 rudder init <name> [--size web|mobile|desktop|WxH] [--dir <path>] [--brief "..."]
-rudder board generate [--n 4] [--quality high] [--yes]
+rudder project update [--name <n>] [--brand-brief <s>] [--style-brief <s>]
+rudder board generate [--n 4] [--quality low] [--seed <int>] [--yes]
 rudder board pick <candidate-id>          # 设为锚点
 rudder page add <slug> --brief "..."
+rudder page update <slug> --brief "..."   # 改布局简报（免手编 project.json）
 rudder page generate <slug|--all> [--n 1-4] [--yes]
 rudder page pick <slug> <candidate-id>    # 候选→主稿（旧主稿入 history/）
 rudder component add <name> --type <t> --brief "..."
+rudder component update <name> [--type <t>] [--brief "..."]
 rudder component generate <name|--all> [--n 1-4] [--yes]
 rudder component pick <name> <candidate-id>
 rudder list [pages|components]            # status 概览
-rudder export [--out <dir>]               # 资产包：图片+manifest.json+PROMPTS.md+DESIGN.template.md
+rudder export [--out <dir>] [--with-candidates]  # 默认只带 anchor/主稿；候选需显式带上
 rudder e2e [--yes]                        # 冒烟：建样例项目→总板→1页→1组件→导出
 rudder config get|set <key> <value>       # quality/thinking/n 等默认值，存 ~/Rudder/config.json（不含密钥）
 ```
-🆕 调研吸收（docs/RESEARCH.md）：页面/组件生成同样支持 `--n` 多候选（同 batch 共享风格，superdesign 多稿哲学）；候选命名 `candidates/NNNN.png`，选中即主稿。export 额外产出 `DESIGN.template.md`（项目元数据+全部图片相对路径+待填 token 表骨架），作为 AI 代理撰写 DESIGN.md 的契约底稿。
+🆕 调研吸收（docs/RESEARCH.md）：页面/组件生成同样支持 `--n` 多候选（同 batch 共享风格，superdesign 多稿哲学）；候选命名 `candidates/NNNN.png`，选中即主稿。export 额外产出 `DESIGN.template.md`（项目元数据+全部图片相对路径+待填 token 表骨架），作为 AI 代理撰写 DESIGN.md 的契约底稿。已生成未 pick 的目标在 export 时以 stderr `warning:` 与 `--json data.warnings` 提示（不阻断）。
 全局：`--project <path>`（默认 cwd 或最近项目）、`--dry-run`、`--json`（机器可读输出，Skill 用）。
-输出纪律：**数据走 stdout、日志走 stderr**；人类模式一行摘要；`--json` 时 stdout 输出 `{ok, data|error{code,message,hint}}`；退出码 0 成功 / 1 参数错 / 2 API 错（429/配额归此类） / 3 项目状态错（如未设锚点就生成页面）。
+输出纪律：**人类模式一行摘要走 stdout，日志/警告/错误走 stderr**；`--json` 时 stdout 输出 `{ok, data|error{code,message,hint}}`；生成类响应统一 `{dryRun, kind, target, plan, candidates:[{id,file,seed,size,quality}]}`（prompt 只在 plan.params.prompt 出现一次；`--all` 时包一层 `results[]`）；退出码 0 成功 / 1 参数错 / 2 API 错（429/配额归此类） / 3 项目状态错（如未设锚点就生成页面）。
 
 ## 7. 桌面应用（React）
 - 三栏极简布局：左「项目列表+新建」/ 中「画廊（board 候选、页面、组件的分区网格）」/ 右「详情与操作（简报表单、生成按钮、历史版本）」。

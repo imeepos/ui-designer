@@ -38,12 +38,14 @@ rudder init "<Project Name>" --size web --brief "<brand: industry, mood, palette
 ```bash
 rudder board generate --n 3 --quality low --yes
 ```
+Every batch records its `seed` (plan, candidates, manifest) — replay or
+up-res any candidate with `--seed <recorded>`.
 VIEW every PNG under `board/candidates/` (read the image files). Judge:
 palette usability, type hierarchy, component samples, CJK text quality.
 Pick the best: `rudder board pick <candidate-id>`.
 If all are weak, diagnose the brief (too vague / conflicting adjectives),
-refine it in `project.json` `styleBrief`, regenerate. Do not proceed without
-an anchor — page/component generation exits code 3.
+amend it with `rudder project update --style-brief "<refined>"`, regenerate.
+Do not proceed without an anchor — page/component generation exits code 3.
 
 ### 3. Pages
 ```bash
@@ -55,8 +57,9 @@ content ("top nav 5 items: …, left sidebar with 4 KPI cards: …, main chart
 area, right panel task list"). The model renders labeled UI reliably; vague
 briefs produce pretty posters that cannot be implemented.
 Review `pages/<slug>/candidates/`, then promote the winner:
-`rudder page pick <slug> <candidate-id>`. Regenerate with an amended brief to
-iterate; history is kept automatically.
+`rudder page pick <slug> <candidate-id>`. To iterate, amend the brief with
+`rudder page update <slug> --brief "<amended>"` and regenerate; history is
+kept automatically.
 
 ### 4. Components
 ```bash
@@ -67,9 +70,13 @@ rudder component generate button-set --quality low --yes
 Same review loop: view → `rudder component pick <name> <candidate-id>`.
 
 ### 5. Finals, export, DESIGN.md contract
-1. Regenerate the chosen anchor + 2-4 key pages with `--quality high`.
-2. `rudder export --out ./design-export` → images + `manifest.json` +
-   `PROMPTS.md` + `DESIGN.template.md`.
+1. Regenerate the chosen anchor + 2-4 key pages with `--quality high`
+   (explicit — the default tier is `low`).
+2. `rudder export --out ./design-export` → anchor + picked currents +
+   `manifest.json` + `PROMPTS.md` + `DESIGN.template.md`. Export warns on
+   stderr (and `data.warnings` with `--json`) about generated-but-unpicked
+   targets — resolve them before shipping; add `--with-candidates` only when
+   exploration drafts are wanted.
 3. VIEW every exported image, then fill `DESIGN.template.md` into a
    `DESIGN.md` (tokens: palette hexes sampled from the board, type scale,
    radius, spacing, component specs). Rules: **every value must come from the
@@ -79,7 +86,12 @@ Same review loop: view → `rudder component pick <name> <candidate-id>`.
 ## Hard rules
 
 - Real spends need `--yes`. Default to `--dry-run` while exploring flags.
-- `--json` for machine reading: stdout is `{ok, data|error}`; logs go to stderr.
+- Generation defaults to `--quality low`; pass `--quality high` explicitly
+  for finals only.
+- Human mode: a one-line summary lands on stdout; logs/warnings/errors go to
+  stderr. `--json` for machine reading: stdout is `{ok, data|error}`.
+- Amend briefs with the `update` subcommands — never hand-edit
+  `project.json`.
 - Never put secrets in commands, logs, or committed files.
 - One project = one style universe. Never mix candidates from different
   boards in one export.

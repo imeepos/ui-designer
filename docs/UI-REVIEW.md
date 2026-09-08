@@ -60,3 +60,18 @@
 - **主色口径**：采纳锚点图色系——primary `#0B3D91`（深海军蓝）、accent `#D4A017`（琥珀金）、background `#FAFAF8`（纸白）、foreground `#2F3A44`（墨石）。THEME.md §2 与 src/index.css 同步修订；dark 模式派生可自行发挥，负责人截图终审。
 - **圆角口径**：采纳锚点图四档——按钮 4px / 输入 6px / 卡片 8px / 弹窗 12px；THEME.md §4 与 --radius 派生同步修订。
 - **字阶**：维持 THEME 12/13/14/18/24（高密度工具 UI），不采图片 16px body（见改进项 6）。
+
+## Phase 5 整改记录（builder-release 会话）
+
+| 缺陷 | 处置 | 测试 |
+|---|---|---|
+| 1 board 候选缺 seed | `--seed` 省略时自动生成并记录：plan.params / project.json lineage / 候选行 / manifest board 候选（含 pages 对称的恒有 seed 键） | ops `generation_params_always_carry_a_seed`、`board_generate_report_candidates_carry_seed_and_shape`；cli `real_generate_is_reproducible_symmetric_and_prompt_deduped` |
+| 2 无 update 子命令 | 新增 `project update` / `page update` / `component update`（改 name/briefs/type），promptLog 记 marker | ops `project_page_component_update_amend_metadata`；cli `update_commands_amend_briefs_without_hand_editing` |
+| 3 响应形状不对称 | 单目标 page/component 与 board 同形（顶层 candidates）；仅 `--all` 包 `results[]`；写入 cli.md | cli `real_generate…`（data.kind/target/candidates 断言） |
+| 4 候选重复 prompt | `--json` 候选行只留 `{id,file,seed,size,quality}`，prompt 仅存于 plan.params.prompt | cli `real_generate…`（全文出现次数=1） |
+| 5 默认 quality high | 默认降为 low（config 默认值），high 需显式 `--quality high` | ops/config 测试断言更新；cli dry-run plan 断言 quality=low |
+| 6 stdout 恒空 | 人类模式成功摘要一行走 stdout，dry-run 计划/警告/错误留 stderr | cli `board_generate_without_yes…` 改断言；update/export 摘要断言 |
+| 7 export 带落选稿 | 默认只导 anchor+主稿；`--with-candidates` 显式带候选；manifest.board.candidates 随开关 | export `export_default_bundle…`/`export_with_candidates…`；cli `pick_promotes…` |
+| 10 export 静默丢未 pick | ExportReport.warnings：board 无锚、page/component 有候选无主稿各出一条；stderr `warning:` + `--json data.warnings` | export `export_warns_about_generated_but_unpicked_targets`；cli `export_warns_on_generated_but_unpicked_targets` |
+
+界面改进项 4/5/7/9 于 Phase 5 落地（表单 schema 统一、空态插画规范入 THEME §5、徽标 ≥11px、悬停浮层按 §5 姿态）；3/6/8 按裁决不动。

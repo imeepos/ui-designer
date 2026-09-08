@@ -1,7 +1,8 @@
 # Rudder CLI Reference
 
-Agent-facing contract of every command. Human-readable one-line summaries go
-to stderr; pass `--json` to get machine-readable data on stdout.
+Agent-facing contract of every command. Human mode prints a one-line summary
+to **stdout** (success at a glance; dry-run plans, warnings and errors go to
+stderr); pass `--json` to get the machine-readable envelope on stdout.
 
 ## Install
 
@@ -25,9 +26,13 @@ Exit codes: `0` ok · `1` bad arguments (see `hint`) · `2` API error
 `3` project state error (e.g. no anchor picked yet).
 
 Defaults (unless overridden by flags or `rudder config`): board `--n 4`,
-page/component `--n 1`, `--quality high`, `--thinking medium`. Candidate ids
-are the `NNNN` file stems; `rudder board pick 0001.png` (an `ls` listing) and
-`rudder board pick 0001` address the same candidate.
+page/component `--n 1`, `--quality low` (exploration tier — `high` must be
+opted into explicitly with `--quality high`), `--thinking medium`. `--seed`
+is auto-generated and recorded when omitted (plan, project.json lineage,
+candidate rows, manifest all carry it), so any batch can be replayed with
+`--seed <recorded>`. Candidate ids are the `NNNN` file stems;
+`rudder board pick 0001.png` (an `ls` listing) and `rudder board pick 0001`
+address the same candidate.
 
 ## Commands
 
@@ -42,23 +47,37 @@ Generate design-system board candidates (`board/candidates/NNNN.png`).
 Without `--ref` this uses the generations endpoint; any `--ref` images switch
 it to the edits endpoint with those images attached.
 Anchor mechanics: one board defines palette, type scale, corner radius,
-component samples, icon style for the WHOLE set. Data:
-`{candidates: [{id, file, prompt, seed, size, quality}]}`.
+component samples, icon style for the WHOLE set. Data (same envelope for
+every generate command):
+`{dryRun, kind: "board", target: "", plan, candidates: [{id, file, seed, size, quality}]}`.
+The full prompt lives ONCE in `plan.params.prompt`; candidate rows reference
+it by `id`/`file`.
 
 ### `rudder board pick <candidate-id>`
 Copy candidate to `board/anchor.png` and lock it in `project.json`.
 
+### `rudder project update [--name <n>] [--brand-brief <s>] [--style-brief <s>]`
+Amend project metadata between generations (at least one flag). This is the
+supported way to iterate on briefs — no hand-editing of `project.json`.
+
 ### `rudder page add <slug> --brief "..."` / `rudder page list`
 Register a page (slug: `a-z0-9-`). Brief = layout structure (regions, counts,
 labels), not adjectives.
+
+### `rudder page update <slug> --brief "..."`
+Replace a page's layout brief, then `page generate` to iterate.
 
 ### `rudder page generate <slug|--all> [--n 1-4] [--quality ...] [--yes] [--ref <img>...]`
 Anchor-backed generation into `pages/<slug>/candidates/`. `--ref` adds extra
 layout reference images (they are passed after the anchor). Promote with
 `rudder page pick <slug> <candidate-id>` → `pages/<slug>/current.png`
 (previous current moves to `history/`).
+Envelope: a single target answers with the exact board shape (top-level
+`candidates`); only `--all` wraps per-target entries as
+`{dryRun, kind: "page", results: [{kind, target, plan, candidates}]}`.
 
 ### `rudder component add <name> --type <t> --brief "..."`
+### `rudder component update <name> [--type <t>] [--brief "..."]`
 ### `rudder component generate <name|--all> [--n 1-4] ...` / `rudder component pick <name> <candidate-id>`
 Same lifecycle as pages, under `components/<name>/`. `--type` is an open
 label rendered into the prompt; common values: buttons | forms | cards |
@@ -67,9 +86,15 @@ navigation | icons | tables | modals.
 ### `rudder list [pages|components]`
 Status overview: anchor present? pages/components with candidate counts.
 
-### `rudder export [--out <dir>]`
-Bundle: `board/`, `pages/`, `components/` (currents), `manifest.json`
-(full prompt/model/seed/size lineage), `PROMPTS.md`, `DESIGN.template.md`.
+### `rudder export [--out <dir>] [--with-candidates]`
+Bundle (default): `board/anchor.png`, `pages/<slug>/current.png`,
+`components/<name>/current.png`, `manifest.json` (full
+prompt/model/seed/size lineage), `PROMPTS.md`, `DESIGN.template.md`.
+Board exploration candidates are NOT included unless `--with-candidates` is
+passed. Targets that were generated but never picked are excluded from the
+bundle; each one produces a `warning:` line on stderr and an entry in the
+`--json` `data.warnings` array — pick them (`board pick` / `page pick` /
+`component pick`) before exporting a final set.
 
 ### `rudder config get <key>` / `rudder config set <key> <value>`
 Defaults: `quality`, `thinking`, `n`. Stored in `~/Rudder/config.json`
@@ -93,6 +118,7 @@ free, no network.
 └── refs/
 ```
 
-`project.json` is the source of truth; edit `styleBrief`/page `brief` fields
-freely between generations. Write is atomic (tempfile+rename); don't hand-edit
-while a generation is running.
+`project.json` is the source of truth; amend briefs with the `update`
+subcommands (`rudder project update --style-brief …`, `rudder page update …`,
+`rudder component update …`) between generations. Write is atomic
+(tempfile+rename); don't hand-edit while a generation is running.
