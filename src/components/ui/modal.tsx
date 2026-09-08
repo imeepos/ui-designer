@@ -58,7 +58,7 @@ export function Modal({ open, onClose, title, children, footer, wide, testId }: 
       <div
         ref={cardRef}
         className={cn(
-          "relative flex max-h-[85vh] w-full flex-col rounded-lg border bg-card shadow-[0_8px_24px_rgba(2,8,23,0.08)]",
+          "relative flex max-h-[85vh] w-full flex-col rounded-xl border bg-card shadow-[0_8px_24px_rgba(2,8,23,0.08)]",
           wide ? "max-w-3xl" : "max-w-md",
         )}
       >
