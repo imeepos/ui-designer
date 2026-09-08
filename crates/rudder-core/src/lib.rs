@@ -13,6 +13,7 @@ pub mod canvas;
 pub mod config;
 pub mod error;
 pub mod store;
+pub mod image;
 pub mod prompt;
 
 pub use canvas::CanvasSize;
