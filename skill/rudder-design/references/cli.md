@@ -7,7 +7,8 @@ to stderr; pass `--json` to get machine-readable data on stdout.
 
 - macOS/Linux (project-local, preferred): `pnpm add -g @tauri-apps/cli` is the
   Tauri app CLI, NOT rudder. The rudder CLI ships with the Rudder desktop app
-  or via `cargo install rudder-cli` from the repo root. Verify: `rudder --version`.
+  or via `cargo install --path crates/rudder-cli` from the repo root. Verify:
+  `rudder --version`.
 - Requires `OPENAI_API_KEY` and optionally `OPENAI_BASE_URL` in env.
 
 ## Global flags (all commands)
@@ -23,6 +24,11 @@ Exit codes: `0` ok · `1` bad arguments (see `hint`) · `2` API error
 (429/quota/5xx — back off 30s, retry once, then lower `--n`/quality) ·
 `3` project state error (e.g. no anchor picked yet).
 
+Defaults (unless overridden by flags or `rudder config`): board `--n 4`,
+page/component `--n 1`, `--quality high`, `--thinking medium`. Candidate ids
+are the `NNNN` file stems; `rudder board pick 0001.png` (an `ls` listing) and
+`rudder board pick 0001` address the same candidate.
+
 ## Commands
 
 ### `rudder init <name> [--size web|mobile|desktop|WxH] [--dir <path>] [--brief "..."]`
@@ -31,8 +37,10 @@ Create a project. Size presets: `web`=1536x1024, `mobile`=1024x1536,
 aspect ≤ 3:1, total pixels 0.65M–8.3M. `--brief` seeds `styleBrief`.
 Data: `{projectId, dir, canvasSize}`.
 
-### `rudder board generate [--n 1-4] [--quality low|medium|high] [--seed <int>] [--ref <img>...]`
+### `rudder board generate [--n 1-4] [--quality low|medium|high] [--seed <int>] [--thinking low|medium|high] [--ref <img>...]`
 Generate design-system board candidates (`board/candidates/NNNN.png`).
+Without `--ref` this uses the generations endpoint; any `--ref` images switch
+it to the edits endpoint with those images attached.
 Anchor mechanics: one board defines palette, type scale, corner radius,
 component samples, icon style for the WHOLE set. Data:
 `{candidates: [{id, file, prompt, seed, size, quality}]}`.
@@ -50,9 +58,11 @@ layout reference images (they are passed after the anchor). Promote with
 `rudder page pick <slug> <candidate-id>` → `pages/<slug>/current.png`
 (previous current moves to `history/`).
 
-### `rudder component add <name> --type buttons|forms|cards|navigation|icons|tables|modals --brief "..."`
+### `rudder component add <name> --type <t> --brief "..."`
 ### `rudder component generate <name|--all> [--n 1-4] ...` / `rudder component pick <name> <candidate-id>`
-Same lifecycle as pages, under `components/<name>/`.
+Same lifecycle as pages, under `components/<name>/`. `--type` is an open
+label rendered into the prompt; common values: buttons | forms | cards |
+navigation | icons | tables | modals.
 
 ### `rudder list [pages|components]`
 Status overview: anchor present? pages/components with candidate counts.
@@ -62,12 +72,15 @@ Bundle: `board/`, `pages/`, `components/` (currents), `manifest.json`
 (full prompt/model/seed/size lineage), `PROMPTS.md`, `DESIGN.template.md`.
 
 ### `rudder config get <key>` / `rudder config set <key> <value>`
-Defaults: `quality`, `thinking`, `n`. Stored in `~/Rudder/config.json`.
+Defaults: `quality`, `thinking`, `n`. Stored in `~/Rudder/config.json`
+(directory overridable with `RUDDER_HOME`).
 Secrets are NEVER stored — env only.
 
 ### `rudder e2e [--quality low] [--yes]`
 Self-test: sample project → board → 1 page → 1 component → export. Use to
-verify the toolchain before real work.
+verify the toolchain before real work. Without `--yes` (or with `--dry-run`)
+it prints the per-step request plans and creates only the sample project —
+free, no network.
 
 ## Project layout on disk
 

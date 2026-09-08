@@ -92,6 +92,6 @@ Same review loop: view → `rudder component pick <name> <candidate-id>`.
 | 1 | bad arguments | read `hint` in the JSON error, correct flags |
 | 2 | API error (429/quota/5xx) | wait 30s and retry once; then reduce `--n` or quality |
 | 3 | project state (no anchor, no page) | run the missing earlier step |
-| 0 + `ok:false` | see `error.code` | `code=SIZE_INVALID` → fix dimensions per §1 constraints |
+| 1/2/3 + `ok:false` | see `error.code` | `code=SIZE_INVALID` → fix dimensions per §1 constraints |
 
 Full command reference: references/cli.md. DESIGN.md guide: references/design-md.md.
