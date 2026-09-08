@@ -25,7 +25,7 @@ export function HelmMark({ className }: IconProps) {
   );
 }
 
-/** Compass: empty-state illustration */
+/** Compass: empty-state illustration (THEME §5: nautical line art, 1.5px stroke). */
 export function CompassMark({ className }: IconProps) {
   return (
     <svg
@@ -43,6 +43,28 @@ export function CompassMark({ className }: IconProps) {
       <path d="M48 14v-6M48 88v-6M14 48H8M88 48h-6" />
       <path d="M58 38l-6.5 14.5L38 58l6.5-14.5L58 38z" />
       <circle cx="48" cy="48" r="1.5" />
+    </svg>
+  );
+}
+
+/** Anchor: empty-state illustration (THEME §5 v2: helm/compass/anchor only). */
+export function AnchorMark({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 96 96"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={cn("size-24", className)}
+    >
+      <circle cx="48" cy="22" r="8" />
+      <path d="M48 30v52" />
+      <path d="M32 42h32" />
+      <path d="M20 58c0 16 12.5 24 28 24s28-8 28-24" />
+      <path d="M20 58l-6-4M20 58l7-2M76 58l6-4M76 58l-7-2" />
     </svg>
   );
 }

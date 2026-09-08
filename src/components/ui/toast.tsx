@@ -61,7 +61,7 @@ function ToastCard({
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         {item.code && (
-          <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
+          <span className="font-mono text-[11px] tracking-wide text-muted-foreground uppercase">
             {item.code}
           </span>
         )}

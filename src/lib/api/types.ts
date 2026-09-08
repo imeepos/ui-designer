@@ -111,6 +111,8 @@ export interface BoardBrief {
 
 export interface GenerateOptions {
   count?: number;
+  /** Generation quality tier; default low (exploration). */
+  quality?: "low" | "medium" | "high";
   signal?: AbortSignal;
   /** 0..1 progress feedback for loading UI (mock simulates it). */
   onProgress?: (progress: number) => void;

@@ -103,7 +103,7 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
                 {t("export.dialog.browse")}
               </Button>
             </div>
-            <p className="text-[10px] text-muted-foreground">{t("export.dialog.dirHint")}</p>
+            <p className="text-[11px] text-muted-foreground">{t("export.dialog.dirHint")}</p>
           </div>
           {state.job?.kind === "export" ? (
             <JobPanel job={state.job} />
@@ -119,11 +119,11 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
           <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs">
             <Image aria-hidden="true" className="size-4 text-primary" />
             <span>{t("export.dialog.doneSummary", { images: totals.images, files: files.length })}</span>
-            <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+            <span className="ml-auto font-mono text-[11px] text-muted-foreground">
               {formatBytes(totals.bytes)}
             </span>
           </div>
-          <p className="font-mono text-[10px] text-muted-foreground">{result?.outDir}</p>
+          <p className="font-mono text-[11px] text-muted-foreground">{result?.outDir}</p>
           <ul className="flex flex-col gap-1" data-testid="export-files">
             {files.map((file) => (
               <li
@@ -132,7 +132,7 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
               >
                 <FileGlyph kind={file.kind} />
                 <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{file.path}</span>
-                <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
                   {formatBytes(file.bytes)}
                 </span>
               </li>

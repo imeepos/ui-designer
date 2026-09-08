@@ -22,6 +22,7 @@ import type {
   ProjectDetail,
   ProjectSummary,
 } from "@/lib/api/types";
+import { DEFAULT_QUALITY, type QualityLevel } from "@/lib/form-schema";
 import { useToast } from "@/state/toast";
 
 export type JobKind = "board" | "page" | "component" | "export";
@@ -173,10 +174,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   );
 
   const generateBoard = useCallback(
-    async (brief: BoardBrief, count: number) => {
+    async (brief: BoardBrief, count: number, quality: QualityLevel = DEFAULT_QUALITY) => {
       if (!project) return;
       const result = await runJob("board", undefined, (signal, onProgress) =>
-        api.generateBoard(project.id, brief, { count, signal, onProgress }),
+        api.generateBoard(project.id, brief, { count, quality, signal, onProgress }),
       );
       if (!result) return;
       setProject(result.project);
@@ -219,10 +220,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   );
 
   const generatePage = useCallback(
-    async (slug: string, count: number) => {
+    async (slug: string, count: number, quality: QualityLevel = DEFAULT_QUALITY) => {
       if (!project) return;
       const result = await runJob("page", slug, (signal, onProgress) =>
-        api.generatePage(project.id, slug, { count, signal, onProgress }),
+        api.generatePage(project.id, slug, { count, quality, signal, onProgress }),
       );
       if (!result) return;
       setProject(result.project);
@@ -263,10 +264,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   );
 
   const generateComponent = useCallback(
-    async (name: string, count: number) => {
+    async (name: string, count: number, quality: QualityLevel = DEFAULT_QUALITY) => {
       if (!project) return;
       const result = await runJob("component", name, (signal, onProgress) =>
-        api.generateComponent(project.id, name, { count, signal, onProgress }),
+        api.generateComponent(project.id, name, { count, quality, signal, onProgress }),
       );
       if (!result) return;
       setProject(result.project);
@@ -390,13 +391,13 @@ export interface StudioApi {
   cancelJob: () => void;
   createProject: (input: CreateProjectInput) => Promise<void>;
   selectProject: (id: string) => Promise<void>;
-  generateBoard: (brief: BoardBrief, count: number) => Promise<void>;
+  generateBoard: (brief: BoardBrief, count: number, quality?: QualityLevel) => Promise<void>;
   pickAnchor: (candidateId: string) => Promise<void>;
   addPage: (slug: string, brief: string) => Promise<void>;
-  generatePage: (slug: string, count: number) => Promise<void>;
+  generatePage: (slug: string, count: number, quality?: QualityLevel) => Promise<void>;
   pickPage: (slug: string, candidateId: string) => Promise<void>;
   addComponent: (name: string, type: ComponentType, brief: string) => Promise<void>;
-  generateComponent: (name: string, count: number) => Promise<void>;
+  generateComponent: (name: string, count: number, quality?: QualityLevel) => Promise<void>;
   pickComponent: (name: string, candidateId: string) => Promise<void>;
   exportProject: (outDir: string) => Promise<void>;
   deleteArtifact: (target: DeleteTarget) => Promise<void>;

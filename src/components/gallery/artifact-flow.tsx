@@ -99,7 +99,7 @@ export function ArtifactFlow({
                   item.current ? (
                     <span
                       data-testid={`${testPrefix}-picked-badge`}
-                      className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground"
+                      className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground"
                     >
                       <PickIcon />
                       {t("gallery.flow.picked")}
@@ -286,7 +286,7 @@ function EmptyThumb() {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 border border-dashed bg-muted/40 text-muted-foreground">
       <ImagePlus aria-hidden="true" className="size-5" />
-      <span className="text-[10px]">{t("gallery.flow.placeholder")}</span>
+      <span className="text-[11px]">{t("gallery.flow.placeholder")}</span>
     </div>
   );
 }

@@ -65,7 +65,7 @@ export function BoardSection() {
               <p className="truncate text-xs text-muted-foreground">
                 {t("gallery.board.anchorDesc")}
               </p>
-              <p className="font-mono text-[10px] text-muted-foreground">
+              <p className="font-mono text-[11px] text-muted-foreground">
                 {anchor.candidateId}
               </p>
             </div>
@@ -164,7 +164,7 @@ export function BoardSection() {
           </div>
         )}
       </section>
-      <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <PickIcon className="size-3" />
         {t("gallery.board.pickHint")}
       </p>

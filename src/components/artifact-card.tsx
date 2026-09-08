@@ -68,13 +68,13 @@ export function ArtifactCard({
         )}
         {badge && <div className="absolute top-1.5 left-1.5">{badge}</div>}
         {actions && (
-          <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100">
+          <div className="absolute top-1.5 right-1.5 flex gap-1 rounded-md p-0.5 opacity-0 shadow-[0_8px_24px_rgba(2,8,23,0.08)] transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100">
             {actions}
           </div>
         )}
       </div>
       {footer && (
-        <figcaption className="flex items-center gap-2 border-t px-2.5 py-1.5 text-[10px] text-muted-foreground">
+        <figcaption className="flex items-center gap-2 border-t px-2.5 py-1.5 text-[11px] text-muted-foreground">
           {footer}
         </figcaption>
       )}

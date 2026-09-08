@@ -111,7 +111,7 @@ export function Stepper({ current, states, unlocked, onSelect }: StepperProps) {
                   >
                     {t(`steps.${id}.title`)}
                   </span>
-                  <span className="hidden text-[10px] tracking-wide text-muted-foreground sm:block">
+                  <span className="hidden text-[11px] tracking-wide text-muted-foreground sm:block">
                     {t(`steps.${id}.desc`)}
                   </span>
                 </span>

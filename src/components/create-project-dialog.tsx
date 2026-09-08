@@ -152,7 +152,7 @@ export function CreateProjectDialog({ open, onClose }: CreateProjectDialogProps)
                   className="font-mono"
                 />
               </div>
-              <p className="text-[10px] text-muted-foreground">{t("project.form.sizeHint")}</p>
+              <p className="text-[11px] text-muted-foreground">{t("project.form.sizeHint")}</p>
               {sizeError && (
                 <p data-testid="size-error" className="text-xs text-destructive">
                   {t(`project.form.error.${sizeError.code}`, sizeError.params ?? {})}
@@ -160,7 +160,7 @@ export function CreateProjectDialog({ open, onClose }: CreateProjectDialogProps)
               )}
             </div>
           ) : (
-            <p className="font-mono text-[10px] text-muted-foreground">
+            <p className="font-mono text-[11px] text-muted-foreground">
               {preset === "web" ? "1536x1024" : preset === "mobile" ? "1024x1536" : "2560x1440"}
             </p>
           )}
@@ -176,7 +176,7 @@ export function CreateProjectDialog({ open, onClose }: CreateProjectDialogProps)
             placeholder={t("project.form.brandBriefPlaceholder")}
             rows={3}
           />
-          <p className="text-[10px] text-muted-foreground">{t("project.form.brandBriefHint")}</p>
+          <p className="text-[11px] text-muted-foreground">{t("project.form.brandBriefHint")}</p>
         </div>
       </form>
     </Modal>

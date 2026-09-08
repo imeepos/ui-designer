@@ -116,6 +116,13 @@
   },
   "form": {
     "count": "候选数量",
+    "briefCount": "{{count}}/{{max}}",
+    "quality": {
+      "label": "生成质量",
+      "low": "草稿",
+      "medium": "标准",
+      "high": "高清"
+    },
     "board": {
       "title": "设计系统总板",
       "desc": "色板、字阶、组件样本与图标风格画在一张总板上。",

@@ -116,6 +116,13 @@
   },
   "form": {
     "count": "Candidates",
+    "briefCount": "{{count}}/{{max}}",
+    "quality": {
+      "label": "Quality",
+      "low": "Draft",
+      "medium": "Standard",
+      "high": "Hi-Fi"
+    },
     "board": {
       "title": "Design system board",
       "desc": "Palette, type scale, component samples and icon style on one board.",

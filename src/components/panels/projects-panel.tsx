@@ -61,7 +61,7 @@ export function ProjectsPanel() {
                       </span>
                       {item.hasAnchor && <AnchorBadge className="scale-90" />}
                     </span>
-                    <span className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
                       <span>{formatSize(item.size)}</span>
                       <span aria-hidden="true">·</span>
                       <span>{t("panel.projects.pageCount", { count: item.pageCount })}</span>

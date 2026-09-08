@@ -4,13 +4,16 @@ import { useTranslation } from "react-i18next";
 
 import { useStudio } from "@/state/studio";
 import type { BoardBrief } from "@/lib/api/types";
+import { BRIEF_MAX, DEFAULT_QUALITY, type QualityLevel } from "@/lib/form-schema";
 import { formatSize } from "@/lib/size";
 import {
   AddComponentForm,
   AddPageForm,
+  BriefField,
   ComponentDetailForm,
   CountPicker,
   PageDetailForm,
+  QualityPicker,
 } from "@/components/detail-forms";
 import { JobPanel } from "@/components/job-panel";
 import { Button } from "@/components/ui/button";
@@ -143,6 +146,7 @@ function BoardFormCard() {
   const [radiusDensity, setRadiusDensity] = useState("");
   const [reference, setReference] = useState("");
   const [count, setCount] = useState(2);
+  const [quality, setQuality] = useState<QualityLevel>(DEFAULT_QUALITY);
 
   if (!project) return null;
   const boardJob = state.job?.kind === "board" ? state.job : null;
@@ -155,7 +159,7 @@ function BoardFormCard() {
       radiusDensity,
       reference,
     };
-    void generateBoard(brief, count);
+    void generateBoard(brief, count, quality);
   };
 
   return (
@@ -165,23 +169,22 @@ function BoardFormCard() {
         <CardDescription>{t("form.board.desc")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="board-brand">{t("form.board.brandKeywords")}</Label>
-          <Textarea
-            id="board-brand"
-            data-testid="board-brand-input"
-            value={brandKeywords}
-            onChange={(event) => setBrandKeywords(event.target.value)}
-            placeholder={t("form.board.brandPlaceholder")}
-            rows={2}
-          />
-        </div>
+        <BriefField
+          id="board-brand"
+          testId="board-brand-input"
+          label={t("form.board.brandKeywords")}
+          placeholder={t("form.board.brandPlaceholder")}
+          value={brandKeywords}
+          onChange={setBrandKeywords}
+          rows={2}
+        />
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="board-color">{t("form.board.colorDirection")}</Label>
           <Input
             id="board-color"
             data-testid="board-color-input"
             value={colorDirection}
+            maxLength={BRIEF_MAX}
             onChange={(event) => setColorDirection(event.target.value)}
             placeholder={t("form.board.colorPlaceholder")}
           />
@@ -192,6 +195,7 @@ function BoardFormCard() {
             id="board-font"
             data-testid="board-font-input"
             value={fontMood}
+            maxLength={BRIEF_MAX}
             onChange={(event) => setFontMood(event.target.value)}
             placeholder={t("form.board.fontPlaceholder")}
           />
@@ -202,6 +206,7 @@ function BoardFormCard() {
             id="board-radius"
             data-testid="board-radius-input"
             value={radiusDensity}
+            maxLength={BRIEF_MAX}
             onChange={(event) => setRadiusDensity(event.target.value)}
             placeholder={t("form.board.radiusPlaceholder")}
           />
@@ -212,12 +217,14 @@ function BoardFormCard() {
             id="board-reference"
             data-testid="board-reference-input"
             value={reference}
+            maxLength={BRIEF_MAX}
             onChange={(event) => setReference(event.target.value)}
             placeholder={t("form.board.referencePlaceholder")}
             rows={2}
           />
         </div>
         <CountPicker value={count} onChange={setCount} testIdPrefix="board" />
+        <QualityPicker value={quality} onChange={setQuality} testIdPrefix="board" />
         {boardJob ? (
           <JobPanel job={boardJob} />
         ) : (
@@ -233,7 +240,7 @@ function BoardFormCard() {
           </Button>
         )}
         {project.boardCandidates.length > 0 && !project.anchor && (
-          <p className="text-[10px] text-muted-foreground">{t("form.board.anchorHint")}</p>
+          <p className="text-[11px] text-muted-foreground">{t("form.board.anchorHint")}</p>
         )}
       </CardContent>
     </Card>

@@ -44,7 +44,7 @@ export function JobPanel({ job }: { job: ActiveJob }) {
         />
       </div>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] tracking-wide text-muted-foreground">
+        <span className="text-[11px] tracking-wide text-muted-foreground">
           {t("job.etaNote")}
         </span>
         <Button variant="ghost" size="sm" data-testid="job-cancel" onClick={cancelJob}>

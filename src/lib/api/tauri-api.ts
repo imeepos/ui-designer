@@ -339,7 +339,7 @@ export class TauriApi implements ApiAdapter {
       const dto = await this.withAbort(
         this.call<GeneratePayloadDto>(command, {
           ...args,
-          options: { count: options?.count, jobId },
+          options: { count: options?.count, quality: options?.quality, jobId },
         }),
         options?.signal,
       );
