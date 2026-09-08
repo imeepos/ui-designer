@@ -13,6 +13,7 @@ pub mod canvas;
 pub mod config;
 pub mod error;
 pub mod store;
+pub mod ops;
 pub mod export;
 pub mod image;
 pub mod prompt;
