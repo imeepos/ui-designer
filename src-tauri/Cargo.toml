@@ -1,0 +1,18 @@
+[package]
+name = "rudder-app"
+description = "Rudder desktop shell (Tauri 2)"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "rudder_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rudder-core = { workspace = true }
