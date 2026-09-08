@@ -48,9 +48,25 @@ run "$BIN" board pick "$ANCHOR" --project "$WORK/proj"
 
 run "$BIN" page add dashboard --brief "运营仪表盘：顶部指标卡x4，中部折线图区，右侧任务列表" --project "$WORK/proj"
 run "$BIN" page generate dashboard --quality "$QUALITY" --yes ${PLAN_FLAG[@]+"${PLAN_FLAG[@]}"} --project "$WORK/proj"
+if [ "$DRYRUN" = "0" ]; then
+  PAGE_CAND="$(ls "$WORK/proj/pages/dashboard/candidates" | head -1)"
+else
+  mkdir -p "$WORK/proj/pages/dashboard/candidates"
+  head -c 20480 /dev/zero > "$WORK/proj/pages/dashboard/candidates/0001.png"
+  PAGE_CAND="0001.png"
+fi
+run "$BIN" page pick dashboard "$PAGE_CAND" --project "$WORK/proj"
 
 run "$BIN" component add button-set --type buttons --brief "主/次/幽灵按钮三态" --project "$WORK/proj"
 run "$BIN" component generate button-set --quality "$QUALITY" --yes ${PLAN_FLAG[@]+"${PLAN_FLAG[@]}"} --project "$WORK/proj"
+if [ "$DRYRUN" = "0" ]; then
+  COMP_CAND="$(ls "$WORK/proj/components/button-set/candidates" | head -1)"
+else
+  mkdir -p "$WORK/proj/components/button-set/candidates"
+  head -c 20480 /dev/zero > "$WORK/proj/components/button-set/candidates/0001.png"
+  COMP_CAND="0001.png"
+fi
+run "$BIN" component pick button-set "$COMP_CAND" --project "$WORK/proj"
 
 run "$BIN" export --out "$WORK/export" --project "$WORK/proj"
 
