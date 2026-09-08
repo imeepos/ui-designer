@@ -1,0 +1,353 @@
+{
+  "board": {
+    "anchor": {
+      "endpoint": "edits",
+      "file": "board/anchor.png",
+      "generatedAt": "2026-09-08T19:36:43.520Z",
+      "id": "0004",
+      "model": "gpt-image-2",
+      "prompt": "Purpose: a UI design system board (风格总板) for the product \"舵 Rudder · Studio\".\nStyle brief: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nCanvas: 1536x1024. Lay out ONE labeled sheet with these sections:\n1. COLOR PALETTE — 5-8 swatch chips as rounded rectangles, each with its exact hex code printed as a label under or inside the chip.\n2. TYPOGRAPHY — type hierarchy specimen: display / heading / subheading / body / caption rows, each labeled with size and weight.\n3. COMPONENT SAMPLES — a row of buttons (primary, secondary, ghost; default/hover/disabled states), one text input, one select, one card, one toggle, one checkbox, labeled.\n4. ICON STYLE — a row of 6-8 sample icons showing stroke weight and corner treatment.\n5. SPACING & GRID RULES — a spacing scale diagram (4/8/16/24/32px) and corner-radius samples per element class.\nSections separated by thin dividers, generous margins, engineering spec-sheet clarity.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "quality": "high",
+      "size": "1536x1024"
+    },
+    "candidates": [
+      {
+        "endpoint": "generations",
+        "file": "board/candidates/0001.png",
+        "generatedAt": "2026-09-08T19:24:31.069Z",
+        "id": "0001",
+        "model": "gpt-image-2",
+        "prompt": "Purpose: a UI design system board (风格总板) for the product \"舵 Rudder · Studio\".\nStyle brief: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nCanvas: 1536x1024. Lay out ONE labeled sheet with these sections:\n1. COLOR PALETTE — 5-8 swatch chips as rounded rectangles, each with its exact hex code printed as a label under or inside the chip.\n2. TYPOGRAPHY — type hierarchy specimen: display / heading / subheading / body / caption rows, each labeled with size and weight.\n3. COMPONENT SAMPLES — a row of buttons (primary, secondary, ghost; default/hover/disabled states), one text input, one select, one card, one toggle, one checkbox, labeled.\n4. ICON STYLE — a row of 6-8 sample icons showing stroke weight and corner treatment.\n5. SPACING & GRID RULES — a spacing scale diagram (4/8/16/24/32px) and corner-radius samples per element class.\nSections separated by thin dividers, generous margins, engineering spec-sheet clarity.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+        "quality": "low",
+        "size": "1536x1024"
+      },
+      {
+        "endpoint": "generations",
+        "file": "board/candidates/0002.png",
+        "generatedAt": "2026-09-08T19:24:31.069Z",
+        "id": "0002",
+        "model": "gpt-image-2",
+        "prompt": "Purpose: a UI design system board (风格总板) for the product \"舵 Rudder · Studio\".\nStyle brief: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nCanvas: 1536x1024. Lay out ONE labeled sheet with these sections:\n1. COLOR PALETTE — 5-8 swatch chips as rounded rectangles, each with its exact hex code printed as a label under or inside the chip.\n2. TYPOGRAPHY — type hierarchy specimen: display / heading / subheading / body / caption rows, each labeled with size and weight.\n3. COMPONENT SAMPLES — a row of buttons (primary, secondary, ghost; default/hover/disabled states), one text input, one select, one card, one toggle, one checkbox, labeled.\n4. ICON STYLE — a row of 6-8 sample icons showing stroke weight and corner treatment.\n5. SPACING & GRID RULES — a spacing scale diagram (4/8/16/24/32px) and corner-radius samples per element class.\nSections separated by thin dividers, generous margins, engineering spec-sheet clarity.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+        "quality": "low",
+        "size": "1536x1024"
+      },
+      {
+        "endpoint": "generations",
+        "file": "board/candidates/0003.png",
+        "generatedAt": "2026-09-08T19:24:31.069Z",
+        "id": "0003",
+        "model": "gpt-image-2",
+        "prompt": "Purpose: a UI design system board (风格总板) for the product \"舵 Rudder · Studio\".\nStyle brief: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nCanvas: 1536x1024. Lay out ONE labeled sheet with these sections:\n1. COLOR PALETTE — 5-8 swatch chips as rounded rectangles, each with its exact hex code printed as a label under or inside the chip.\n2. TYPOGRAPHY — type hierarchy specimen: display / heading / subheading / body / caption rows, each labeled with size and weight.\n3. COMPONENT SAMPLES — a row of buttons (primary, secondary, ghost; default/hover/disabled states), one text input, one select, one card, one toggle, one checkbox, labeled.\n4. ICON STYLE — a row of 6-8 sample icons showing stroke weight and corner treatment.\n5. SPACING & GRID RULES — a spacing scale diagram (4/8/16/24/32px) and corner-radius samples per element class.\nSections separated by thin dividers, generous margins, engineering spec-sheet clarity.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+        "quality": "low",
+        "size": "1536x1024"
+      },
+      {
+        "endpoint": "edits",
+        "file": "board/candidates/0004.png",
+        "generatedAt": "2026-09-08T19:36:43.520Z",
+        "id": "0004",
+        "model": "gpt-image-2",
+        "prompt": "Purpose: a UI design system board (风格总板) for the product \"舵 Rudder · Studio\".\nStyle brief: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nCanvas: 1536x1024. Lay out ONE labeled sheet with these sections:\n1. COLOR PALETTE — 5-8 swatch chips as rounded rectangles, each with its exact hex code printed as a label under or inside the chip.\n2. TYPOGRAPHY — type hierarchy specimen: display / heading / subheading / body / caption rows, each labeled with size and weight.\n3. COMPONENT SAMPLES — a row of buttons (primary, secondary, ghost; default/hover/disabled states), one text input, one select, one card, one toggle, one checkbox, labeled.\n4. ICON STYLE — a row of 6-8 sample icons showing stroke weight and corner treatment.\n5. SPACING & GRID RULES — a spacing scale diagram (4/8/16/24/32px) and corner-radius samples per element class.\nSections separated by thin dividers, generous margins, engineering spec-sheet clarity.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+        "quality": "high",
+        "size": "1536x1024"
+      }
+    ]
+  },
+  "components": [
+    {
+      "brief": "Component sheet on paper-white background, one labeled row per variant × state grid. Variants: Primary / Secondary / Ghost. States: Default / Hover / Disabled. Chinese labels inside buttons: 主要按钮 / 次要按钮 / 幽灵按钮. Primary = solid navy #0B3D91 white text; Secondary = white with 1px navy border navy text; Ghost = no border muted text. Hover rows slightly darker/lighter; disabled = muted gray fill, low-contrast text. Include size row (sm 28px / md 32px / lg 40px heights) and corner radius 8px. Thin-line icons allowed. Spec-sheet clarity with labels.",
+      "endpoint": "edits",
+      "file": "components/button-set/current.png",
+      "generatedAt": "2026-09-08T19:34:29.267Z",
+      "model": "gpt-image-2",
+      "name": "button-set",
+      "prompt": "Image 1 是本产品设计系统总板。严格沿用它的设计语言，为单个组件族出细节图。\nTask: a component detail sheet for the \"buttons\" family: Component sheet on paper-white background, one labeled row per variant × state grid. Variants: Primary / Secondary / Ghost. States: Default / Hover / Disabled. Chinese labels inside buttons: 主要按钮 / 次要按钮 / 幽灵按钮. Primary = solid navy #0B3D91 white text; Secondary = white with 1px navy border navy text; Ghost = no border muted text. Hover rows slightly darker/lighter; disabled = muted gray fill, low-contrast text. Include size row (sm 28px / md 32px / lg 40px heights) and corner radius 8px. Thin-line icons allowed. Spec-sheet clarity with labels.\nShow every variant and state in a tidy grid, each labeled (e.g. default / hover / active / disabled / focus).\nInvariants (do NOT change): strictly reuse Image 1's exact\n- color palette (same hex values for primary/background/text/accent),\n- typography family, sizes and weights,\n- corner radii and border treatment,\n- component styling (buttons, inputs, cards), icon style and stroke weight,\n- spacing rhythm and density.\nOverall mood stays: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nOnly compose NEW layout/content; never redesign the system.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "quality": "low",
+      "seed": null,
+      "size": "1536x1024",
+      "type": "buttons",
+      "updatedAt": "2026-09-08T19:35:48.890Z"
+    },
+    {
+      "brief": "Component sheet: a horizontal 4-step stepper specimen on paper-white background, three state rows. Steps labeled in Chinese: 1 新建项目, 2 设计系统总板, 3 功能页面, 4 组件设计, connected by thin lines. Row A (完成态): steps 1-2 done = navy circle with white check + navy label. Row B (当前态): step 3 current = brass/amber #D4A017 filled dot + bold navy label, others muted. Row C (未来态): all steps muted gray outline circles. Also show a compact variant for top bars (dot + label inline) and size specs (circle 20px, gap 8px, connector 1px).",
+      "endpoint": "edits",
+      "file": "components/stepper/current.png",
+      "generatedAt": "2026-09-08T19:35:28.537Z",
+      "model": "gpt-image-2",
+      "name": "stepper",
+      "prompt": "Image 1 是本产品设计系统总板。严格沿用它的设计语言，为单个组件族出细节图。\nTask: a component detail sheet for the \"navigation\" family: Component sheet: a horizontal 4-step stepper specimen on paper-white background, three state rows. Steps labeled in Chinese: 1 新建项目, 2 设计系统总板, 3 功能页面, 4 组件设计, connected by thin lines. Row A (完成态): steps 1-2 done = navy circle with white check + navy label. Row B (当前态): step 3 current = brass/amber #D4A017 filled dot + bold navy label, others muted. Row C (未来态): all steps muted gray outline circles. Also show a compact variant for top bars (dot + label inline) and size specs (circle 20px, gap 8px, connector 1px).\nShow every variant and state in a tidy grid, each labeled (e.g. default / hover / active / disabled / focus).\nInvariants (do NOT change): strictly reuse Image 1's exact\n- color palette (same hex values for primary/background/text/accent),\n- typography family, sizes and weights,\n- corner radii and border treatment,\n- component styling (buttons, inputs, cards), icon style and stroke weight,\n- spacing rhythm and density.\nOverall mood stays: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nOnly compose NEW layout/content; never redesign the system.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "quality": "low",
+      "seed": null,
+      "size": "1536x1024",
+      "type": "navigation",
+      "updatedAt": "2026-09-08T19:35:48.909Z"
+    }
+  ],
+  "generatedAt": "2026-09-08T19:36:51.309Z",
+  "pages": [
+    {
+      "brief": "Three-column web app shell, flat, paper-white background. Top bar: helm logo + '舵 Rudder · Studio' left; right side a 4-step stepper: 新建项目 (done, navy check), 设计系统总板 (current, brass dot + bold), 功能页面 (muted), 组件设计 (muted). Left sidebar 240px: header '项目' with primary navy button '新建项目'; 5 project list items (name + muted date), first item active with navy left edge: 舵 Rudder · Studio / 清单 App / 博客主题 / 数据面板 / 空项目. Main area: centered empty state — thin-line compass illustration (navy line art), heading '从一块总板开始', caption '生成设计系统总板，作为全组风格的锚点', primary button '生成设计系统总板' + ghost '查看引导'.",
+      "endpoint": "edits",
+      "file": "pages/project-library/current.png",
+      "generatedAt": "2026-09-08T19:26:51.339Z",
+      "model": "gpt-image-2",
+      "prompt": "Image 1 是本产品设计系统总板。严格沿用它的设计语言，只组合新的页面内容。\nTask: design the full \"project-library\" page as one high-fidelity UI mockup.\nLayout brief: Three-column web app shell, flat, paper-white background. Top bar: helm logo + '舵 Rudder · Studio' left; right side a 4-step stepper: 新建项目 (done, navy check), 设计系统总板 (current, brass dot + bold), 功能页面 (muted), 组件设计 (muted). Left sidebar 240px: header '项目' with primary navy button '新建项目'; 5 project list items (name + muted date), first item active with navy left edge: 舵 Rudder · Studio / 清单 App / 博客主题 / 数据面板 / 空项目. Main area: centered empty state — thin-line compass illustration (navy line art), heading '从一块总板开始', caption '生成设计系统总板，作为全组风格的锚点', primary button '生成设计系统总板' + ghost '查看引导'.\nInvariants (do NOT change): strictly reuse Image 1's exact\n- color palette (same hex values for primary/background/text/accent),\n- typography family, sizes and weights,\n- corner radii and border treatment,\n- component styling (buttons, inputs, cards), icon style and stroke weight,\n- spacing rhythm and density.\nOverall mood stays: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nOnly compose NEW layout/content; never redesign the system.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "quality": "low",
+      "seed": null,
+      "size": "1536x1024",
+      "slug": "project-library",
+      "updatedAt": "2026-09-08T19:31:08.459Z"
+    },
+    {
+      "brief": "Same app shell as library page (top bar + 4-step stepper, step 功能页面 current. The stepper MUST use EXACTLY these four labels in this order: 1 新建项目 (done), 2 设计系统总板 (done), 3 功能页面 (current, brass dot, bold), 4 组件设计 (future, muted) — never rename or invent other step names). Left sidebar 240px project list. Main center: gallery grid with three labeled sections stacked vertically: '总板候选' (3 board thumbnail cards in a row), '页面' (2x2 grid of page thumbnails), '组件' (2 component thumbnails); each card = white thumbnail, 1px border, name + badge below; the hovered card shows small ghost icon buttons floating at its top-right corner: 重新生成 / 删除 / 放大. Right panel 320px detail form: title '详情', inputs: 名称, 简报 textarea, 尺寸 select '1536x1024', 质量 select; bottom buttons: primary '重新生成' + secondary '设为当前'.",
+      "endpoint": "edits",
+      "file": "pages/gallery/current.png",
+      "generatedAt": "2026-09-08T19:32:06.213Z",
+      "model": "gpt-image-2",
+      "prompt": "Image 1 是本产品设计系统总板。严格沿用它的设计语言，只组合新的页面内容。\nTask: design the full \"gallery\" page as one high-fidelity UI mockup.\nLayout brief: Same app shell as library page (top bar + 4-step stepper, step 功能页面 current. The stepper MUST use EXACTLY these four labels in this order: 1 新建项目 (done), 2 设计系统总板 (done), 3 功能页面 (current, brass dot, bold), 4 组件设计 (future, muted) — never rename or invent other step names). Left sidebar 240px project list. Main center: gallery grid with three labeled sections stacked vertically: '总板候选' (3 board thumbnail cards in a row), '页面' (2x2 grid of page thumbnails), '组件' (2 component thumbnails); each card = white thumbnail, 1px border, name + badge below; the hovered card shows small ghost icon buttons floating at its top-right corner: 重新生成 / 删除 / 放大. Right panel 320px detail form: title '详情', inputs: 名称, 简报 textarea, 尺寸 select '1536x1024', 质量 select; bottom buttons: primary '重新生成' + secondary '设为当前'.\nInvariants (do NOT change): strictly reuse Image 1's exact\n- color palette (same hex values for primary/background/text/accent),\n- typography family, sizes and weights,\n- corner radii and border treatment,\n- component styling (buttons, inputs, cards), icon style and stroke weight,\n- spacing rhythm and density.\nOverall mood stays: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nOnly compose NEW layout/content; never redesign the system.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "quality": "high",
+      "seed": null,
+      "size": "1536x1024",
+      "slug": "gallery",
+      "updatedAt": "2026-09-08T19:32:35.729Z"
+    },
+    {
+      "brief": "Same app shell (top bar + 4-step stepper, step 设计系统总板 current). Left sidebar 240px project list. Main center: large preview card (white, 1px border) showing a design-system board image with caption 'board · anchor'. Right panel 320px operation panel titled '操作面板': section '设计简报' form — 项目名 input, 画布尺寸 select, 品牌简报 textarea (3 rows placeholder), 质量 select; full-width primary button '生成设计系统总板'; below: loading skeleton of gray bars with muted caption '生成中，约需 30~120 秒…' and ghost '取消' button; bottom section '历史版本': horizontal strip of 4 small version thumbnails labeled v4 v3 v2 v1, v4 with brass border.",
+      "endpoint": "edits",
+      "file": "pages/detail/current.png",
+      "generatedAt": "2026-09-08T19:29:22.723Z",
+      "model": "gpt-image-2",
+      "prompt": "Image 1 是本产品设计系统总板。严格沿用它的设计语言，只组合新的页面内容。\nTask: design the full \"detail\" page as one high-fidelity UI mockup.\nLayout brief: Same app shell (top bar + 4-step stepper, step 设计系统总板 current). Left sidebar 240px project list. Main center: large preview card (white, 1px border) showing a design-system board image with caption 'board · anchor'. Right panel 320px operation panel titled '操作面板': section '设计简报' form — 项目名 input, 画布尺寸 select, 品牌简报 textarea (3 rows placeholder), 质量 select; full-width primary button '生成设计系统总板'; below: loading skeleton of gray bars with muted caption '生成中，约需 30~120 秒…' and ghost '取消' button; bottom section '历史版本': horizontal strip of 4 small version thumbnails labeled v4 v3 v2 v1, v4 with brass border.\nInvariants (do NOT change): strictly reuse Image 1's exact\n- color palette (same hex values for primary/background/text/accent),\n- typography family, sizes and weights,\n- corner radii and border treatment,\n- component styling (buttons, inputs, cards), icon style and stroke weight,\n- spacing rhythm and density.\nOverall mood stays: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nOnly compose NEW layout/content; never redesign the system.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "quality": "low",
+      "seed": null,
+      "size": "1536x1024",
+      "slug": "detail",
+      "updatedAt": "2026-09-08T19:33:06.852Z"
+    }
+  ],
+  "project": {
+    "brandBrief": "",
+    "canvasSize": {
+      "h": 1024,
+      "preset": "web",
+      "w": 1536
+    },
+    "id": "f20ffa15-441f-4ef5-8365-2ccb6a85056d",
+    "name": "舵 Rudder · Studio",
+    "styleBrief": "Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations."
+  },
+  "promptLog": [
+    {
+      "at": "2026-09-08T19:24:31.069Z",
+      "candidate_ids": [
+        "0001",
+        "0002",
+        "0003"
+      ],
+      "endpoint": "generations",
+      "kind": "board",
+      "params": {
+        "model": "gpt-image-2",
+        "n": 3,
+        "quality": "low",
+        "size": "1536x1024",
+        "thinking": "medium"
+      },
+      "prompt": "Purpose: a UI design system board (风格总板) for the product \"舵 Rudder · Studio\".\nStyle brief: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nCanvas: 1536x1024. Lay out ONE labeled sheet with these sections:\n1. COLOR PALETTE — 5-8 swatch chips as rounded rectangles, each with its exact hex code printed as a label under or inside the chip.\n2. TYPOGRAPHY — type hierarchy specimen: display / heading / subheading / body / caption rows, each labeled with size and weight.\n3. COMPONENT SAMPLES — a row of buttons (primary, secondary, ghost; default/hover/disabled states), one text input, one select, one card, one toggle, one checkbox, labeled.\n4. ICON STYLE — a row of 6-8 sample icons showing stroke weight and corner treatment.\n5. SPACING & GRID RULES — a spacing scale diagram (4/8/16/24/32px) and corner-radius samples per element class.\nSections separated by thin dividers, generous margins, engineering spec-sheet clarity.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "target": ""
+    },
+    {
+      "at": "2026-09-08T19:26:00.175Z",
+      "candidate_ids": [],
+      "endpoint": "-",
+      "kind": "page-add",
+      "params": {
+        "model": "-",
+        "n": 0,
+        "quality": "-",
+        "size": "-"
+      },
+      "prompt": "[page-add] project-library",
+      "target": "project-library"
+    },
+    {
+      "at": "2026-09-08T19:26:00.190Z",
+      "candidate_ids": [],
+      "endpoint": "-",
+      "kind": "page-add",
+      "params": {
+        "model": "-",
+        "n": 0,
+        "quality": "-",
+        "size": "-"
+      },
+      "prompt": "[page-add] gallery",
+      "target": "gallery"
+    },
+    {
+      "at": "2026-09-08T19:26:00.205Z",
+      "candidate_ids": [],
+      "endpoint": "-",
+      "kind": "page-add",
+      "params": {
+        "model": "-",
+        "n": 0,
+        "quality": "-",
+        "size": "-"
+      },
+      "prompt": "[page-add] detail",
+      "target": "detail"
+    },
+    {
+      "at": "2026-09-08T19:26:51.339Z",
+      "candidate_ids": [
+        "0001",
+        "0002"
+      ],
+      "endpoint": "edits",
+      "kind": "page",
+      "params": {
+        "model": "gpt-image-2",
+        "n": 2,
+        "quality": "low",
+        "size": "1536x1024",
+        "thinking": "medium"
+      },
+      "prompt": "Image 1 是本产品设计系统总板。严格沿用它的设计语言，只组合新的页面内容。\nTask: design the full \"project-library\" page as one high-fidelity UI mockup.\nLayout brief: Three-column web app shell, flat, paper-white background. Top bar: helm logo + '舵 Rudder · Studio' left; right side a 4-step stepper: 新建项目 (done, navy check), 设计系统总板 (current, brass dot + bold), 功能页面 (muted), 组件设计 (muted). Left sidebar 240px: header '项目' with primary navy button '新建项目'; 5 project list items (name + muted date), first item active with navy left edge: 舵 Rudder · Studio / 清单 App / 博客主题 / 数据面板 / 空项目. Main area: centered empty state — thin-line compass illustration (navy line art), heading '从一块总板开始', caption '生成设计系统总板，作为全组风格的锚点', primary button '生成设计系统总板' + ghost '查看引导'.\nInvariants (do NOT change): strictly reuse Image 1's exact\n- color palette (same hex values for primary/background/text/accent),\n- typography family, sizes and weights,\n- corner radii and border treatment,\n- component styling (buttons, inputs, cards), icon style and stroke weight,\n- spacing rhythm and density.\nOverall mood stays: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nOnly compose NEW layout/content; never redesign the system.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "target": "project-library"
+    },
+    {
+      "at": "2026-09-08T19:28:24.241Z",
+      "candidate_ids": [
+        "0001",
+        "0002"
+      ],
+      "endpoint": "edits",
+      "kind": "page",
+      "params": {
+        "model": "gpt-image-2",
+        "n": 2,
+        "quality": "low",
+        "size": "1536x1024",
+        "thinking": "medium"
+      },
+      "prompt": "Image 1 是本产品设计系统总板。严格沿用它的设计语言，只组合新的页面内容。\nTask: design the full \"gallery\" page as one high-fidelity UI mockup.\nLayout brief: Same app shell as library page (top bar + 4-step stepper, step 功能页面 current). Left sidebar 240px project list. Main center: gallery grid with three labeled sections stacked vertically: '总板候选' (3 board thumbnail cards in a row), '页面' (2x2 grid of page thumbnails), '组件' (2 component thumbnails); each card = white thumbnail, 1px border, name + badge below; the hovered card shows small ghost icon buttons floating at its top-right corner: 重新生成 / 删除 / 放大. Right panel 320px detail form: title '详情', inputs: 名称, 简报 textarea, 尺寸 select '1536x1024', 质量 select; bottom buttons: primary '重新生成' + secondary '设为当前'.\nInvariants (do NOT change): strictly reuse Image 1's exact\n- color palette (same hex values for primary/background/text/accent),\n- typography family, sizes and weights,\n- corner radii and border treatment,\n- component styling (buttons, inputs, cards), icon style and stroke weight,\n- spacing rhythm and density.\nOverall mood stays: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nOnly compose NEW layout/content; never redesign the system.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "target": "gallery"
+    },
+    {
+      "at": "2026-09-08T19:29:22.723Z",
+      "candidate_ids": [
+        "0001",
+        "0002"
+      ],
+      "endpoint": "edits",
+      "kind": "page",
+      "params": {
+        "model": "gpt-image-2",
+        "n": 2,
+        "quality": "low",
+        "size": "1536x1024",
+        "thinking": "medium"
+      },
+      "prompt": "Image 1 是本产品设计系统总板。严格沿用它的设计语言，只组合新的页面内容。\nTask: design the full \"detail\" page as one high-fidelity UI mockup.\nLayout brief: Same app shell (top bar + 4-step stepper, step 设计系统总板 current). Left sidebar 240px project list. Main center: large preview card (white, 1px border) showing a design-system board image with caption 'board · anchor'. Right panel 320px operation panel titled '操作面板': section '设计简报' form — 项目名 input, 画布尺寸 select, 品牌简报 textarea (3 rows placeholder), 质量 select; full-width primary button '生成设计系统总板'; below: loading skeleton of gray bars with muted caption '生成中，约需 30~120 秒…' and ghost '取消' button; bottom section '历史版本': horizontal strip of 4 small version thumbnails labeled v4 v3 v2 v1, v4 with brass border.\nInvariants (do NOT change): strictly reuse Image 1's exact\n- color palette (same hex values for primary/background/text/accent),\n- typography family, sizes and weights,\n- corner radii and border treatment,\n- component styling (buttons, inputs, cards), icon style and stroke weight,\n- spacing rhythm and density.\nOverall mood stays: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nOnly compose NEW layout/content; never redesign the system.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "target": "detail"
+    },
+    {
+      "at": "2026-09-08T19:32:06.213Z",
+      "candidate_ids": [
+        "0003"
+      ],
+      "endpoint": "edits",
+      "kind": "page",
+      "params": {
+        "model": "gpt-image-2",
+        "n": 1,
+        "quality": "high",
+        "size": "1536x1024",
+        "thinking": "medium"
+      },
+      "prompt": "Image 1 是本产品设计系统总板。严格沿用它的设计语言，只组合新的页面内容。\nTask: design the full \"gallery\" page as one high-fidelity UI mockup.\nLayout brief: Same app shell as library page (top bar + 4-step stepper, step 功能页面 current. The stepper MUST use EXACTLY these four labels in this order: 1 新建项目 (done), 2 设计系统总板 (done), 3 功能页面 (current, brass dot, bold), 4 组件设计 (future, muted) — never rename or invent other step names). Left sidebar 240px project list. Main center: gallery grid with three labeled sections stacked vertically: '总板候选' (3 board thumbnail cards in a row), '页面' (2x2 grid of page thumbnails), '组件' (2 component thumbnails); each card = white thumbnail, 1px border, name + badge below; the hovered card shows small ghost icon buttons floating at its top-right corner: 重新生成 / 删除 / 放大. Right panel 320px detail form: title '详情', inputs: 名称, 简报 textarea, 尺寸 select '1536x1024', 质量 select; bottom buttons: primary '重新生成' + secondary '设为当前'.\nInvariants (do NOT change): strictly reuse Image 1's exact\n- color palette (same hex values for primary/background/text/accent),\n- typography family, sizes and weights,\n- corner radii and border treatment,\n- component styling (buttons, inputs, cards), icon style and stroke weight,\n- spacing rhythm and density.\nOverall mood stays: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nOnly compose NEW layout/content; never redesign the system.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "target": "gallery"
+    },
+    {
+      "at": "2026-09-08T19:33:29.827Z",
+      "candidate_ids": [],
+      "endpoint": "-",
+      "kind": "component-add",
+      "params": {
+        "model": "-",
+        "n": 0,
+        "quality": "-",
+        "size": "-"
+      },
+      "prompt": "[component-add] button-set",
+      "target": "button-set"
+    },
+    {
+      "at": "2026-09-08T19:33:29.840Z",
+      "candidate_ids": [],
+      "endpoint": "-",
+      "kind": "component-add",
+      "params": {
+        "model": "-",
+        "n": 0,
+        "quality": "-",
+        "size": "-"
+      },
+      "prompt": "[component-add] stepper",
+      "target": "stepper"
+    },
+    {
+      "at": "2026-09-08T19:34:29.268Z",
+      "candidate_ids": [
+        "0001"
+      ],
+      "endpoint": "edits",
+      "kind": "component",
+      "params": {
+        "model": "gpt-image-2",
+        "n": 1,
+        "quality": "low",
+        "size": "1536x1024",
+        "thinking": "medium"
+      },
+      "prompt": "Image 1 是本产品设计系统总板。严格沿用它的设计语言，为单个组件族出细节图。\nTask: a component detail sheet for the \"buttons\" family: Component sheet on paper-white background, one labeled row per variant × state grid. Variants: Primary / Secondary / Ghost. States: Default / Hover / Disabled. Chinese labels inside buttons: 主要按钮 / 次要按钮 / 幽灵按钮. Primary = solid navy #0B3D91 white text; Secondary = white with 1px navy border navy text; Ghost = no border muted text. Hover rows slightly darker/lighter; disabled = muted gray fill, low-contrast text. Include size row (sm 28px / md 32px / lg 40px heights) and corner radius 8px. Thin-line icons allowed. Spec-sheet clarity with labels.\nShow every variant and state in a tidy grid, each labeled (e.g. default / hover / active / disabled / focus).\nInvariants (do NOT change): strictly reuse Image 1's exact\n- color palette (same hex values for primary/background/text/accent),\n- typography family, sizes and weights,\n- corner radii and border treatment,\n- component styling (buttons, inputs, cards), icon style and stroke weight,\n- spacing rhythm and density.\nOverall mood stays: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nOnly compose NEW layout/content; never redesign the system.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "target": "button-set"
+    },
+    {
+      "at": "2026-09-08T19:35:28.537Z",
+      "candidate_ids": [
+        "0001"
+      ],
+      "endpoint": "edits",
+      "kind": "component",
+      "params": {
+        "model": "gpt-image-2",
+        "n": 1,
+        "quality": "low",
+        "size": "1536x1024",
+        "thinking": "medium"
+      },
+      "prompt": "Image 1 是本产品设计系统总板。严格沿用它的设计语言，为单个组件族出细节图。\nTask: a component detail sheet for the \"navigation\" family: Component sheet: a horizontal 4-step stepper specimen on paper-white background, three state rows. Steps labeled in Chinese: 1 新建项目, 2 设计系统总板, 3 功能页面, 4 组件设计, connected by thin lines. Row A (完成态): steps 1-2 done = navy circle with white check + navy label. Row B (当前态): step 3 current = brass/amber #D4A017 filled dot + bold navy label, others muted. Row C (未来态): all steps muted gray outline circles. Also show a compact variant for top bars (dot + label inline) and size specs (circle 20px, gap 8px, connector 1px).\nShow every variant and state in a tidy grid, each labeled (e.g. default / hover / active / disabled / focus).\nInvariants (do NOT change): strictly reuse Image 1's exact\n- color palette (same hex values for primary/background/text/accent),\n- typography family, sizes and weights,\n- corner radii and border treatment,\n- component styling (buttons, inputs, cards), icon style and stroke weight,\n- spacing rhythm and density.\nOverall mood stays: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nOnly compose NEW layout/content; never redesign the system.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "target": "stepper"
+    },
+    {
+      "at": "2026-09-08T19:36:43.521Z",
+      "candidate_ids": [
+        "0004"
+      ],
+      "endpoint": "edits",
+      "kind": "board",
+      "params": {
+        "model": "gpt-image-2",
+        "n": 1,
+        "quality": "high",
+        "size": "1536x1024",
+        "thinking": "medium"
+      },
+      "prompt": "Purpose: a UI design system board (风格总板) for the product \"舵 Rudder · Studio\".\nStyle brief: Deep-sea nautical design studio for a professional developer tool called Rudder (Chinese: 舵). Navy blue primary color, brass/amber accent used sparingly, large neutral grays carrying content, warm paper-white background. Calm, restrained, professional instrument feel — like a ship's bridge console. Flat design, no gradients, no heavy shadows, 1px borders preferred. Typography Inter + PingFang SC. The design-system board must show: hex-labeled color swatches, a type scale specimen (Inter/PingFang), button / card / input-field component samples, thin-line icon style, and 8px spacing grid annotations.\nCanvas: 1536x1024. Lay out ONE labeled sheet with these sections:\n1. COLOR PALETTE — 5-8 swatch chips as rounded rectangles, each with its exact hex code printed as a label under or inside the chip.\n2. TYPOGRAPHY — type hierarchy specimen: display / heading / subheading / body / caption rows, each labeled with size and weight.\n3. COMPONENT SAMPLES — a row of buttons (primary, secondary, ghost; default/hover/disabled states), one text input, one select, one card, one toggle, one checkbox, labeled.\n4. ICON STYLE — a row of 6-8 sample icons showing stroke weight and corner treatment.\n5. SPACING & GRID RULES — a spacing scale diagram (4/8/16/24/32px) and corner-radius samples per element class.\nSections separated by thin dividers, generous margins, engineering spec-sheet clarity.\nRendering rules: flat vector UI mockup, high fidelity, crisp edges, realistic UI label text (no lorem ipsum, no gibberish glyphs), generous whitespace, no photorealistic scenes, no 3D perspective, no device frames beyond the canvas itself.",
+      "target": ""
+    }
+  ],
+  "rudderVersion": "0.1.0"
+}
