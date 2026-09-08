@@ -2,13 +2,19 @@ import { MockApi } from "@/lib/api/mock-api";
 import { TauriApi } from "@/lib/api/tauri-api";
 import type { ApiAdapter } from "@/lib/api/types";
 
+/**
+ * Tauri 2 injects `__TAURI_INTERNALS__` into the webview; `__TAURI__` only
+ * exists with `withGlobalTauri`. Browser dev (vite/vitest) has neither and
+ * falls back to MockApi.
+ */
 export function hasTauriRuntime(): boolean {
-  return typeof window !== "undefined" && "__TAURI__" in window;
+  if (typeof window === "undefined") return false;
+  return "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
 }
 
 /**
- * Mock-first: the Tauri adapter is a stub until the core bridge lands, so the
- * app always runs against MockApi unless a real Tauri shell is detected.
+ * Mock-first: the Tauri adapter talks to the real Rust bridge (rudder-core)
+ * and is only used inside the desktop shell; plain browser dev uses MockApi.
  */
 export function createApi(): ApiAdapter {
   return hasTauriRuntime() ? new TauriApi() : new MockApi();
