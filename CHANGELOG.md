@@ -1,0 +1,40 @@
+# 更新日志 · 舵 Rudder
+
+本文件记录「舵 Rudder」各版本的可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+
+## 0.1.0 — 2026-09-08
+
+首个公开里程碑：AI 成套 UI 设计工作室走通「新建项目 → 设计系统总板 → 功能页面 → 组件设计」四步流程，CLI / 桌面端 / AI 代理 Skill 三入口共享同一 Rust 核心库。
+
+### Phase 1 · 仓库脚手架
+
+- Monorepo 骨架：React 前端 + Rust workspace（`rudder-core` / `rudder-cli`）+ Tauri 2 壳。
+- 舵主题 CSS 变量（light/dark 双模式）与三栏极简骨架、四步步条。
+- i18n 骨架（zh-CN / en），界面文案零硬编码（`scripts/check-hardcoded-text.mjs` 把关）。
+- `ping` command 前后端打通。
+
+### Phase 2 · 核心库 + CLI
+
+- `rudder-core`：项目存储（tempfile+rename 原子写）、三段式提示词引擎、gpt-image-2 客户端（dry-run 计划、multipart 多参考图、429/5xx 指数退避重试）、资产包导出器（manifest.json 溯源 + PROMPTS.md + DESIGN.template.md）。
+- `rudder` CLI 全命令：`init` / `project update` / `board generate|pick` / `page add|update|generate|pick` / `component add|update|generate|pick` / `list` / `export` / `e2e` / `config`。
+- 输出契约：`--json` 信封 `{ok, data|error{code,message,hint}}`，退出码 0/1/2/3；`--yes` 显式确认才真实调用，默认 dry-run。
+- 生成批次自动记录 `seed`（plan / project.json / 候选行 / manifest），任何批次可凭 `--seed` 复现。
+- 生成类默认质量为探索档 `low`，`high` 需显式指定。
+
+### Phase 3 · 桌面应用
+
+- 三栏布局完整四步流程：项目新建（尺寸预设 + 自定义校验）、总板候选与锚点、页面/组件生命周期（候选对比 → 转正 → 历史）、导出对话框。
+- 生成中骨架屏 + 任务进度事件（约 30s~3min，可取消）；错误统一 `{code,message}` 并走 i18n 文案。
+- Tauri commands 薄封装 `rudder-core::ops`，asset protocol 展示项目图片。
+
+### Phase 4 · Skill + 自举
+
+- `skill/rudder-design`：SKILL.md 四步工作流 + 命令参考 + DESIGN.md 契约 + 错误恢复表，供 AI 编码代理自主驱动。
+- 自举实测：用本工具 CLI+Skill 为「舵」自身生成设计资产（总板锚点 + 三屏 + 组件图，存 `design-assets/`），并产出 `docs/UI-REVIEW.md` 打磨清单。
+
+### Phase 5 · 打磨 + 发布
+
+- 采纳自举锚点图色系与四档圆角（THEME v2）：primary `#0B3D91` / accent `#D4A017` / 纸白底 / 墨石正文；按钮 4px / 输入 6px / 卡片 8px / 弹窗 12px；dark 模式按「海军蓝提亮、纸白转深、琥珀金保持」派生并通过对比度自审。
+- UI-REVIEW 工具缺陷 1-7、10 全部关闭：seed 全程记录、`update` 子命令、生成响应与 board 对称（候选去重 prompt）、默认质量 low、人类模式 stdout 一行摘要、export 默认只带锚点与主稿（`--with-candidates` 显式带探索稿）、未 pick 目标导出警告（stderr + `data.warnings`）。
+- 界面整改：详情表单 schema 统一（简报 200 字上限 + 计数、候选数 1-4、质量枚举草稿/标准/高清）并 i18n 定稿；空态插画规范落地（176px、1.5px 线宽、海军蓝单色、舵轮/罗盘/锚三选一）；缩略图徽标字号 ≥11px；悬停浮层按 THEME §5 姿态统一（1.5px 线性图标、hover 主色描边、150ms ease-out、浮层阴影）。
+- 发布物：macOS aarch64 `.app` / `.dmg`（`pnpm tauri build`），MIT LICENSE，本更新日志与 README 安装指南。
