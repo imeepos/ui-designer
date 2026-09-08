@@ -1,0 +1,3 @@
+display_name: Rudder Design Studio
+short_description: Generate consistent UI design sets (board → pages → components) via the rudder CLI + gpt-image-2
+default_prompt: Design a complete UI set for my product with rudder: design-system board first, then key pages and component sheets, export assets and write DESIGN.md

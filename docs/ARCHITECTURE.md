@@ -31,9 +31,11 @@ board/                # 设计系统总板候选与选中
   candidates/0001.png …
   anchor.png          # 选定的锚点图（copy）
 pages/<slug>/         # 每个功能页面
-  current.png
-  history/<ts>.png
+  candidates/NNNN.png # 多稿候选（pick 后保留备查）
+  current.png         # 选中的主稿（copy）
+  history/<ts>.png    # 被替换的旧主稿
 components/<name>/
+  candidates/NNNN.png
   current.png
   history/<ts>.png
 refs/                 # 用户提供的布局参考图
@@ -62,8 +64,10 @@ rudder board generate [--n 4] [--quality high] [--yes]
 rudder board pick <candidate-id>          # 设为锚点
 rudder page add <slug> --brief "..."
 rudder page generate <slug|--all> [--n 1-4] [--yes]
+rudder page pick <slug> <candidate-id>    # 候选→主稿（旧主稿入 history/）
 rudder component add <name> --type <t> --brief "..."
 rudder component generate <name|--all> [--n 1-4] [--yes]
+rudder component pick <name> <candidate-id>
 rudder list [pages|components]            # status 概览
 rudder export [--out <dir>]               # 资产包：图片+manifest.json+PROMPTS.md+DESIGN.template.md
 rudder e2e [--yes]                        # 冒烟：建样例项目→总板→1页→1组件→导出
@@ -91,5 +95,5 @@ rudder config get|set <key> <value>       # quality/thinking/n 等默认值，�
 - 前端：`pnpm build` 零错；关键组件渲染冒烟（vitest 可选）。
 
 ## 10. 打包
-- `cargo tauri build` 出 macOS .app/.dmg（aarch64）。
+- `pnpm tauri build`（@tauri-apps/cli 为 devDependency；cargo install tauri-cli 本机编译失败已弃用）出 macOS .app/.dmg（aarch64）。
 - CLI 单独 `cargo build --release`，随包附 `install.md`。
