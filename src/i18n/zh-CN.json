@@ -1,0 +1,72 @@
+{
+  "app": {
+    "title": "舵 Rudder",
+    "subtitle": "AI 成套 UI 设计工作室"
+  },
+  "language": {
+    "label": "界面语言",
+    "zh-CN": "中文",
+    "en": "EN"
+  },
+  "theme": {
+    "toggleToLight": "切换为浅色模式",
+    "toggleToDark": "切换为深色模式"
+  },
+  "steps": {
+    "label": "设计流程",
+    "project": {
+      "title": "项目",
+      "desc": "新建或选择项目"
+    },
+    "board": {
+      "title": "总板",
+      "desc": "设计系统总板"
+    },
+    "page": {
+      "title": "页面",
+      "desc": "功能页面设计"
+    },
+    "component": {
+      "title": "组件",
+      "desc": "组件细节设计"
+    }
+  },
+  "panel": {
+    "projects": {
+      "title": "项目",
+      "new": "新建项目",
+      "empty": "暂无项目，点击「新建项目」开始"
+    },
+    "gallery": {
+      "title": "画廊",
+      "sections": {
+        "board": "总板候选",
+        "pages": "功能页面",
+        "components": "组件"
+      },
+      "empty": {
+        "title": "从设计系统总板开始",
+        "desc": "新建项目并生成总板后，页面与组件都会沿用同一套风格。",
+        "cta": "新建项目"
+      }
+    },
+    "detail": {
+      "title": "详情与操作",
+      "placeholder": {
+        "title": "暂未选择内容"
+      },
+      "empty": "在画廊中选择一项后，这里会显示简报表单、生成按钮与历史版本。"
+    }
+  },
+  "status": {
+    "core": {
+      "label": "Rust 核心",
+      "checking": "检测中…",
+      "ok": "已连接 · v{{version}}",
+      "browser": "浏览器预览（Tauri 壳未加载）"
+    }
+  },
+  "footer": {
+    "phase": "Phase 1 · 工程骨架"
+  }
+}

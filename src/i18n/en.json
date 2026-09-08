@@ -1,0 +1,72 @@
+{
+  "app": {
+    "title": "Rudder",
+    "subtitle": "AI UI design studio"
+  },
+  "language": {
+    "label": "Language",
+    "zh-CN": "中文",
+    "en": "EN"
+  },
+  "theme": {
+    "toggleToLight": "Switch to light mode",
+    "toggleToDark": "Switch to dark mode"
+  },
+  "steps": {
+    "label": "Design flow",
+    "project": {
+      "title": "Project",
+      "desc": "Create or pick a project"
+    },
+    "board": {
+      "title": "Board",
+      "desc": "Design system board"
+    },
+    "page": {
+      "title": "Page",
+      "desc": "Feature page design"
+    },
+    "component": {
+      "title": "Component",
+      "desc": "Component details"
+    }
+  },
+  "panel": {
+    "projects": {
+      "title": "Projects",
+      "new": "New project",
+      "empty": "No projects yet. Click \"New project\" to start."
+    },
+    "gallery": {
+      "title": "Gallery",
+      "sections": {
+        "board": "Board candidates",
+        "pages": "Pages",
+        "components": "Components"
+      },
+      "empty": {
+        "title": "Start from the design system board",
+        "desc": "Create a project and generate the board first; pages and components will share its style.",
+        "cta": "New project"
+      }
+    },
+    "detail": {
+      "title": "Details & actions",
+      "placeholder": {
+        "title": "Nothing selected"
+      },
+      "empty": "Pick an item in the gallery to see its brief form, generate button and history."
+    }
+  },
+  "status": {
+    "core": {
+      "label": "Rust core",
+      "checking": "Checking…",
+      "ok": "Connected · v{{version}}",
+      "browser": "Browser preview (Tauri shell not loaded)"
+    }
+  },
+  "footer": {
+    "phase": "Phase 1 · Scaffolding"
+  }
+}
