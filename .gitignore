@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+target/
+
+# Environment & secrets — 永不入库
+.env
+.env.*
+!.env.example
+
+# Local tooling & artifacts
+.devloop/
+.smoke/
+coverage/
+
+# OS / editor
+.DS_Store
+*.log
+
+# Tauri generated schemas
+src-tauri/gen/
