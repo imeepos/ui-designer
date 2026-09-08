@@ -14,6 +14,7 @@
   },
   "steps": {
     "label": "Design flow",
+    "locked": "Finish the previous steps first",
     "project": {
       "title": "Project",
       "desc": "Create or pick a project"
@@ -31,19 +32,39 @@
       "desc": "Component details"
     }
   },
+  "common": {
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "close": "Close",
+    "enlarge": "View larger",
+    "export": "Export assets",
+    "done": "Done"
+  },
+  "status": {
+    "core": {
+      "label": "Rust core",
+      "checking": "Checking…",
+      "ok": "Connected · v{{version}}",
+      "browser": "Browser preview (Tauri shell not loaded)"
+    },
+    "api": {
+      "mock": "Mock preview",
+      "tauri": "Tauri connected"
+    }
+  },
+  "footer": {
+    "phase": "Phase 3 · Desktop app (mock-first)"
+  },
   "panel": {
     "projects": {
       "title": "Projects",
       "new": "New project",
-      "empty": "No projects yet. Click \"New project\" to start."
+      "empty": "No projects yet. Click \"New project\" to start.",
+      "pageCount": "{{count}} pages",
+      "componentCount": "{{count}} comps"
     },
     "gallery": {
       "title": "Gallery",
-      "sections": {
-        "board": "Board candidates",
-        "pages": "Pages",
-        "components": "Components"
-      },
       "empty": {
         "title": "Start from the design system board",
         "desc": "Create a project and generate the board first; pages and components will share its style.",
@@ -55,18 +76,260 @@
       "placeholder": {
         "title": "Nothing selected"
       },
-      "empty": "Pick an item in the gallery to see its brief form, generate button and history."
+      "empty": "Pick an item in the gallery to see its brief form, generate button and history.",
+      "backToBoard": "Back to board",
+      "project": {
+        "created": "Created {{date}}",
+        "brand": "Brand brief",
+        "style": "Style notes",
+        "pages": "Pages",
+        "components": "Components"
+      }
     }
   },
-  "status": {
-    "core": {
-      "label": "Rust core",
-      "checking": "Checking…",
-      "ok": "Connected · v{{version}}",
-      "browser": "Browser preview (Tauri shell not loaded)"
+  "project": {
+    "form": {
+      "title": "New project",
+      "name": "Project name",
+      "namePlaceholder": "e.g. Rudder Studio",
+      "size": "Canvas size",
+      "preset": {
+        "web": "Web",
+        "mobile": "Mobile",
+        "desktop": "Desktop",
+        "custom": "Custom"
+      },
+      "width": "Width (px)",
+      "height": "Height (px)",
+      "sizeHint": "Sides must be multiples of 16, aspect ratio ≤ 3:1, total pixels 0.65M–8.3M.",
+      "brandBrief": "Brand brief",
+      "brandBriefPlaceholder": "One line on the brand mood, e.g. an ocean-going studio, restrained and professional.",
+      "brandBriefHint": "Pre-fills the board brand keywords.",
+      "submit": "Create project",
+      "error": {
+        "required": "Enter positive integer dimensions.",
+        "multiple": "Sides must be multiples of {{multiple}}; {{w}} x {{h}} is not.",
+        "aspect": "Aspect ratio must not exceed {{max}}:1.",
+        "pixels": "Total pixels ≈ {{pixels}}MP, outside {{min}}–{{max}}MP."
+      }
     }
   },
-  "footer": {
-    "phase": "Phase 1 · Scaffolding"
+  "form": {
+    "count": "Candidates",
+    "board": {
+      "title": "Design system board",
+      "desc": "Palette, type scale, component samples and icon style on one board.",
+      "brandKeywords": "Brand keywords",
+      "brandPlaceholder": "e.g. navy blue, brass accent, restrained tool feel",
+      "colorDirection": "Color direction",
+      "colorPlaceholder": "e.g. deep navy primary + a touch of brass",
+      "fontMood": "Type mood",
+      "fontPlaceholder": "e.g. Inter / PingFang, modern and neutral",
+      "radiusDensity": "Radius / density",
+      "radiusPlaceholder": "e.g. 12px radius, 8px spacing, medium density",
+      "reference": "Reference (optional)",
+      "referencePlaceholder": "Target style or reference image notes",
+      "generate": "Generate design system board",
+      "regenerate": "Regenerate candidates",
+      "anchorHint": "Click a candidate in the gallery to set it as the anchor; later generations follow its style."
+    },
+    "page": {
+      "addTitle": "Add page",
+      "pickTitle": "Pick a page",
+      "detailTitle": "Page actions",
+      "slug": "Page slug",
+      "slugPlaceholder": "e.g. project-library",
+      "slugHint": "Lowercase letters, digits and dashes, up to 48 chars.",
+      "brief": "Layout brief",
+      "briefPlaceholder": "Describe the information architecture, e.g. left list + center gallery + right details.",
+      "add": "Add page",
+      "generate": "Generate page drafts",
+      "regenerate": "Regenerate",
+      "hint": "Compare candidates in the gallery, pick one; the old current moves to history."
+    },
+    "component": {
+      "addTitle": "Add component",
+      "pickTitle": "Pick a component",
+      "detailTitle": "Component actions",
+      "name": "Component name",
+      "namePlaceholder": "e.g. button-set",
+      "type": "Component type",
+      "brief": "Component brief",
+      "briefPlaceholder": "e.g. primary / secondary / ghost states with hover and disabled.",
+      "add": "Add component",
+      "generate": "Generate component detail",
+      "regenerate": "Regenerate",
+      "hint": "The anchor board is reference 1; page images can be added for context."
+    },
+    "error": {
+      "slugRequired": "Enter a page slug.",
+      "slugTaken": "This slug already exists.",
+      "slugFormat": "Slugs allow lowercase letters, digits and dashes only.",
+      "nameRequired": "Enter a component name.",
+      "nameTaken": "This component name already exists."
+    }
+  },
+  "component": {
+    "type": {
+      "buttons": "Buttons",
+      "forms": "Forms",
+      "cards": "Cards",
+      "navigation": "Navigation",
+      "icons": "Icon set",
+      "tables": "Tables",
+      "modals": "Modals"
+    }
+  },
+  "gallery": {
+    "section": {
+      "board": "Board candidates"
+    },
+    "board": {
+      "anchorTitle": "Current anchor",
+      "anchorDesc": "Page and component generations use this image as reference 1.",
+      "anchorEmpty": "No anchor yet: generate candidates, then click one to set the style anchor.",
+      "anchorBadge": "Anchor",
+      "setAnchor": "Set as anchor",
+      "candidateAlt": "Board candidate {{id}}",
+      "empty": {
+        "title": "No board candidates yet",
+        "desc": "Fill in the brand and style brief on the right, then generate 1–4 candidates."
+      },
+      "pickHint": "Hover a candidate and click \"Set as anchor\"; the anchor card carries a brass badge."
+    },
+    "flow": {
+      "items": "Items",
+      "candidates": "Candidates · {{name}}",
+      "candidatesEmpty": "No candidates yet: hit generate on the right.",
+      "candidateAlt": "Candidate {{id}}",
+      "pick": "Pick",
+      "history": "History ({{count}})",
+      "picked": "Picked",
+      "pickedShort": "Picked",
+      "candidatesShort": "{{count}} candidates",
+      "untouched": "Not generated",
+      "placeholder": "Not generated yet"
+    },
+    "pages": {
+      "empty": {
+        "title": "No pages yet",
+        "desc": "Add a page slug and layout brief on the right to start generating."
+      }
+    },
+    "components": {
+      "empty": {
+        "title": "No components yet",
+        "desc": "Add a component and its type on the right to generate details."
+      }
+    },
+    "overview": {
+      "anchorMissing": "No anchor yet — finish the board step first.",
+      "board": "Board",
+      "pages": "Pages",
+      "components": "Components",
+      "done": "Done",
+      "candidates": "{{count}} candidates",
+      "progress": "{{done}}/{{total}} picked",
+      "gotoBoard": "Go to board",
+      "gotoPages": "Go to pages",
+      "gotoComponents": "Go to components"
+    }
+  },
+  "job": {
+    "label": {
+      "board": "Generating board candidates…",
+      "page": "Generating page \"{{slug}}\"…",
+      "component": "Generating component \"{{name}}\"…",
+      "export": "Exporting asset bundle…"
+    },
+    "elapsed": "{{seconds}}s",
+    "etaNote": "Real generations take ~30s–3min, up to 3 minutes at most."
+  },
+  "export": {
+    "dialog": {
+      "title": "Export asset bundle",
+      "dir": "Export directory",
+      "dirHint": "The desktop build opens the native directory picker; in mock preview just edit the path.",
+      "browse": "Choose directory…",
+      "browseHint": "Mock preview: the path above is used",
+      "start": "Start export",
+      "summary": "Exports images for {{pages}} pages and {{components}} components, plus manifest.json and PROMPTS.md.",
+      "doneSummary": "Exported {{images}} images, {{files}} files in total."
+    }
+  },
+  "toast": {
+    "success": {
+      "project": "Project created.",
+      "board": "Generated {{count}} board candidates.",
+      "anchor": "Anchor set. Page design unlocked.",
+      "pageAdded": "Page {{slug}} added.",
+      "page": "Page {{slug}}: {{count}} candidates generated.",
+      "pagePicked": "Page {{slug}} picked.",
+      "componentAdded": "Component {{name}} added.",
+      "component": "Component {{name}}: {{count}} candidates generated.",
+      "componentPicked": "Component {{name}} picked.",
+      "export": "Asset bundle exported, {{count}} files.",
+      "deleted": "Deleted."
+    },
+    "cancelled": "Operation cancelled."
+  },
+  "confirm": {
+    "deleteCandidate": {
+      "title": "Delete board candidate",
+      "desc": "Delete candidate {{id}}? This cannot be undone."
+    },
+    "deleteItem": {
+      "title": "Delete",
+      "desc": "Delete \"{{name}}\"? Its candidates and history will be removed too."
+    },
+    "deleteHistory": {
+      "title": "Delete history entry",
+      "desc": "Delete the {{time}} history version of \"{{name}}\"?"
+    }
+  },
+  "errors": {
+    "VALIDATION_ERROR": {
+      "message": "Invalid input, please check the form.",
+      "hint": "Fix the fields and retry."
+    },
+    "ANCHOR_REQUIRED": {
+      "message": "No board anchor is set yet.",
+      "hint": "Pick a board candidate as the anchor first."
+    },
+    "ANCHOR_LOCKED": {
+      "message": "The anchor board cannot be deleted.",
+      "hint": "Set another candidate as anchor before deleting this one."
+    },
+    "NOT_FOUND": {
+      "message": "The target does not exist or was removed.",
+      "hint": "Refresh the project and retry."
+    },
+    "DUPLICATE_SLUG": {
+      "message": "This page slug already exists.",
+      "hint": "Choose another slug."
+    },
+    "DUPLICATE_NAME": {
+      "message": "This component name already exists.",
+      "hint": "Choose another name."
+    },
+    "EXPORT_FAILED": {
+      "message": "Export failed.",
+      "hint": "Generate and pick at least one image first."
+    },
+    "API_ERROR": {
+      "message": "The image service call failed.",
+      "hint": "Retry later; if it persists check the environment configuration."
+    },
+    "NOT_IMPLEMENTED": {
+      "message": "This capability is not wired to the core yet.",
+      "hint": "This is the mock preview; the Tauri bridge lands in a later phase."
+    },
+    "UNKNOWN": {
+      "message": "An unknown error occurred.",
+      "hint": "Retry or check the logs."
+    }
+  },
+  "lightbox": {
+    "hint": "Esc to close"
   }
 }

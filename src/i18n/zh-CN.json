@@ -14,6 +14,7 @@
   },
   "steps": {
     "label": "设计流程",
+    "locked": "先完成前置步骤",
     "project": {
       "title": "项目",
       "desc": "新建或选择项目"
@@ -31,19 +32,39 @@
       "desc": "组件细节设计"
     }
   },
+  "common": {
+    "cancel": "取消",
+    "delete": "删除",
+    "close": "关闭",
+    "enlarge": "查看大图",
+    "export": "导出资产包",
+    "done": "完成"
+  },
+  "status": {
+    "core": {
+      "label": "Rust 核心",
+      "checking": "检测中…",
+      "ok": "已连接 · v{{version}}",
+      "browser": "浏览器预览（Tauri 壳未加载）"
+    },
+    "api": {
+      "mock": "Mock 预览",
+      "tauri": "Tauri 已接入"
+    }
+  },
+  "footer": {
+    "phase": "Phase 3 · 桌面应用（Mock 优先）"
+  },
   "panel": {
     "projects": {
       "title": "项目",
       "new": "新建项目",
-      "empty": "暂无项目，点击「新建项目」开始"
+      "empty": "暂无项目，点击「新建项目」开始",
+      "pageCount": "{{count}} 页",
+      "componentCount": "{{count}} 组件"
     },
     "gallery": {
       "title": "画廊",
-      "sections": {
-        "board": "总板候选",
-        "pages": "功能页面",
-        "components": "组件"
-      },
       "empty": {
         "title": "从设计系统总板开始",
         "desc": "新建项目并生成总板后，页面与组件都会沿用同一套风格。",
@@ -55,18 +76,260 @@
       "placeholder": {
         "title": "暂未选择内容"
       },
-      "empty": "在画廊中选择一项后，这里会显示简报表单、生成按钮与历史版本。"
+      "empty": "在画廊中选择一项后，这里会显示简报表单、生成按钮与历史版本。",
+      "backToBoard": "返回总板",
+      "project": {
+        "created": "创建于 {{date}}",
+        "brand": "品牌简报",
+        "style": "风格要点",
+        "pages": "页面",
+        "components": "组件"
+      }
     }
   },
-  "status": {
-    "core": {
-      "label": "Rust 核心",
-      "checking": "检测中…",
-      "ok": "已连接 · v{{version}}",
-      "browser": "浏览器预览（Tauri 壳未加载）"
+  "project": {
+    "form": {
+      "title": "新建项目",
+      "name": "项目名称",
+      "namePlaceholder": "例如：舵 Rudder · Studio",
+      "size": "画布尺寸",
+      "preset": {
+        "web": "Web",
+        "mobile": "Mobile",
+        "desktop": "Desktop",
+        "custom": "自定义"
+      },
+      "width": "宽（px）",
+      "height": "高（px）",
+      "sizeHint": "边长须为 16 的倍数，宽高比 ≤ 3:1，总像素 65 万 ~ 829 万。",
+      "brandBrief": "品牌简报",
+      "brandBriefPlaceholder": "一句话描述品牌气质，例如：远洋航海工作室，克制专业的工具感。",
+      "brandBriefHint": "将自动带入总板的品牌关键词。",
+      "submit": "创建项目",
+      "error": {
+        "required": "请输入正整数尺寸。",
+        "multiple": "边长须为 {{multiple}} 的倍数，当前 {{w}} x {{h}} 不满足。",
+        "aspect": "宽高比不能超过 {{max}}:1。",
+        "pixels": "总像素约 {{pixels}}MP，超出 {{min}}~{{max}}MP 范围。"
+      }
     }
   },
-  "footer": {
-    "phase": "Phase 1 · 工程骨架"
+  "form": {
+    "count": "候选数量",
+    "board": {
+      "title": "设计系统总板",
+      "desc": "色板、字阶、组件样本与图标风格画在一张总板上。",
+      "brandKeywords": "品牌关键词",
+      "brandPlaceholder": "例如：海军蓝、黄铜点缀、克制的工具感",
+      "colorDirection": "配色方向",
+      "colorPlaceholder": "例如：深海军蓝主色 + 少量黄铜",
+      "fontMood": "字体气质",
+      "fontPlaceholder": "例如：Inter / PingFang，现代、中性",
+      "radiusDensity": "圆角 / 密度",
+      "radiusPlaceholder": "例如：12px 圆角、8px 间距、信息密度中等",
+      "reference": "参考描述（可选）",
+      "referencePlaceholder": "想对标的风格或参考图说明",
+      "generate": "生成设计系统总板",
+      "regenerate": "重新生成候选",
+      "anchorHint": "在画廊点选一张候选设为锚点，后续生成将沿用其风格。"
+    },
+    "page": {
+      "addTitle": "添加页面",
+      "pickTitle": "选择页面",
+      "detailTitle": "页面操作",
+      "slug": "页面 slug",
+      "slugPlaceholder": "例如：project-library",
+      "slugHint": "小写字母、数字与中划线，最长 48 字符。",
+      "brief": "布局简报",
+      "briefPlaceholder": "描述信息架构与布局，例如：左栏列表 + 中间画廊 + 右栏详情。",
+      "add": "添加页面",
+      "generate": "生成页面多稿",
+      "regenerate": "重新生成",
+      "hint": "候选在画廊对比后转正，旧主稿进入历史版本。"
+    },
+    "component": {
+      "addTitle": "添加组件",
+      "pickTitle": "选择组件",
+      "detailTitle": "组件操作",
+      "name": "组件名称",
+      "namePlaceholder": "例如：button-set",
+      "type": "组件类型",
+      "brief": "组件简报",
+      "briefPlaceholder": "例如：primary / secondary / ghost 三态，含 hover 与 disabled。",
+      "add": "添加组件",
+      "generate": "生成组件细节图",
+      "regenerate": "重新生成",
+      "hint": "锚点图为主参考，可结合页面图输出细节。"
+    },
+    "error": {
+      "slugRequired": "请输入页面 slug。",
+      "slugTaken": "该 slug 已存在。",
+      "slugFormat": "slug 仅支持小写字母、数字与中划线。",
+      "nameRequired": "请输入组件名称。",
+      "nameTaken": "该组件名已存在。"
+    }
+  },
+  "component": {
+    "type": {
+      "buttons": "按钮",
+      "forms": "表单",
+      "cards": "卡片",
+      "navigation": "导航",
+      "icons": "图标组",
+      "tables": "表格",
+      "modals": "弹窗"
+    }
+  },
+  "gallery": {
+    "section": {
+      "board": "总板候选"
+    },
+    "board": {
+      "anchorTitle": "当前锚点",
+      "anchorDesc": "后续页面与组件生成都以这张图为 Image 1 参考。",
+      "anchorEmpty": "尚未设置锚点：生成候选后，点选一张设为风格锚点。",
+      "anchorBadge": "锚点",
+      "setAnchor": "设为锚点",
+      "candidateAlt": "总板候选 {{id}}",
+      "empty": {
+        "title": "还没有总板候选",
+        "desc": "在右侧填写品牌与风格简报，生成 1~4 张候选。"
+      },
+      "pickHint": "悬停候选卡片，点击「设为锚点」；锚点卡片带黄铜色标记。"
+    },
+    "flow": {
+      "items": "列表",
+      "candidates": "候选对比 · {{name}}",
+      "candidatesEmpty": "暂无候选：在右侧点击生成。",
+      "candidateAlt": "候选 {{id}}",
+      "pick": "转正",
+      "history": "历史版本（{{count}}）",
+      "picked": "已转正",
+      "pickedShort": "已转正",
+      "candidatesShort": "候选 {{count}}",
+      "untouched": "未生成",
+      "placeholder": "尚未生成"
+    },
+    "pages": {
+      "empty": {
+        "title": "还没有页面",
+        "desc": "在右侧添加页面 slug 与布局简报，开始生成。"
+      }
+    },
+    "components": {
+      "empty": {
+        "title": "还没有组件",
+        "desc": "在右侧添加组件与类型，生成细节图。"
+      }
+    },
+    "overview": {
+      "anchorMissing": "尚未设置锚点，先去总板完成。",
+      "board": "总板",
+      "pages": "页面",
+      "components": "组件",
+      "done": "已完成",
+      "candidates": "候选 {{count}}",
+      "progress": "{{done}}/{{total}} 已转正",
+      "gotoBoard": "去总板",
+      "gotoPages": "去页面",
+      "gotoComponents": "去组件"
+    }
+  },
+  "job": {
+    "label": {
+      "board": "正在生成总板候选…",
+      "page": "正在生成页面「{{slug}}」…",
+      "component": "正在生成组件「{{name}}」…",
+      "export": "正在导出资产包…"
+    },
+    "elapsed": "{{seconds}}s",
+    "etaNote": "真实生成约 30 秒~3 分钟，最长约 3 分钟。"
+  },
+  "export": {
+    "dialog": {
+      "title": "导出资产包",
+      "dir": "导出目录",
+      "dirHint": "桌面版将打开系统目录选择；Mock 预览下可直接编辑路径。",
+      "browse": "选择目录…",
+      "browseHint": "Mock 预览：使用上方路径",
+      "start": "开始导出",
+      "summary": "将导出 {{pages}} 个页面与 {{components}} 个组件的图片、manifest.json 与 PROMPTS.md。",
+      "doneSummary": "已导出 {{images}} 张图片、共 {{files}} 个文件。"
+    }
+  },
+  "toast": {
+    "success": {
+      "project": "项目已创建。",
+      "board": "已生成 {{count}} 张总板候选。",
+      "anchor": "锚点已设置，可以开始页面设计。",
+      "pageAdded": "页面 {{slug}} 已添加。",
+      "page": "页面 {{slug}} 已生成 {{count}} 张候选。",
+      "pagePicked": "页面 {{slug}} 已转正。",
+      "componentAdded": "组件 {{name}} 已添加。",
+      "component": "组件 {{name}} 已生成 {{count}} 张候选。",
+      "componentPicked": "组件 {{name}} 已转正。",
+      "export": "资产包已导出，共 {{count}} 个文件。",
+      "deleted": "已删除。"
+    },
+    "cancelled": "操作已取消。"
+  },
+  "confirm": {
+    "deleteCandidate": {
+      "title": "删除总板候选",
+      "desc": "确定删除候选 {{id}}？此操作不可撤销。"
+    },
+    "deleteItem": {
+      "title": "删除",
+      "desc": "确定删除「{{name}}」？其候选与历史版本将一并删除。"
+    },
+    "deleteHistory": {
+      "title": "删除历史版本",
+      "desc": "确定删除「{{name}}」在 {{time}} 的历史版本？"
+    }
+  },
+  "errors": {
+    "VALIDATION_ERROR": {
+      "message": "输入不合法，请检查表单。",
+      "hint": "修正后重试。"
+    },
+    "ANCHOR_REQUIRED": {
+      "message": "尚未设置总板锚点。",
+      "hint": "先在总板候选中点选一张设为锚点。"
+    },
+    "ANCHOR_LOCKED": {
+      "message": "锚点图不能删除。",
+      "hint": "先将其他候选设为锚点，再删除当前锚点候选。"
+    },
+    "NOT_FOUND": {
+      "message": "目标不存在或已被删除。",
+      "hint": "刷新项目后重试。"
+    },
+    "DUPLICATE_SLUG": {
+      "message": "页面 slug 重复。",
+      "hint": "换一个 slug 再试。"
+    },
+    "DUPLICATE_NAME": {
+      "message": "组件名称重复。",
+      "hint": "换一个名称再试。"
+    },
+    "EXPORT_FAILED": {
+      "message": "导出失败。",
+      "hint": "确认已生成并转正至少一张图。"
+    },
+    "API_ERROR": {
+      "message": "图像服务调用失败。",
+      "hint": "稍后重试；持续失败请检查环境变量配置。"
+    },
+    "NOT_IMPLEMENTED": {
+      "message": "该能力尚未接入核心库。",
+      "hint": "当前为 Mock 预览，Tauri 桥接将在后续阶段启用。"
+    },
+    "UNKNOWN": {
+      "message": "发生未知错误。",
+      "hint": "请重试或查看日志。"
+    }
+  },
+  "lightbox": {
+    "hint": "Esc 关闭"
   }
 }

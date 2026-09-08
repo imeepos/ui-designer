@@ -1,0 +1,362 @@
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import { useStudio } from "@/state/studio";
+import type { ComponentType } from "@/lib/api/types";
+import { COMPONENT_TYPES } from "@/lib/api/types";
+import { isValidSlug, slugifyHint } from "@/lib/validate";
+import { useConfirm } from "@/hooks/use-confirm";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+
+/** Segmented 1-4 candidate count (PRD: 1-4 draft candidates per generation). */
+export function CountPicker({
+  value,
+  onChange,
+  testIdPrefix,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+  testIdPrefix: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>{t("form.count")}</Label>
+      <div
+        role="group"
+        aria-label={t("form.count")}
+        className="grid grid-cols-4 gap-1 rounded-md border p-1"
+      >
+        {[1, 2, 3, 4].map((count) => (
+          <button
+            key={count}
+            type="button"
+            data-testid={`${testIdPrefix}-count-${count}`}
+            aria-pressed={value === count}
+            onClick={() => onChange(count)}
+            className={cn(
+              "rounded-sm px-2 py-1 font-mono text-xs transition-colors duration-150 ease-out",
+              value === count
+                ? "bg-primary font-medium text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            {count}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function slugErrorKey(slug: string, taken: boolean): string | null {
+  if (!slug.trim()) return "form.error.slugRequired";
+  if (taken) return "form.error.slugTaken";
+  if (!isValidSlug(slug)) return "form.error.slugFormat";
+  return null;
+}
+
+/** Add page form (step 3 entry). */
+export function AddPageForm({ onAdded }: { onAdded?: () => void }) {
+  const { t } = useTranslation();
+  const { state, addPage } = useStudio();
+  const project = state.project;
+  const [slug, setSlug] = useState("");
+  const [brief, setBrief] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = () => {
+    if (!project) return;
+    const taken = project.pages.some((page) => page.slug === slug.trim());
+    const key = slugErrorKey(slug, taken);
+    if (key) {
+      setError(t(key));
+      return;
+    }
+    setError(null);
+    void addPage(slug.trim(), brief);
+    setSlug("");
+    setBrief("");
+    onAdded?.();
+  };
+
+  return (
+    <form
+      data-testid="add-page-form"
+      className="flex flex-col gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
+    >
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="page-slug">{t("form.page.slug")}</Label>
+        <Input
+          id="page-slug"
+          data-testid="page-slug-input"
+          value={slug}
+          onChange={(event) => {
+            setSlug(event.target.value);
+            setError(null);
+          }}
+          onBlur={() => setSlug((prev) => slugifyHint(prev))}
+          placeholder={t("form.page.slugPlaceholder")}
+          className="font-mono text-xs"
+          autoFocus
+        />
+        <p className="text-[10px] text-muted-foreground">{t("form.page.slugHint")}</p>
+        {error && (
+          <p data-testid="slug-error" className="text-xs text-destructive">
+            {error}
+          </p>
+        )}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="page-brief">{t("form.page.brief")}</Label>
+        <Textarea
+          id="page-brief"
+          data-testid="page-brief-input"
+          value={brief}
+          onChange={(event) => setBrief(event.target.value)}
+          placeholder={t("form.page.briefPlaceholder")}
+          rows={3}
+        />
+      </div>
+      <Button type="submit" size="sm" data-testid="add-page-submit">
+        {t("form.page.add")}
+      </Button>
+    </form>
+  );
+}
+
+/** Selected-page operations: brief, count, regenerate, delete. */
+export function PageDetailForm() {
+  const { t } = useTranslation();
+  const { state, generatePage, deleteArtifact } = useStudio();
+  const { ask, element: confirmElement } = useConfirm();
+  const project = state.project;
+  const page = project?.pages.find((item) => item.slug === state.selectedPage);
+  const [brief, setBrief] = useState(page?.brief ?? "");
+  const [count, setCount] = useState(2);
+
+  useEffect(() => {
+    setBrief(page?.brief ?? "");
+  }, [page?.slug, page?.brief]);
+
+  if (!project || !page) return null;
+  const jobRunning = state.job !== null;
+
+  return (
+    <div data-testid="page-detail-form" className="flex flex-col gap-3">
+      {confirmElement}
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate font-mono text-xs font-semibold">
+          {page.slug}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          data-testid="page-delete"
+          className="text-destructive hover:text-destructive"
+          onClick={() =>
+            ask({
+              title: t("confirm.deleteItem.title"),
+              description: t("confirm.deleteItem.desc", { name: page.slug }),
+              onConfirm: () => void deleteArtifact({ kind: "page", slug: page.slug }),
+            })
+          }
+        >
+          {t("common.delete")}
+        </Button>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="page-detail-brief">{t("form.page.brief")}</Label>
+        <Textarea
+          id="page-detail-brief"
+          data-testid="page-detail-brief"
+          value={brief}
+          onChange={(event) => setBrief(event.target.value)}
+          rows={3}
+        />
+      </div>
+      <CountPicker value={count} onChange={setCount} testIdPrefix="page-detail" />
+      <Button
+        size="sm"
+        data-testid="page-generate"
+        disabled={jobRunning || !brief.trim()}
+        onClick={() => void generatePage(page.slug, count)}
+      >
+        {page.candidates.length > 0 || page.current
+          ? t("form.page.regenerate")
+          : t("form.page.generate")}
+      </Button>
+      <p className="text-[10px] text-muted-foreground">{t("form.page.hint")}</p>
+    </div>
+  );
+}
+
+/** Add component form (step 4 entry) with the seven type choices. */
+export function AddComponentForm({ onAdded }: { onAdded?: () => void }) {
+  const { t } = useTranslation();
+  const { state, addComponent } = useStudio();
+  const project = state.project;
+  const [name, setName] = useState("");
+  const [type, setType] = useState<ComponentType>("buttons");
+  const [brief, setBrief] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = () => {
+    if (!project) return;
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError(t("form.error.nameRequired"));
+      return;
+    }
+    if (project.components.some((component) => component.name === trimmed)) {
+      setError(t("form.error.nameTaken"));
+      return;
+    }
+    setError(null);
+    void addComponent(trimmed, type, brief);
+    setName("");
+    setBrief("");
+    onAdded?.();
+  };
+
+  return (
+    <form
+      data-testid="add-component-form"
+      className="flex flex-col gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
+    >
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="component-name">{t("form.component.name")}</Label>
+        <Input
+          id="component-name"
+          data-testid="component-name-input"
+          value={name}
+          onChange={(event) => {
+            setName(event.target.value);
+            setError(null);
+          }}
+          placeholder={t("form.component.namePlaceholder")}
+          className="font-mono text-xs"
+          autoFocus
+        />
+        {error && (
+          <p data-testid="name-error" className="text-xs text-destructive">
+            {error}
+          </p>
+        )}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="component-type">{t("form.component.type")}</Label>
+        <Select
+          id="component-type"
+          data-testid="component-type-select"
+          value={type}
+          onChange={(event) => setType(event.target.value as ComponentType)}
+        >
+          {COMPONENT_TYPES.map((option) => (
+            <option key={option} value={option}>
+              {t(`component.type.${option}`)}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="component-brief">{t("form.component.brief")}</Label>
+        <Textarea
+          id="component-brief"
+          data-testid="component-brief-input"
+          value={brief}
+          onChange={(event) => setBrief(event.target.value)}
+          placeholder={t("form.component.briefPlaceholder")}
+          rows={3}
+        />
+      </div>
+      <Button type="submit" size="sm" data-testid="add-component-submit">
+        {t("form.component.add")}
+      </Button>
+    </form>
+  );
+}
+
+/** Selected-component operations. */
+export function ComponentDetailForm() {
+  const { t } = useTranslation();
+  const { state, generateComponent, deleteArtifact } = useStudio();
+  const { ask, element: confirmElement } = useConfirm();
+  const project = state.project;
+  const component = project?.components.find(
+    (item) => item.name === state.selectedComponent,
+  );
+  const [brief, setBrief] = useState(component?.brief ?? "");
+  const [count, setCount] = useState(2);
+
+  useEffect(() => {
+    setBrief(component?.brief ?? "");
+  }, [component?.name, component?.brief]);
+
+  if (!project || !component) return null;
+  const jobRunning = state.job !== null;
+
+  return (
+    <div data-testid="component-detail-form" className="flex flex-col gap-3">
+      {confirmElement}
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate font-mono text-xs font-semibold">
+          {component.name}
+        </span>
+        <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] text-muted-foreground">
+          {t(`component.type.${component.type}`)}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          data-testid="component-delete"
+          className="text-destructive hover:text-destructive"
+          onClick={() =>
+            ask({
+              title: t("confirm.deleteItem.title"),
+              description: t("confirm.deleteItem.desc", { name: component.name }),
+              onConfirm: () => void deleteArtifact({ kind: "component", name: component.name }),
+            })
+          }
+        >
+          {t("common.delete")}
+        </Button>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="component-detail-brief">{t("form.component.brief")}</Label>
+        <Textarea
+          id="component-detail-brief"
+          data-testid="component-detail-brief"
+          value={brief}
+          onChange={(event) => setBrief(event.target.value)}
+          rows={3}
+        />
+      </div>
+      <CountPicker value={count} onChange={setCount} testIdPrefix="component-detail" />
+      <Button
+        size="sm"
+        data-testid="component-generate"
+        disabled={jobRunning || !brief.trim()}
+        onClick={() => void generateComponent(component.name, count)}
+      >
+        {component.candidates.length > 0 || component.current
+          ? t("form.component.regenerate")
+          : t("form.component.generate")}
+      </Button>
+      <p className="text-[10px] text-muted-foreground">{t("form.component.hint")}</p>
+    </div>
+  );
+}

@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 
+import { persistLanguage } from "@/i18n";
 import { cn } from "@/lib/utils";
 
 export const SUPPORTED_LANGUAGES = ["zh-CN", "en"] as const;
@@ -25,7 +26,10 @@ export function LanguageSwitcher({ className }: { className?: string }) {
           key={lang}
           type="button"
           aria-pressed={current === lang}
-          onClick={() => void i18n.changeLanguage(lang)}
+          onClick={() => {
+            persistLanguage(lang);
+            void i18n.changeLanguage(lang);
+          }}
           className={cn(
             "rounded-sm px-2 py-0.5 text-xs transition-colors duration-150 ease-out",
             current === lang
