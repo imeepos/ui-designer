@@ -135,6 +135,9 @@ pub struct GenOptionsInput {
     /// Candidate count 1-4 (`None` → core default: board 4, rest 1).
     #[serde(default)]
     pub count: Option<u32>,
+    /// Generation quality tier (`None` → core default: low).
+    #[serde(default)]
+    pub quality: Option<String>,
     /// Correlates `rudder://job` progress events with this call.
     #[serde(default)]
     pub job_id: Option<String>,
@@ -268,6 +271,7 @@ async fn run_generation(
                 &target,
                 GenerateOptions {
                     n: options.count,
+                    quality: options.quality,
                     ..Default::default()
                 },
                 &client,
