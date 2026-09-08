@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* 舵主题 · light（docs/THEME.md §2）*/
+:root {
+  --background: #fafaf8;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --secondary: #eef1f5;
+  --secondary-foreground: #0f172a;
+  --muted: #eef1f5;
+  --muted-foreground: #64748b;
+  --accent: #b45309;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #b45309;
+  --radius: 0.75rem;
+}
+
+/* 舵主题 · dark（docs/THEME.md §2）*/
+.dark {
+  --background: #0b1220;
+  --foreground: #e6eaf2;
+  --card: #101a30;
+  --card-foreground: #e6eaf2;
+  --popover: #101a30;
+  --popover-foreground: #e6eaf2;
+  --primary: #3b82f6;
+  --primary-foreground: #0b1220;
+  --secondary: #16203a;
+  --secondary-foreground: #e6eaf2;
+  --muted: #16203a;
+  --muted-foreground: #8a97b1;
+  --accent: #d97706;
+  --accent-foreground: #0b1220;
+  --destructive: #ef4444;
+  --border: #1e2a44;
+  --input: #1e2a44;
+  --ring: #d97706;
+}
+
+@theme inline {
+  --font-sans: Inter, "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* THEME §4：卡片 12px / 按钮与输入 8px / 徽标 999px */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: var(--radius);
+  --radius-xl: 1rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* THEME §3：默认正文 13px，行高 1.5 */
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+}
