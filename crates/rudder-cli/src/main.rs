@@ -1,25 +1,577 @@
 //! Rudder CLI entry point (binary name: `rudder`).
 //!
-//! Phase 1 scaffold: argument skeleton only, so the binary builds and
-//! exposes `--version`. Full command set lands in Phase 2
-//! (docs/ARCHITECTURE.md §6).
+//! Implements docs/ARCHITECTURE.md §6. Global flags: `--project`, `--json`,
+//! `--dry-run`, `--yes`. Real image-API spend requires `--yes`; without it
+//! generate commands print their request plan (dry-run). Exit codes:
+//! 0 ok · 1 bad argument · 2 API error · 3 project state.
 
-use clap::Parser;
+mod output;
+
+use clap::{error::ErrorKind as ClapErrorKind, Parser, Subcommand};
+use output::{emit_err, emit_ok, format_plan, CmdResult};
+use rudder_core::config::Config;
+use rudder_core::image::ImageClient;
+use rudder_core::ops::{self, GenerateOptions, Target};
+use rudder_core::store;
+use rudder_core::{export, RudderError};
+use serde_json::json;
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(
     name = "rudder",
     version = rudder_core::VERSION,
     about = "Rudder - AI UI design studio CLI",
-    long_about = None
+    long_about = None,
+    subcommand_required = true,
+    arg_required_else_help = true
 )]
 struct Cli {
-    /// Placeholder flag so the parser is wired; real globals land in Phase 2.
-    #[arg(long, default_value_t = false)]
+    /// Target project directory (default: cwd if it is a project, else last used).
+    #[arg(long, global = true, value_name = "PATH")]
+    project: Option<PathBuf>,
+
+    /// Machine-readable envelope on stdout: {ok, data|error}.
+    #[arg(long, global = true)]
+    json: bool,
+
+    /// Print the request plan only; never touch the network (free).
+    #[arg(long, global = true)]
     dry_run: bool,
+
+    /// REQUIRED for any real image API spend.
+    #[arg(long, global = true)]
+    yes: bool,
+
+    #[command(subcommand)]
+    command: Command,
 }
 
-fn main() -> anyhow::Result<()> {
-    let _cli = Cli::parse();
-    Ok(())
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Create a new project (directory layout + project.json).
+    Init {
+        /// Project display name.
+        name: String,
+        /// web | mobile | desktop | WxH (16-multiples, ≤3:1, 0.65-8.3 MP).
+        #[arg(long, default_value = "web")]
+        size: String,
+        /// Project directory (default: current directory).
+        #[arg(long)]
+        dir: Option<PathBuf>,
+        /// Seeds styleBrief.
+        #[arg(long)]
+        brief: Option<String>,
+    },
+    /// Design-system board (the style anchor).
+    Board {
+        #[command(subcommand)]
+        command: BoardCommand,
+    },
+    /// Functional pages derived from the anchor.
+    Page {
+        #[command(subcommand)]
+        command: PageCommand,
+    },
+    /// Component detail sheets derived from the anchor.
+    Component {
+        #[command(subcommand)]
+        command: ComponentCommand,
+    },
+    /// Status overview: anchor present? pages/components with candidate counts.
+    List {
+        /// Optional filter: pages | components.
+        arg: Option<String>,
+    },
+    /// Export the asset bundle (images + manifest.json + PROMPTS.md + DESIGN.template.md).
+    Export {
+        /// Output directory (default: ./export).
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Self-test: sample project → board → 1 page → 1 component → export.
+    E2e {
+        /// Quality for the self-test generation steps (low keeps it cheap).
+        #[arg(long, default_value = "low")]
+        quality: String,
+    },
+    /// Generation defaults in ~/Rudder/config.json (never secrets).
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum BoardCommand {
+    /// Generate board candidates (board/candidates/NNNN.png).
+    Generate {
+        /// Candidate count, 1-4 (default 4).
+        #[arg(long)]
+        n: Option<u32>,
+        /// low | medium | high (default from config, else high).
+        #[arg(long)]
+        quality: Option<String>,
+        #[arg(long)]
+        seed: Option<u64>,
+        /// thinking effort passthrough (default from config, else medium).
+        #[arg(long)]
+        thinking: Option<String>,
+        /// Extra inspiration reference images (switches to the edits endpoint).
+        #[arg(long = "ref")]
+        refs: Vec<PathBuf>,
+    },
+    /// Pick the anchor: candidate → board/anchor.png.
+    Pick {
+        candidate_id: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum PageCommand {
+    /// Register a page (slug: a-z0-9-).
+    Add {
+        slug: String,
+        #[arg(long)]
+        brief: String,
+    },
+    /// List registered pages.
+    List,
+    /// Generate candidates for <slug> or --all.
+    Generate {
+        /// Page slug, or `--all` for every page.
+        #[arg(allow_hyphen_values = true)]
+        target: String,
+        /// Candidate count, 1-4 (default 1).
+        #[arg(long)]
+        n: Option<u32>,
+        #[arg(long)]
+        quality: Option<String>,
+        #[arg(long)]
+        seed: Option<u64>,
+        #[arg(long)]
+        thinking: Option<String>,
+        /// Extra layout reference images (passed after the anchor).
+        #[arg(long = "ref")]
+        refs: Vec<PathBuf>,
+    },
+    /// Promote a candidate to pages/<slug>/current.png (old current → history/).
+    Pick {
+        slug: String,
+        candidate_id: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ComponentCommand {
+    /// Register a component sheet (name: a-z0-9-).
+    Add {
+        name: String,
+        /// e.g. buttons | forms | cards | navigation | icons | tables | modals.
+        #[arg(long)]
+        r#type: String,
+        #[arg(long)]
+        brief: String,
+    },
+    /// List registered components.
+    List,
+    /// Generate candidates for <name> or --all.
+    Generate {
+        /// Component name, or `--all` for every component.
+        #[arg(allow_hyphen_values = true)]
+        target: String,
+        /// Candidate count, 1-4 (default 1).
+        #[arg(long)]
+        n: Option<u32>,
+        #[arg(long)]
+        quality: Option<String>,
+        #[arg(long)]
+        seed: Option<u64>,
+        #[arg(long)]
+        thinking: Option<String>,
+        #[arg(long = "ref")]
+        refs: Vec<PathBuf>,
+    },
+    /// Promote a candidate to components/<name>/current.png (old current → history/).
+    Pick {
+        name: String,
+        candidate_id: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ConfigCommand {
+    /// Print a key's effective value (quality | thinking | n).
+    Get { key: String },
+    /// Set a key (quality low|medium|high · thinking low|medium|high · n 1-4).
+    Set { key: String, value: String },
+}
+
+fn main() {
+    // Exit-code contract: clap's own parse errors count as bad arguments (1),
+    // not clap's default 2.
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(err) => {
+            let is_help_or_version =
+                matches!(err.kind(), ClapErrorKind::DisplayHelp | ClapErrorKind::DisplayVersion);
+            let _ = err.print();
+            if is_help_or_version {
+                std::process::exit(0);
+            }
+            emit_parse_error();
+            std::process::exit(1);
+        }
+    };
+    let code = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("tokio runtime")
+        .block_on(dispatch(cli));
+    std::process::exit(code);
+}
+
+/// clap parse failures in --json mode still honor the envelope contract.
+fn emit_parse_error() {
+    if !std::env::args().any(|a| a == "--json") {
+        return;
+    }
+    let envelope = json!({
+        "ok": false,
+        "error": {
+            "code": "INVALID_ARG",
+            "message": "invalid arguments (run `rudder --help`)",
+            "hint": "check flags against skill/rudder-design/references/cli.md"
+        }
+    });
+    println!("{envelope}");
+}
+
+fn resolve_root(project: Option<&PathBuf>) -> Result<PathBuf, RudderError> {
+    store::resolve_project_root(project.map(|p| p.as_path()))
+}
+
+/// Final dry-run decision: explicit --dry-run always wins; a missing --yes
+/// means dry-run for anything that could spend money.
+fn spend_allowed(cli: &Cli) -> bool {
+    cli.yes && !cli.dry_run
+}
+
+fn generate_opts(
+    n: Option<u32>,
+    quality: Option<String>,
+    seed: Option<u64>,
+    thinking: Option<String>,
+    refs: Vec<PathBuf>,
+    cli: &Cli,
+) -> GenerateOptions {
+    GenerateOptions {
+        n,
+        quality,
+        seed,
+        thinking,
+        refs,
+        dry_run: !spend_allowed(cli),
+        assume_anchor: false,
+    }
+}
+
+fn build_client(cli: &Cli) -> Result<ImageClient, RudderError> {
+    ImageClient::from_env(!spend_allowed(cli))
+}
+
+async fn dispatch(cli: Cli) -> i32 {
+    let json_mode = cli.json;
+    let result = run(&cli).await;
+    match result {
+        Ok(ok) => emit_ok(json_mode, &ok),
+        Err(err) => emit_err(json_mode, &err),
+    }
+}
+
+async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
+    match &cli.command {
+        Command::Init { name, size, dir, brief } => {
+            let dir = dir.clone().unwrap_or_else(|| PathBuf::from("."));
+            ops::init_project(&dir, name, size, brief.as_deref())?;
+            let project = store::load_project(&dir)?;
+            let dir_abs = std::fs::canonicalize(&dir).unwrap_or(dir);
+            Ok(CmdResult::new(
+                format!(
+                    "project `{}` created at {} (canvas {})",
+                    project.name,
+                    dir_abs.display(),
+                    project.canvas_size.to_api_string()
+                ),
+                json!({
+                    "projectId": project.id,
+                    "dir": dir_abs.display().to_string(),
+                    "canvasSize": {
+                        "w": project.canvas_size.w,
+                        "h": project.canvas_size.h,
+                        "preset": ops::preset_name(&project.canvas_size),
+                    }
+                }),
+            ))
+        }
+
+        Command::Board { command } => match command {
+            BoardCommand::Generate { n, quality, seed, thinking, refs } => {
+                let root = resolve_root(cli.project.as_ref())?;
+                let client = build_client(cli)?;
+                let report = ops::generate(
+                    &root,
+                    &Target::Board,
+                    generate_opts(*n, quality.clone(), *seed, thinking.clone(), refs.clone(), cli),
+                    &client,
+                )
+                .await?;
+                Ok(generate_result(&report))
+            }
+            BoardCommand::Pick { candidate_id } => {
+                let root = resolve_root(cli.project.as_ref())?;
+                let file = ops::board_pick(&root, candidate_id)?;
+                Ok(CmdResult::new(
+                    format!("anchor set to candidate {candidate_id} → {file}"),
+                    json!({ "anchor": candidate_id, "file": file }),
+                ))
+            }
+        },
+
+        Command::Page { command } => match command {
+            PageCommand::Add { slug, brief } => {
+                let root = resolve_root(cli.project.as_ref())?;
+                let page = ops::page_add(&root, slug, brief)?;
+                Ok(CmdResult::new(
+                    format!("page `{}` registered (brief {} chars)", page.slug, page.brief.chars().count()),
+                    json!({ "slug": page.slug, "brief": page.brief }),
+                ))
+            }
+            PageCommand::List => {
+                let root = resolve_root(cli.project.as_ref())?;
+                let status = ops::status(&root)?;
+                Ok(CmdResult::new(
+                    format!("{} page(s)", status.pages.len()),
+                    json!({ "pages": status.pages }),
+                ))
+            }
+            PageCommand::Generate { target, n, quality, seed, thinking, refs } => {
+                let root = resolve_root(cli.project.as_ref())?;
+                let client = build_client(cli)?;
+                let slugs = expand_targets(&root, target, true)?;
+                let mut reports = Vec::new();
+                for slug in slugs {
+                    let report = ops::generate(
+                        &root,
+                        &Target::Page(slug.clone()),
+                        generate_opts(*n, quality.clone(), *seed, thinking.clone(), refs.clone(), cli),
+                        &client,
+                    )
+                    .await?;
+                    reports.push(report);
+                }
+                Ok(generate_all_result("page", reports))
+            }
+            PageCommand::Pick { slug, candidate_id } => {
+                let root = resolve_root(cli.project.as_ref())?;
+                let current = ops::page_pick(&root, slug, candidate_id)?;
+                Ok(CmdResult::new(
+                    format!("page `{slug}` current ← candidate {candidate_id} ({current})"),
+                    json!({ "slug": slug, "picked": candidate_id, "current": current }),
+                ))
+            }
+        },
+
+        Command::Component { command } => match command {
+            ComponentCommand::Add { name, r#type, brief } => {
+                let root = resolve_root(cli.project.as_ref())?;
+                let component = ops::component_add(&root, name, r#type, brief)?;
+                Ok(CmdResult::new(
+                    format!("component `{}` ({}) registered", component.name, component.kind),
+                    json!({ "name": component.name, "type": component.kind, "brief": component.brief }),
+                ))
+            }
+            ComponentCommand::List => {
+                let root = resolve_root(cli.project.as_ref())?;
+                let status = ops::status(&root)?;
+                Ok(CmdResult::new(
+                    format!("{} component(s)", status.components.len()),
+                    json!({ "components": status.components }),
+                ))
+            }
+            ComponentCommand::Generate { target, n, quality, seed, thinking, refs } => {
+                let root = resolve_root(cli.project.as_ref())?;
+                let client = build_client(cli)?;
+                let names = expand_targets(&root, target, false)?;
+                let mut reports = Vec::new();
+                for name in names {
+                    let report = ops::generate(
+                        &root,
+                        &Target::Component(name.clone()),
+                        generate_opts(*n, quality.clone(), *seed, thinking.clone(), refs.clone(), cli),
+                        &client,
+                    )
+                    .await?;
+                    reports.push(report);
+                }
+                Ok(generate_all_result("component", reports))
+            }
+            ComponentCommand::Pick { name, candidate_id } => {
+                let root = resolve_root(cli.project.as_ref())?;
+                let current = ops::component_pick(&root, name, candidate_id)?;
+                Ok(CmdResult::new(
+                    format!("component `{name}` current ← candidate {candidate_id} ({current})"),
+                    json!({ "name": name, "picked": candidate_id, "current": current }),
+                ))
+            }
+        },
+
+        Command::List { arg } => {
+            let root = resolve_root(cli.project.as_ref())?;
+            let status = ops::status(&root)?;
+            let human = format!(
+                "project `{}` ({}) · anchor: {} · pages: {} · components: {}",
+                status.name,
+                status.canvas_size,
+                status.anchor.as_deref().unwrap_or("none"),
+                status.pages.len(),
+                status.components.len()
+            );
+            let data = match arg.as_deref() {
+                Some("pages") => json!({ "pages": status.pages }),
+                Some("components") => json!({ "components": status.components }),
+                _ => json!(status),
+            };
+            Ok(CmdResult::new(human, data))
+        }
+
+        Command::Export { out } => {
+            let root = resolve_root(cli.project.as_ref())?;
+            let out = out.clone().unwrap_or_else(|| PathBuf::from("export"));
+            export::validate_out_dir(&root, &out)?;
+            let report = export::export_project(&root, &out)?;
+            Ok(CmdResult::new(
+                format!(
+                    "exported {} image file(s) → {} (manifest.json, PROMPTS.md, DESIGN.template.md)",
+                    report.files,
+                    report.out.display()
+                ),
+                json!({
+                    "out": report.out.display().to_string(),
+                    "manifest": report.manifest.display().to_string(),
+                    "files": report.files,
+                }),
+            ))
+        }
+
+        Command::E2e { quality } => {
+            if !["low", "medium", "high"].contains(&quality.as_str()) {
+                return Err(RudderError::InvalidArg {
+                    detail: "quality must be one of low|medium|high".into(),
+                });
+            }
+            let client = build_client(cli)?;
+            let report = ops::run_e2e(&client, quality).await?;
+            let steps: Vec<String> = report
+                .steps
+                .iter()
+                .map(|s| {
+                    if s.dry_run {
+                        format!("{} (plan)", s.step)
+                    } else {
+                        s.step.clone()
+                    }
+                })
+                .collect();
+            Ok(CmdResult::new(
+                format!(
+                    "e2e {}: {} → {}",
+                    if report.dry_run { "dry-run complete" } else { "complete" },
+                    steps.join(" → "),
+                    report.project_dir
+                ),
+                serde_json::to_value(&report).expect("e2e report serializes"),
+            ))
+        }
+
+        Command::Config { command } => match command {
+            ConfigCommand::Get { key } => {
+                let config = Config::load();
+                let value = config.get(key)?;
+                Ok(CmdResult::new(
+                    format!("{key} = {value}"),
+                    json!({ "key": key, "value": value }),
+                ))
+            }
+            ConfigCommand::Set { key, value } => {
+                let mut config = Config::load();
+                config.set(key, value)?;
+                config.save()?;
+                Ok(CmdResult::new(
+                    format!("{key} = {value}"),
+                    json!({ "key": key, "value": value }),
+                ))
+            }
+        },
+    }
+}
+
+/// Resolve `<slug|--all>` positional (allows the leading-hyphen form).
+fn expand_targets(root: &std::path::Path, target: &str, pages: bool) -> Result<Vec<String>, RudderError> {
+    if target == "--all" || target == "all" {
+        let project = store::load_project(root)?;
+        return Ok(if pages {
+            project.pages.into_iter().map(|p| p.slug).collect()
+        } else {
+            project.components.into_iter().map(|c| c.name).collect()
+        });
+    }
+    Ok(vec![target.to_string()])
+}
+
+fn generate_result(report: &ops::GenerateReport) -> CmdResult {
+    let data = json!({
+        "dryRun": report.dry_run,
+        "kind": report.kind,
+        "target": report.target,
+        "plan": serde_json::to_value(&report.plan).expect("plan serializes"),
+        "candidates": report.candidates,
+    });
+    if report.dry_run {
+        CmdResult::new(format_plan(&report.plan), data)
+    } else {
+        let ids: Vec<&str> = report.candidates.iter().map(|c| c.id.as_str()).collect();
+        CmdResult::new(
+            format!(
+                "{} {} → {} candidate(s): {}",
+                report.kind,
+                if report.target.is_empty() { String::new() } else { format!("`{}`", report.target) },
+                report.candidates.len(),
+                ids.join(", ")
+            ),
+            data,
+        )
+    }
+}
+
+fn generate_all_result(kind: &str, reports: Vec<ops::GenerateReport>) -> CmdResult {
+    let dry_run = reports.iter().all(|r| r.dry_run);
+    let mut human_lines = Vec::new();
+    for report in &reports {
+        if report.dry_run {
+            human_lines.push(format_plan(&report.plan));
+        } else {
+            let ids: Vec<&str> = report.candidates.iter().map(|c| c.id.as_str()).collect();
+            human_lines.push(format!(
+                "{kind} `{}` → candidate(s): {}",
+                report.target,
+                ids.join(", ")
+            ));
+        }
+    }
+    let data = json!({
+        "dryRun": dry_run,
+        "results": reports,
+    });
+    CmdResult::new(human_lines.join("\n"), data)
 }
