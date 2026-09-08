@@ -49,3 +49,14 @@
 
 - 张数：low 11（board 3 + 页面 6 + 组件 2）+ high 2（board 0004、gallery 0003）= 13 张，均在预算 $1.5 内（按 gpt-image 同档价目估算 ≈ $0.68）。
 - 全程命令与 dry-run 计划：见 `design-assets/PROMPTS.md` 与 `design-assets/manifest.json`。
+
+## 负责人补充发现（Phase 2 真实冒烟，2026-09-08）
+
+10. **P1 · export 静默跳过"已生成未 pick"的页面/组件**：`page generate` 后未 `pick` 就 `export`，导出包 pages 为空数组且无任何告警（实测 /tmp 项目复现，退出码 0）。对 AI 代理用户等于静默数据丢失。修复：export 时对存在 candidates 但无 current 的页面/组件，向 stderr 输出警告行并在 --json 的 data.warnings 中回传。
+11. **P2 · 验收 shell 需显式加载 cargo 环境**：devloop 验收命令在全新 shell 中执行，`cargo` 不在 PATH（exit 127）。已在 .devloop 账本全部验收命令前置 `source "$HOME/.cargo/env"` 修复；README 安装段应提示 CLI 用户将 ~/.cargo/bin 加入 PATH。
+
+## Phase 5 负责人裁决
+
+- **主色口径**：采纳锚点图色系——primary `#0B3D91`（深海军蓝）、accent `#D4A017`（琥珀金）、background `#FAFAF8`（纸白）、foreground `#2F3A44`（墨石）。THEME.md §2 与 src/index.css 同步修订；dark 模式派生可自行发挥，负责人截图终审。
+- **圆角口径**：采纳锚点图四档——按钮 4px / 输入 6px / 卡片 8px / 弹窗 12px；THEME.md §4 与 --radius 派生同步修订。
+- **字阶**：维持 THEME 12/13/14/18/24（高密度工具 UI），不采图片 16px body（见改进项 6）。
