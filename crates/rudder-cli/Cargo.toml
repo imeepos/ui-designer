@@ -1,0 +1,14 @@
+[package]
+name = "rudder-cli"
+description = "Rudder CLI (binary name: rudder)"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "rudder"
+path = "src/main.rs"
+
+[dependencies]
+rudder-core = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }

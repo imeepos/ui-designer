@@ -1,0 +1,22 @@
+[package]
+name = "rudder-core"
+description = "Rudder core library: project storage, prompt engine, gpt-image-2 client, export"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Dependency set locked by docs/ARCHITECTURE.md §2
+reqwest = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+base64 = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+dirs = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
