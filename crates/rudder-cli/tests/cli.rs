@@ -151,7 +151,8 @@ fn board_generate_without_yes_prints_plan_and_writes_nothing() {
         .output()
         .expect("init");
 
-    // Human mode: plan goes to stderr, stdout stays empty (data only in --json).
+    // Human mode: a one-line dry-run summary on stdout (UI-REVIEW 缺陷 6),
+    // the verbose plan on stderr.
     let out = sb
         .rudder()
         .args(["board", "generate", "--n", "2", "--quality", "low", "--project"])
@@ -159,7 +160,9 @@ fn board_generate_without_yes_prints_plan_and_writes_nothing() {
         .output()
         .expect("board generate");
     assert_eq!(exit_code(&out), 0, "stderr: {}", stderr_text(&out));
-    assert!(out.stdout.is_empty(), "human mode keeps stdout clean");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("[dry-run]"), "stdout one-line summary: {stdout}");
+    assert_eq!(stdout.trim().lines().count(), 1, "exactly one summary line");
     let err = stderr_text(&out);
     assert!(err.contains("[dry-run]"), "plan header on stderr: {err}");
     assert!(err.contains("/v1/images/generations"));
@@ -180,6 +183,10 @@ fn board_generate_without_yes_prints_plan_and_writes_nothing() {
     assert_eq!(envelope["data"]["plan"]["endpoint"], "generations");
     assert_eq!(envelope["data"]["plan"]["params"]["model"], "gpt-image-2");
     assert_eq!(envelope["data"]["plan"]["params"]["thinking"], "medium");
+    // UI-REVIEW 缺陷 1: the plan records a seed even when --seed is omitted.
+    assert!(envelope["data"]["plan"]["params"]["seed"].is_u64(), "seed recorded for reproducibility");
+    // UI-REVIEW 缺陷 5: default quality is the exploration tier.
+    assert_eq!(envelope["data"]["plan"]["params"]["quality"], "low");
     assert_eq!(
         envelope["data"]["candidates"].as_array().unwrap().len(),
         0,
@@ -301,7 +308,7 @@ fn pick_promotes_candidate_and_export_bundles_everything() {
     assert_eq!(envelope["data"]["pages"][0]["candidates"], 1);
     assert_eq!(envelope["data"]["components"][0]["hasCurrent"], true);
 
-    // export the bundle.
+    // export the bundle (default: anchor + picked currents, no candidates).
     let out_dir = sb.project_dir("export-out");
     let out = sb
         .rudder()
@@ -323,10 +330,30 @@ fn pick_promotes_candidate_and_export_bundles_everything() {
     ] {
         assert!(out_dir.join(rel).is_file(), "{rel} must be exported");
     }
+    assert!(
+        !out_dir.join("board/candidates").exists(),
+        "default export must not include exploration candidates (UI-REVIEW #7)"
+    );
     let manifest: Value = serde_json::from_slice(&fs::read(out_dir.join("manifest.json")).unwrap()).unwrap();
     assert_eq!(manifest["project"]["name"], "样例");
     assert_eq!(manifest["pages"][0]["slug"], "dashboard");
     assert_eq!(manifest["board"]["anchor"]["file"], "board/anchor.png");
+
+    // --with-candidates brings the exploration drafts back (UI-REVIEW #7).
+    let out_dir2 = sb.project_dir("export-out-cands");
+    let out = sb
+        .rudder()
+        .args(["export", "--out"])
+        .arg(&out_dir2)
+        .arg("--with-candidates")
+        .arg("--project")
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("export --with-candidates");
+    assert_eq!(exit_code(&out), 0, "stderr: {}", stderr_text(&out));
+    assert!(out_dir2.join("board/candidates/0001.png").is_file());
+    assert!(out_dir2.join("board/candidates/0002.png").is_file());
 }
 
 #[test]
@@ -516,4 +543,319 @@ fn project_resolution_prefers_cwd_then_last_project() {
         .expect("list from elsewhere");
     assert_eq!(exit_code(&out), 0, "stderr: {}", stderr_text(&out));
     assert_eq!(parse_envelope(&out)["data"]["name"], "cwd");
+}
+
+// ---------------------------------------------------------------------------
+// update subcommands (UI-REVIEW 缺陷 2)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn update_commands_amend_briefs_without_hand_editing() {
+    let sb = Sandbox::new("update");
+    let dir = sb.project_dir("proj");
+    sb.rudder().args(["init", "旧名", "--dir"]).arg(&dir).output().unwrap();
+    sb.rudder()
+        .args(["page", "add", "dashboard", "--brief", "旧简报"])
+        .arg("--project")
+        .arg(&dir)
+        .output()
+        .unwrap();
+    sb.rudder()
+        .args(["component", "add", "button-set", "--type", "buttons", "--brief", "旧简报"])
+        .arg("--project")
+        .arg(&dir)
+        .output()
+        .unwrap();
+
+    // project update: rename + style brief swap (human mode → stdout summary).
+    let out = sb
+        .rudder()
+        .args(["project", "update", "--name", "新名字", "--style-brief", "黄铜+深蓝"])
+        .arg("--project")
+        .arg(&dir)
+        .output()
+        .expect("project update");
+    assert_eq!(exit_code(&out), 0, "stderr: {}", stderr_text(&out));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("project updated"), "one-line summary on stdout: {stdout}");
+
+    // page update.
+    let out = sb
+        .rudder()
+        .args(["page", "update", "dashboard", "--brief", "新布局简报", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("page update");
+    assert_eq!(exit_code(&out), 0);
+    assert_eq!(parse_envelope(&out)["data"]["brief"], "新布局简报");
+
+    // component update (type + brief).
+    let out = sb
+        .rudder()
+        .args(["component", "update", "button-set", "--type", "cards", "--brief", "新简报", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("component update");
+    assert_eq!(exit_code(&out), 0);
+    let envelope = parse_envelope(&out);
+    assert_eq!(envelope["data"]["type"], "cards");
+    assert_eq!(envelope["data"]["brief"], "新简报");
+
+    // everything persisted.
+    let project: Value = serde_json::from_slice(&fs::read(dir.join("project.json")).unwrap()).unwrap();
+    assert_eq!(project["name"], "新名字");
+    assert_eq!(project["style_brief"], "黄铜+深蓝", "style brief persisted (snake_case storage key)");
+    let raw = fs::read_to_string(dir.join("project.json")).unwrap();
+    assert!(raw.contains("新布局简报"), "page brief persisted");
+    assert!(raw.contains("\"type\": \"cards\"") || raw.contains("\"type\":\"cards\""), "component type persisted");
+
+    // error paths: unknown target exits 3, empty update exits 1.
+    let out = sb
+        .rudder()
+        .args(["page", "update", "missing", "--brief", "x", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("page update missing");
+    assert_eq!(exit_code(&out), 3);
+    let out = sb
+        .rudder()
+        .args(["project", "update", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("project update no fields");
+    assert_eq!(exit_code(&out), 1);
+    assert_eq!(parse_envelope(&out)["error"]["code"], "INVALID_ARG");
+}
+
+// ---------------------------------------------------------------------------
+// generate envelope shape + prompt dedupe against a local mock endpoint
+// (UI-REVIEW 缺陷 1/3/4; zero external network)
+// ---------------------------------------------------------------------------
+
+/// Minimal HTTP/1.1 mock server (same proven pattern as
+/// rudder-core::image::tests): per-connection thread, bounded reads via
+/// read timeout + Content-Length, respond, close.
+mod mock {
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    struct RecordedRequest {
+        /// Kept for debugging; the envelope assertions read project state.
+        #[allow(dead_code)]
+        body: Vec<u8>,
+    }
+
+    /// Always answers `200` with two b64 images; records request bodies.
+    pub struct MockServer {
+        addr: std::net::SocketAddr,
+        requests: Arc<Mutex<Vec<RecordedRequest>>>,
+    }
+
+    impl MockServer {
+        pub fn start() -> MockServer {
+            let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
+            let addr = listener.local_addr().expect("local addr");
+            let requests: Arc<Mutex<Vec<RecordedRequest>>> = Arc::new(Mutex::new(Vec::new()));
+            {
+                let requests = requests.clone();
+                std::thread::spawn(move || {
+                    for stream in listener.incoming() {
+                        let Ok(mut stream) = stream else { break };
+                        let requests = requests.clone();
+                        std::thread::spawn(move || {
+                            let Ok(Some(req)) = read_request(&mut stream) else { return };
+                            requests.lock().expect("request log lock").push(req);
+                            let body =
+                                br#"{"created":1,"data":[{"b64_json":"aGVsbG8="},{"b64_json":"aGVsbG8="}]}"#;
+                            let head = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                body.len()
+                            );
+                            let _ = stream.write_all(head.as_bytes());
+                            let _ = stream.write_all(body);
+                            let _ = stream.flush();
+                        });
+                    }
+                });
+            }
+            MockServer { addr, requests }
+        }
+
+        pub fn url(&self) -> String {
+            format!("http://{}", self.addr)
+        }
+
+        #[allow(dead_code)]
+        pub fn request_count(&self) -> usize {
+            self.requests.lock().expect("request log lock").len()
+        }
+    }
+
+    fn find_double_crlf(buf: &[u8]) -> Option<usize> {
+        buf.windows(4).position(|w| w == b"\r\n\r\n")
+    }
+
+    fn read_request(stream: &mut TcpStream) -> std::io::Result<Option<RecordedRequest>> {
+        stream.set_read_timeout(Some(Duration::from_secs(10)))?;
+        let mut buf: Vec<u8> = Vec::new();
+        let mut tmp = [0u8; 8192];
+        let head_end = loop {
+            if let Some(pos) = find_double_crlf(&buf) {
+                break pos;
+            }
+            let n = stream.read(&mut tmp)?;
+            if n == 0 {
+                return Ok(None);
+            }
+            buf.extend_from_slice(&tmp[..n]);
+        };
+        let head = String::from_utf8_lossy(&buf[..head_end]).into_owned();
+        let content_length = head
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.trim()
+                    .eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().ok())?
+            })
+            .unwrap_or(0);
+        let mut body = buf[head_end + 4..].to_vec();
+        while body.len() < content_length {
+            let n = stream.read(&mut tmp)?;
+            if n == 0 {
+                break;
+            }
+            body.extend_from_slice(&tmp[..n]);
+        }
+        body.truncate(content_length);
+        Ok(Some(RecordedRequest { body }))
+    }
+}
+
+#[test]
+fn real_generate_is_reproducible_symmetric_and_prompt_deduped() {
+    let sb = Sandbox::new("mockgen");
+    let dir = sb.project_dir("proj");
+    sb.rudder().args(["init", "mock", "--dir"]).arg(&dir).output().unwrap();
+    sb.rudder()
+        .args(["page", "add", "dashboard", "--brief", "KPI 卡x4"])
+        .arg("--project")
+        .arg(&dir)
+        .output()
+        .unwrap();
+
+    let server = mock::MockServer::start();
+    let base = server.url();
+    let mut cmd = sb.rudder();
+    cmd.env("OPENAI_BASE_URL", &base).env("OPENAI_API_KEY", "test-key");
+
+    // board generate --n 2 --yes: real run against the local mock.
+    let out = cmd
+        .args(["board", "generate", "--n", "2", "--yes", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("board generate real");
+    assert_eq!(
+        exit_code(&out),
+        0,
+        "stderr: {} · stdout: {}",
+        stderr_text(&out),
+        String::from_utf8_lossy(&out.stdout)
+    );
+    let envelope = parse_envelope(&out);
+    let candidates = envelope["data"]["candidates"].as_array().unwrap();
+    assert_eq!(candidates.len(), 2);
+    for row in candidates {
+        // UI-REVIEW 缺陷 4: rows reference the prompt, never repeat it.
+        assert!(row.get("prompt").is_none(), "candidate rows must not carry prompt: {row}");
+        assert!(row["id"].is_string() && row["file"].is_string());
+        // UI-REVIEW 缺陷 1: seed recorded per candidate row.
+        assert!(row["seed"].is_u64(), "candidate row carries the seed: {row}");
+    }
+    // The prompt appears exactly once (inside plan.params.prompt).
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        stdout.matches("Purpose: a UI design system board").count(),
+        1,
+        "prompt must appear once per response, not per candidate"
+    );
+    assert!(dir.join("board/candidates/0001.png").is_file());
+
+    // Pick the anchor, then single-target page generate: symmetric shape.
+    sb.rudder()
+        .args(["board", "pick", "0001", "--project"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    let out = sb
+        .rudder()
+        .env("OPENAI_BASE_URL", &base)
+        .env("OPENAI_API_KEY", "test-key")
+        .args(["page", "generate", "dashboard", "--yes", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("page generate real");
+    assert_eq!(exit_code(&out), 0, "stderr: {}", stderr_text(&out));
+    let envelope = parse_envelope(&out);
+    // UI-REVIEW 缺陷 3: page answers with the exact board shape.
+    assert_eq!(envelope["data"]["kind"], "page");
+    assert_eq!(envelope["data"]["target"], "dashboard");
+    assert!(envelope["data"]["candidates"].is_array(), "top-level candidates (no results wrapper)");
+    assert!(envelope["data"]["candidates"].as_array().unwrap()[0]["seed"].is_u64());
+    assert!(envelope["data"]["results"].is_null(), "no results wrapper for single target");
+
+    // project.json lineage records the seed for both batches (缺陷 1).
+    let raw = fs::read_to_string(dir.join("project.json")).unwrap();
+    let project: Value = serde_json::from_str(&raw).unwrap();
+    assert!(project["board_generations"][0]["params"]["seed"].is_u64());
+    assert!(project["pages"][0]["generations"][0]["params"]["seed"].is_u64());
+    // Both requests went through the mock (board + page edits).
+    assert_eq!(server.request_count(), 2);
+}
+
+// ---------------------------------------------------------------------------
+// export warnings (UI-REVIEW 缺陷 10)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn export_warns_on_generated_but_unpicked_targets() {
+    let sb = Sandbox::new("exportwarn");
+    let dir = sb.project_dir("proj");
+    sb.rudder().args(["init", "warn", "--dir"]).arg(&dir).output().unwrap();
+    sb.rudder()
+        .args(["page", "add", "dashboard", "--brief", "x"])
+        .arg("--project")
+        .arg(&dir)
+        .output()
+        .unwrap();
+    // Generated but never picked (page + board).
+    make_fake_png(&dir.join("pages/dashboard/candidates/0001.png"), 1);
+    make_fake_png(&dir.join("board/candidates/0001.png"), 2);
+
+    let out_dir = sb.project_dir("export-out");
+    let out = sb
+        .rudder()
+        .args(["export", "--out"])
+        .arg(&out_dir)
+        .arg("--project")
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("export");
+    assert_eq!(exit_code(&out), 0, "warnings are non-fatal; stderr: {}", stderr_text(&out));
+    let envelope = parse_envelope(&out);
+    let warnings = envelope["data"]["warnings"].as_array().expect("data.warnings array");
+    assert_eq!(warnings.len(), 2, "board + page warnings: {warnings:?}");
+    let stderr = stderr_text(&out);
+    assert!(stderr.contains("warning:"), "warnings echoed on stderr: {stderr}");
+    assert!(!out_dir.join("pages/dashboard/current.png").exists());
+    assert_eq!(envelope["data"]["files"], 0);
 }

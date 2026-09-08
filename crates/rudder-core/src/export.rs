@@ -1,12 +1,17 @@
 //! Asset bundle export (PRD §3.5 / ARCHITECTURE §6 `rudder export`).
 //!
 //! Produces:
-//! - `board/anchor.png` (+ board candidates), `pages/<slug>/current.png`,
-//!   `components/<name>/current.png` under the output directory;
+//! - `board/anchor.png` and `pages/<slug>/current.png`,
+//!   `components/<name>/current.png` under the output directory (board
+//!   exploration candidates only with `ExportOptions::with_candidates` —
+//!   UI-REVIEW 缺陷 7);
 //! - `manifest.json` — project metadata plus per-image lineage
 //!   (prompt / model / seed / size / quality / endpoint);
 //! - `PROMPTS.md` — the full prompt log as readable markdown;
 //! - `DESIGN.template.md` — the skeleton an AI agent fills into DESIGN.md.
+//!
+//! Non-fatal problems (generated-but-never-picked targets) come back as
+//! `ExportReport.warnings` instead of failing the export (缺陷 10).
 
 use crate::error::Result;
 use crate::store::{self, Component, GenRecord, Page, Project};
@@ -20,6 +25,17 @@ pub struct ExportReport {
     pub out: PathBuf,
     pub manifest: PathBuf,
     pub files: usize,
+    /// Non-fatal notices, e.g. pages that were generated but never picked
+    /// and are therefore excluded from the bundle (UI-REVIEW 缺陷 10).
+    pub warnings: Vec<String>,
+}
+
+/// Options for [`export_project_with`] (UI-REVIEW 缺陷 7).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ExportOptions {
+    /// Include `board/candidates/*.png` exploration drafts in the bundle.
+    /// Default off: only the anchor + picked currents ship.
+    pub with_candidates: bool,
 }
 
 /// Per-image lineage record inside the manifest.
@@ -30,7 +46,8 @@ pub struct ManifestImage {
     /// Path relative to the export root.
     pub file: String,
     pub prompt: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Always serialized (`null` when unknown) so board candidates keep the
+    /// same shape as page/component entries (UI-REVIEW 缺陷 1).
     pub seed: Option<u64>,
     pub model: String,
     pub size: String,
@@ -184,16 +201,33 @@ pub fn render_design_template(project: &Project, manifest_rel: &str) -> String {
     md
 }
 
-/// Export the project at `root` into `out`, creating directories as needed.
+/// Export the project at `root` into `out` with default options (anchor +
+/// picked currents only).
 pub fn export_project(root: &Path, out: &Path) -> Result<ExportReport> {
+    export_project_with(root, out, &ExportOptions::default())
+}
+
+/// Export the project at `root` into `out`, creating directories as needed.
+pub fn export_project_with(root: &Path, out: &Path, options: &ExportOptions) -> Result<ExportReport> {
     let project = store::load_project(root)?;
     if !out.exists() {
         std::fs::create_dir_all(out)?;
     }
     let mut files = 0usize;
+    let mut warnings = Vec::new();
 
     // ---- board -----------------------------------------------------------
     files += copy_into(out, &root.join("board/anchor.png"), "board/anchor.png")?;
+    if root.join("board/anchor.png").is_file() {
+        // anchor exported: nothing to warn about.
+    } else {
+        let candidate_count = store::count_candidates(&root.join("board"))?;
+        if candidate_count > 0 {
+            warnings.push(format!(
+                "board has {candidate_count} candidate(s) but no anchor picked; run `rudder board pick <candidate-id>`"
+            ));
+        }
+    }
     let candidates_dir = root.join("board/candidates");
     let mut board_candidate_entries: Vec<ManifestImage> = Vec::new();
     if candidates_dir.is_dir() {
@@ -204,7 +238,9 @@ pub fn export_project(root: &Path, out: &Path) -> Result<ExportReport> {
             .collect();
         names.sort();
         for name in names {
-            files += copy_into(out, &candidates_dir.join(&name), &format!("board/candidates/{name}"))?;
+            if options.with_candidates {
+                files += copy_into(out, &candidates_dir.join(&name), &format!("board/candidates/{name}"))?;
+            }
             let id = name.trim_end_matches(".png").to_string();
             board_candidate_entries.push(board_image(&project, &id, &format!("board/candidates/{name}")));
         }
@@ -213,6 +249,7 @@ pub fn export_project(root: &Path, out: &Path) -> Result<ExportReport> {
     // ---- pages / components (currents only, per cli.md contract) ----------
     let mut page_entries = Vec::new();
     for page in &project.pages {
+        let page_dir = page.dir(root);
         let rel = format!("pages/{}/current.png", page.slug);
         files += copy_into(out, &root.join(&rel), &rel)?;
         if root.join(&rel).is_file() {
@@ -223,15 +260,34 @@ pub fn export_project(root: &Path, out: &Path) -> Result<ExportReport> {
                 .find(|r| page.prompt.as_deref() == Some(r.prompt.as_str()))
                 .or_else(|| page.generations.last());
             page_entries.push(page_manifest(page, &rel, record));
+        } else {
+            let candidate_count = store::count_candidates(&page_dir)?;
+            if candidate_count > 0 {
+                warnings.push(format!(
+                    "page `{}` has {candidate_count} candidate(s) but none picked; excluded from this bundle — run `rudder page pick {slug} <candidate-id>`",
+                    page.slug,
+                    slug = page.slug
+                ));
+            }
         }
     }
     let mut component_entries = Vec::new();
     for component in &project.components {
+        let component_dir = component.dir(root);
         let rel = format!("components/{}/current.png", component.name);
         files += copy_into(out, &root.join(&rel), &rel)?;
         if root.join(&rel).is_file() {
             let record = component.generations.last();
             component_entries.push(component_manifest(component, &rel, record));
+        } else {
+            let candidate_count = store::count_candidates(&component_dir)?;
+            if candidate_count > 0 {
+                warnings.push(format!(
+                    "component `{}` has {candidate_count} candidate(s) but none picked; excluded from this bundle — run `rudder component pick {name} <candidate-id>`",
+                    component.name,
+                    name = component.name
+                ));
+            }
         }
     }
 
@@ -254,7 +310,13 @@ pub fn export_project(root: &Path, out: &Path) -> Result<ExportReport> {
             "anchor": project.anchor.as_ref().map(|a| {
                 board_image(&project, &a.candidate_id, "board/anchor.png")
             }),
-            "candidates": board_candidate_entries,
+            "candidates": if options.with_candidates {
+                serde_json::Value::Array(
+                    board_candidate_entries.into_iter().map(|c| serde_json::to_value(&c).expect("manifest image serializes")).collect(),
+                )
+            } else {
+                serde_json::Value::Array(Vec::new())
+            },
         },
         "pages": page_entries,
         "components": component_entries,
@@ -274,6 +336,7 @@ pub fn export_project(root: &Path, out: &Path) -> Result<ExportReport> {
         out: out.to_path_buf(),
         manifest: manifest_path,
         files,
+        warnings,
     })
 }
 

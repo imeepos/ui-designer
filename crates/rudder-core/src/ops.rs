@@ -20,6 +20,16 @@ use std::path::{Path, PathBuf};
 /// Default candidate count for board generate (docs/ARCHITECTURE.md §6).
 pub const BOARD_DEFAULT_N: u32 = 4;
 
+/// Random seed for a generation batch when `--seed` is omitted. Derived
+/// from two UUIDv4 values so every batch is reproducible afterwards: the
+/// seed is recorded in the plan, `project.json` lineage, candidate rows and
+/// `manifest.json` (UI-REVIEW 缺陷 1：总板可复现).
+fn random_seed() -> u64 {
+    let a = uuid::Uuid::new_v4().as_u128();
+    let b = uuid::Uuid::new_v4().as_u128();
+    (a as u64) ^ (b as u64).rotate_left(32)
+}
+
 /// Options for one generate call.
 #[derive(Debug, Clone, Default)]
 pub struct GenerateOptions {
@@ -185,6 +195,92 @@ fn log_marker(kind: &str, target: &str) -> PromptLogEntry {
         candidate_ids: Vec::new(),
         dry_run: false,
     }
+}
+
+// ---------------------------------------------------------------------------
+// update (UI-REVIEW 缺陷 2：改简报不再手编 project.json)
+// ---------------------------------------------------------------------------
+
+/// Field patch for `rudder project update`.
+#[derive(Debug, Clone, Default)]
+pub struct ProjectUpdate {
+    pub name: Option<String>,
+    pub brand_brief: Option<String>,
+    pub style_brief: Option<String>,
+}
+
+/// `rudder project update` — amend project metadata (name / briefs).
+pub fn project_update(root: &Path, update: ProjectUpdate) -> Result<Project> {
+    if update.name.is_none() && update.brand_brief.is_none() && update.style_brief.is_none() {
+        return Err(RudderError::InvalidArg {
+            detail: "nothing to update: pass --name, --brand-brief and/or --style-brief".into(),
+        });
+    }
+    let mut project = load_project(root)?;
+    if let Some(name) = update.name {
+        let name = name.trim().to_string();
+        if name.is_empty() {
+            return Err(RudderError::InvalidArg { detail: "project name must not be empty".into() });
+        }
+        project.name = name;
+    }
+    if let Some(brief) = update.brand_brief {
+        project.brand_brief = brief.trim().to_string();
+    }
+    if let Some(brief) = update.style_brief {
+        project.style_brief = brief.trim().to_string();
+    }
+    project.prompt_log.push(log_marker("project-update", &project.name));
+    save_project(root, &project)?;
+    Ok(project)
+}
+
+/// `rudder page update <slug> --brief ...` — amend a page's layout brief.
+pub fn page_update(root: &Path, slug: &str, brief: &str) -> Result<Page> {
+    if brief.trim().is_empty() {
+        return Err(RudderError::InvalidArg { detail: "page brief must not be empty".into() });
+    }
+    let mut project = load_project(root)?;
+    let page = project
+        .pages
+        .iter_mut()
+        .find(|p| p.slug == slug)
+        .ok_or_else(|| RudderError::NotFound { what: format!("page `{slug}`") })?;
+    page.brief = brief.trim().to_string();
+    page.updated_at = store::now_rfc3339();
+    project.prompt_log.push(log_marker("page-update", slug));
+    let updated = page.clone();
+    save_project(root, &project)?;
+    Ok(updated)
+}
+
+/// `rudder component update <name> [--type ...] --brief ...` — amend a
+/// component sheet's type and/or brief.
+pub fn component_update(root: &Path, name: &str, kind: Option<&str>, brief: Option<&str>) -> Result<Component> {
+    let kind = kind.map(str::trim).filter(|s| !s.is_empty());
+    let brief = brief.map(str::trim).filter(|s| !s.is_empty());
+    if kind.is_none() && brief.is_none() {
+        return Err(RudderError::InvalidArg {
+            detail: "nothing to update: pass --type and/or --brief".into(),
+        });
+    }
+    let mut project = load_project(root)?;
+    let component = project
+        .components
+        .iter_mut()
+        .find(|c| c.name == name)
+        .ok_or_else(|| RudderError::NotFound { what: format!("component `{name}`") })?;
+    if let Some(kind) = kind {
+        component.kind = kind.to_string();
+    }
+    if let Some(brief) = brief {
+        component.brief = brief.to_string();
+    }
+    component.updated_at = store::now_rfc3339();
+    project.prompt_log.push(log_marker("component-update", name));
+    let updated = component.clone();
+    save_project(root, &project)?;
+    Ok(updated)
 }
 
 /// Normalize a candidate reference: `0001.png` (an `ls` listing) and `0001`
@@ -372,7 +468,9 @@ fn resolve_generation_params(
         size: canvas.to_api_string(),
         quality,
         n,
-        seed: opts.seed,
+        // Always recorded: explicit `--seed` wins, otherwise a fresh random
+        // seed lands in the plan + lineage so reruns can replay a batch.
+        seed: Some(opts.seed.unwrap_or_else(random_seed)),
         thinking: Some(thinking),
     })
 }

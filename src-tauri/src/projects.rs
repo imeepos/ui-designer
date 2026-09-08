@@ -92,7 +92,7 @@ fn export_kind(rel: &str) -> &'static str {
     }
 }
 
-fn scan_export_dir(root: &Path, dir: &Path, rel_prefix: &str, out: &mut Vec<ExportFileDto>) {
+fn scan_export_dir(dir: &Path, rel_prefix: &str, out: &mut Vec<ExportFileDto>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -105,7 +105,7 @@ fn scan_export_dir(root: &Path, dir: &Path, rel_prefix: &str, out: &mut Vec<Expo
             format!("{rel_prefix}/{name}")
         };
         if path.is_dir() {
-            scan_export_dir(root, &path, &rel, out);
+            scan_export_dir(&path, &rel, out);
         } else if path.is_file() {
             out.push(ExportFileDto {
                 bytes: path.metadata().map(|m| m.len()).unwrap_or(0),
@@ -120,7 +120,7 @@ fn scan_export_dir(root: &Path, dir: &Path, rel_prefix: &str, out: &mut Vec<Expo
 /// root, mirroring the mock adapter's `ExportedFile.path`).
 pub fn scan_export_files(out_dir: &Path) -> CoreResult<Vec<ExportFileDto>> {
     let mut files = Vec::new();
-    scan_export_dir(out_dir, out_dir, "", &mut files);
+    scan_export_dir(out_dir, "", &mut files);
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(files)
 }

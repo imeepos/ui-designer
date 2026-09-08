@@ -16,7 +16,8 @@ pub const THINKING_LEVELS: [&str; 3] = ["low", "medium", "high"];
 /// Generation defaults + last-used project pointer.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Config {
-    /// Default `--quality` when a generate flag is omitted (default `high`).
+    /// Default `--quality` when a generate flag is omitted (default `low` —
+    /// UI-REVIEW 缺陷 5：high must be opted into explicitly).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quality: Option<String>,
     /// Default `--thinking` (default `medium`).
@@ -75,9 +76,10 @@ impl Config {
         crate::store::atomic_write_json(path, config)
     }
 
-    /// Effective default quality: config override, else `high`.
+    /// Effective default quality: config override, else `low` (探索档；
+    /// `high` 需显式 `--quality high`，UI-REVIEW 缺陷 5 裁决).
     pub fn effective_quality(&self) -> &str {
-        self.quality.as_deref().unwrap_or("high")
+        self.quality.as_deref().unwrap_or("low")
     }
 
     /// Effective default thinking: config override, else `medium`.
@@ -156,7 +158,7 @@ mod tests {
     #[test]
     fn defaults_are_documented_values() {
         let cfg = Config::default();
-        assert_eq!(cfg.effective_quality(), "high");
+        assert_eq!(cfg.effective_quality(), "low", "exploration by default (UI-REVIEW #5)");
         assert_eq!(cfg.effective_thinking(), "medium");
         assert_eq!(cfg.effective_n(), 1);
     }

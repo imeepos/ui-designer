@@ -246,7 +246,104 @@ fn resolve_generation_params_validates_enums() {
 
     let opts = GenerateOptions::default();
     let params = resolve_generation_params(&opts, &config, "p".into(), &canvas, 4).unwrap();
-    assert_eq!(params.quality, "high", "documented default");
+    assert_eq!(params.quality, "low", "documented default (UI-REVIEW #5)");
     assert_eq!(params.thinking.as_deref(), Some("medium"));
     assert_eq!(params.n, 4);
+}
+
+#[test]
+fn generation_params_always_carry_a_seed() {
+    // UI-REVIEW 缺陷 1: an omitted --seed auto-fills with a recorded random
+    // seed, so every batch stays reproducible.
+    let config = Config::default();
+    let canvas = CanvasSize::new(1536, 1024, Some(Preset::Web));
+
+    let params = resolve_generation_params(&GenerateOptions::default(), &config, "p".into(), &canvas, 1).unwrap();
+    let auto_seed = params.seed.expect("auto seed must be recorded");
+    assert_ne!(auto_seed, 0, "vanishingly unlikely; guards against all-zero fallback");
+
+    let other = resolve_generation_params(&GenerateOptions::default(), &config, "p".into(), &canvas, 1).unwrap();
+    assert_ne!(other.seed, Some(auto_seed), "two auto seeds must differ (probabilistic)");
+
+    let explicit = resolve_generation_params(
+        &GenerateOptions { seed: Some(42), ..Default::default() },
+        &config,
+        "p".into(),
+        &canvas,
+        1,
+    )
+    .unwrap();
+    assert_eq!(explicit.seed, Some(42), "explicit --seed wins");
+}
+
+#[test]
+fn project_page_component_update_amend_metadata() {
+    let root = seeded_project("update");
+    page_add(&root, "dashboard", "旧简报").unwrap();
+    component_add(&root, "button-set", "buttons", "旧简报").unwrap();
+
+    // project: rename + style brief swap.
+    let project = project_update(
+        &root,
+        ProjectUpdate {
+            name: Some("新名字".into()),
+            style_brief: Some("黄铜+深蓝，圆角 4px".into()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(project.name, "新名字");
+    assert_eq!(project.style_brief, "黄铜+深蓝，圆角 4px");
+
+    // page brief swap.
+    let page = page_update(&root, "dashboard", "新布局简报").unwrap();
+    assert_eq!(page.brief, "新布局简报");
+    let stored = load_project(&root).unwrap();
+    assert_eq!(stored.page("dashboard").unwrap().brief, "新布局简报");
+
+    // component type + brief swap.
+    let comp = component_update(&root, "button-set", Some("cards"), Some("新简报")).unwrap();
+    assert_eq!(comp.kind, "cards");
+    assert_eq!(comp.brief, "新简报");
+
+    // update events land in the prompt log (PROMPTS.md markers).
+    let stored = load_project(&root).unwrap();
+    let kinds: Vec<_> = stored.prompt_log.iter().map(|e| e.kind.as_str()).collect();
+    assert!(kinds.contains(&"project-update"));
+    assert!(kinds.contains(&"page-update"));
+    assert!(kinds.contains(&"component-update"));
+
+    // error paths.
+    assert_eq!(
+        project_update(&root, ProjectUpdate::default()).unwrap_err().code(),
+        "INVALID_ARG"
+    );
+    assert_eq!(page_update(&root, "dashboard", "  ").unwrap_err().code(), "INVALID_ARG");
+    assert_eq!(page_update(&root, "missing", "x").unwrap_err().code(), "NOT_FOUND");
+    assert_eq!(
+        component_update(&root, "button-set", None, None).unwrap_err().code(),
+        "INVALID_ARG"
+    );
+    assert_eq!(
+        component_update(&root, "missing", Some("cards"), None).unwrap_err().code(),
+        "NOT_FOUND"
+    );
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[tokio::test]
+async fn board_generate_report_candidates_carry_seed_and_shape() {
+    let root = seeded_project("seedreport");
+    let client = dry_client();
+    // Dry-run keeps candidates empty but the plan must show the seed.
+    let plan = generate(
+        &root,
+        &Target::Board,
+        GenerateOptions { n: Some(1), quality: Some("low".into()), dry_run: true, ..Default::default() },
+        &client,
+    )
+    .await
+    .unwrap();
+    assert!(plan.plan.params["seed"].is_u64(), "plan params record the seed: {}", plan.plan.params);
+    std::fs::remove_dir_all(&root).ok();
 }

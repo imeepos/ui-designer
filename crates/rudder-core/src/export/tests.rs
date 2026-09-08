@@ -99,16 +99,16 @@ fn populated_project(tag: &str) -> PathBuf {
 }
 
 #[test]
-fn export_copies_layout_and_manifest_has_lineage() {
-    let root = populated_project("copy");
-    let out = tmp("out");
+fn export_default_bundle_keeps_currents_and_anchor_only() {
+    // UI-REVIEW 缺陷 7: exploration drafts stay out unless asked for.
+    let root = populated_project("copy-default");
+    let out = tmp("out-default");
     let report = export_project(&root, &out).unwrap();
-    assert!(report.files >= 5, "anchor + 2 board cands + page + component");
+    assert_eq!(report.files, 3, "anchor + page current + component current");
+    assert!(report.warnings.is_empty(), "fully picked project exports cleanly");
 
     for rel in [
         "board/anchor.png",
-        "board/candidates/0001.png",
-        "board/candidates/0002.png",
         "pages/dashboard/current.png",
         "components/button-set/current.png",
         "manifest.json",
@@ -117,6 +117,10 @@ fn export_copies_layout_and_manifest_has_lineage() {
     ] {
         assert!(out.join(rel).is_file(), "{rel} must exist");
     }
+    assert!(
+        !out.join("board/candidates").exists(),
+        "board exploration candidates must not ship by default"
+    );
 
     let manifest: serde_json::Value =
         serde_json::from_slice(&std::fs::read(out.join("manifest.json")).unwrap()).unwrap();
@@ -129,7 +133,8 @@ fn export_copies_layout_and_manifest_has_lineage() {
     assert_eq!(anchor["model"], MODEL);
     assert_eq!(anchor["seed"], 7);
     assert_eq!(anchor["size"], "1536x1024");
-    assert_eq!(manifest["board"]["candidates"].as_array().unwrap().len(), 2);
+    // Default bundle: candidate lineage is intentionally omitted.
+    assert_eq!(manifest["board"]["candidates"].as_array().unwrap().len(), 0);
     // Page/component entries carry their edit-endpoint lineage.
     let page = &manifest["pages"][0];
     assert_eq!(page["slug"], "dashboard");
@@ -139,8 +144,54 @@ fn export_copies_layout_and_manifest_has_lineage() {
     let comp = &manifest["components"][0];
     assert_eq!(comp["type"], "buttons");
     assert_eq!(comp["prompt"], "COMP PROMPT");
-    // The smoke script's contract: manifest parses, entries reference files.
     assert!(!manifest["promptLog"].as_array().unwrap().is_empty());
+
+    std::fs::remove_dir_all(&root).ok();
+    std::fs::remove_dir_all(&out).ok();
+}
+
+#[test]
+fn export_with_candidates_includes_board_drafts_and_lineage() {
+    let root = populated_project("copy-cands");
+    let out = tmp("out-cands");
+    let report = export_project_with(&root, &out, &ExportOptions { with_candidates: true }).unwrap();
+    assert_eq!(report.files, 5, "anchor + 2 board candidates + page + component");
+    assert!(out.join("board/candidates/0001.png").is_file());
+    assert!(out.join("board/candidates/0002.png").is_file());
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(out.join("manifest.json")).unwrap()).unwrap();
+    let candidates = manifest["board"]["candidates"].as_array().unwrap();
+    assert_eq!(candidates.len(), 2);
+    // UI-REVIEW 缺陷 1: board candidate rows carry seed (shape parity with
+    // pages — the key is present even when unknown).
+    assert_eq!(candidates[0]["id"], "0001");
+    assert_eq!(candidates[0]["seed"], 7);
+    assert!(candidates[0].get("seed").is_some());
+
+    std::fs::remove_dir_all(&root).ok();
+    std::fs::remove_dir_all(&out).ok();
+}
+
+#[test]
+fn export_warns_about_generated_but_unpicked_targets() {
+    // UI-REVIEW 缺陷 10: never silently drop candidates without a pick.
+    let root = populated_project("warn");
+    // Break the picks: remove currents so pages/components have candidates
+    // but nothing promoted; drop the anchor too.
+    std::fs::remove_file(root.join("pages/dashboard/current.png")).unwrap();
+    std::fs::remove_file(root.join("components/button-set/current.png")).unwrap();
+    std::fs::remove_file(root.join("board/anchor.png")).unwrap();
+    let mut project = load_project(&root).unwrap();
+    project.anchor = None;
+    save_project(&root, &project).unwrap();
+
+    let out = tmp("out-warn");
+    let report = export_project(&root, &out).unwrap();
+    assert_eq!(report.files, 0, "nothing promotable remains");
+    let joined = report.warnings.join("\n");
+    assert!(joined.contains("board has 2 candidate(s) but no anchor picked"), "{joined}");
+    assert!(joined.contains("page `dashboard` has 1 candidate(s) but none picked"), "{joined}");
+    assert!(joined.contains("component `button-set` has 1 candidate(s) but none picked"), "{joined}");
 
     std::fs::remove_dir_all(&root).ok();
     std::fs::remove_dir_all(&out).ok();

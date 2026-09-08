@@ -8,13 +8,13 @@
 mod output;
 
 use clap::{error::ErrorKind as ClapErrorKind, Parser, Subcommand};
-use output::{emit_err, emit_ok, format_plan, CmdResult};
+use output::{emit_err, emit_ok, format_plan, format_plan_summary, CmdResult};
 use rudder_core::config::Config;
 use rudder_core::image::ImageClient;
 use rudder_core::ops::{self, GenerateOptions, Target};
 use rudder_core::store;
 use rudder_core::{export, RudderError};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -68,6 +68,11 @@ enum Command {
         #[command(subcommand)]
         command: BoardCommand,
     },
+    /// Project metadata (name / briefs) — amend without regenerating.
+    Project {
+        #[command(subcommand)]
+        command: ProjectCommand,
+    },
     /// Functional pages derived from the anchor.
     Page {
         #[command(subcommand)]
@@ -88,6 +93,10 @@ enum Command {
         /// Output directory (default: ./export).
         #[arg(long)]
         out: Option<PathBuf>,
+        /// Also copy board exploration candidates into the bundle
+        /// (default: anchor + picked currents only).
+        #[arg(long)]
+        with_candidates: bool,
     },
     /// Self-test: sample project → board → 1 page → 1 component → export.
     E2e {
@@ -109,7 +118,7 @@ enum BoardCommand {
         /// Candidate count, 1-4 (default 4).
         #[arg(long)]
         n: Option<u32>,
-        /// low | medium | high (default from config, else high).
+        /// low | medium | high (default from config, else low).
         #[arg(long)]
         quality: Option<String>,
         #[arg(long)]
@@ -124,6 +133,23 @@ enum BoardCommand {
     /// Pick the anchor: candidate → board/anchor.png.
     Pick {
         candidate_id: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ProjectCommand {
+    /// Amend project metadata (`--name`, `--brand-brief`, `--style-brief`;
+    /// at least one required) — the supported way to iterate on briefs.
+    Update {
+        /// New project display name.
+        #[arg(long)]
+        name: Option<String>,
+        /// Replace the brand brief.
+        #[arg(long = "brand-brief")]
+        brand_brief: Option<String>,
+        /// Replace the style brief (board mood + generation invariants).
+        #[arg(long = "style-brief")]
+        style_brief: Option<String>,
     },
 }
 
@@ -159,6 +185,14 @@ enum PageCommand {
     Pick {
         slug: String,
         candidate_id: String,
+    },
+    /// Amend a page's layout brief (UI-REVIEW 缺陷 2: no hand-editing
+    /// project.json).
+    Update {
+        slug: String,
+        /// New layout brief (replaces the stored one).
+        #[arg(long)]
+        brief: String,
     },
 }
 
@@ -196,6 +230,16 @@ enum ComponentCommand {
     Pick {
         name: String,
         candidate_id: String,
+    },
+    /// Amend a component sheet's type and/or brief.
+    Update {
+        name: String,
+        /// New component type label (e.g. buttons | forms | cards | ...).
+        #[arg(long)]
+        r#type: Option<String>,
+        /// New component brief (replaces the stored one).
+        #[arg(long)]
+        brief: Option<String>,
     },
 }
 
@@ -338,6 +382,33 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
             }
         },
 
+        Command::Project { command } => match command {
+            ProjectCommand::Update { name, brand_brief, style_brief } => {
+                let root = resolve_root(cli.project.as_ref())?;
+                let project = ops::project_update(
+                    &root,
+                    ops::ProjectUpdate {
+                        name: name.clone(),
+                        brand_brief: brand_brief.clone(),
+                        style_brief: style_brief.clone(),
+                    },
+                )?;
+                Ok(CmdResult::new(
+                    format!(
+                        "project updated: name `{}` · brand brief {} char(s) · style brief {} char(s)",
+                        project.name,
+                        project.brand_brief.chars().count(),
+                        project.style_brief.chars().count()
+                    ),
+                    json!({
+                        "name": project.name,
+                        "brandBrief": project.brand_brief,
+                        "styleBrief": project.style_brief,
+                    }),
+                ))
+            }
+        },
+
         Command::Page { command } => match command {
             PageCommand::Add { slug, brief } => {
                 let root = resolve_root(cli.project.as_ref())?;
@@ -370,6 +441,12 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
                     .await?;
                     reports.push(report);
                 }
+                // UI-REVIEW 缺陷 3: a single target answers with the exact
+                // board shape (top-level `candidates`); only `--all` wraps
+                // results in an array.
+                if reports.len() == 1 {
+                    return Ok(generate_result(&reports[0]));
+                }
                 Ok(generate_all_result("page", reports))
             }
             PageCommand::Pick { slug, candidate_id } => {
@@ -378,6 +455,14 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
                 Ok(CmdResult::new(
                     format!("page `{slug}` current ← candidate {candidate_id} ({current})"),
                     json!({ "slug": slug, "picked": candidate_id, "current": current }),
+                ))
+            }
+            PageCommand::Update { slug, brief } => {
+                let root = resolve_root(cli.project.as_ref())?;
+                let page = ops::page_update(&root, slug, brief)?;
+                Ok(CmdResult::new(
+                    format!("page `{}` brief updated ({} char(s))", page.slug, page.brief.chars().count()),
+                    json!({ "slug": page.slug, "brief": page.brief }),
                 ))
             }
         },
@@ -414,6 +499,9 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
                     .await?;
                     reports.push(report);
                 }
+                if reports.len() == 1 {
+                    return Ok(generate_result(&reports[0]));
+                }
                 Ok(generate_all_result("component", reports))
             }
             ComponentCommand::Pick { name, candidate_id } => {
@@ -422,6 +510,19 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
                 Ok(CmdResult::new(
                     format!("component `{name}` current ← candidate {candidate_id} ({current})"),
                     json!({ "name": name, "picked": candidate_id, "current": current }),
+                ))
+            }
+            ComponentCommand::Update { name, r#type, brief } => {
+                let root = resolve_root(cli.project.as_ref())?;
+                let component = ops::component_update(&root, name, r#type.as_deref(), brief.as_deref())?;
+                Ok(CmdResult::new(
+                    format!(
+                        "component `{}` updated (type `{}`, brief {} char(s))",
+                        component.name,
+                        component.kind,
+                        component.brief.chars().count()
+                    ),
+                    json!({ "name": component.name, "type": component.kind, "brief": component.brief }),
                 ))
             }
         },
@@ -445,11 +546,20 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
             Ok(CmdResult::new(human, data))
         }
 
-        Command::Export { out } => {
+        Command::Export { out, with_candidates } => {
             let root = resolve_root(cli.project.as_ref())?;
             let out = out.clone().unwrap_or_else(|| PathBuf::from("export"));
             export::validate_out_dir(&root, &out)?;
-            let report = export::export_project(&root, &out)?;
+            let report = export::export_project_with(
+                &root,
+                &out,
+                &export::ExportOptions { with_candidates: *with_candidates },
+            )?;
+            // UI-REVIEW 缺陷 10: never silently drop generated-but-unpicked
+            // targets — warn on stderr (logs channel) in every mode.
+            for warning in &report.warnings {
+                eprintln!("warning: {warning}");
+            }
             Ok(CmdResult::new(
                 format!(
                     "exported {} image file(s) → {} (manifest.json, PROMPTS.md, DESIGN.template.md)",
@@ -460,6 +570,8 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
                     "out": report.out.display().to_string(),
                     "manifest": report.manifest.display().to_string(),
                     "files": report.files,
+                    "withCandidates": with_candidates,
+                    "warnings": report.warnings,
                 }),
             ))
         }
@@ -529,16 +641,40 @@ fn expand_targets(root: &std::path::Path, target: &str, pages: bool) -> Result<V
     Ok(vec![target.to_string()])
 }
 
-fn generate_result(report: &ops::GenerateReport) -> CmdResult {
-    let data = json!({
+/// Trimmed candidate row for `--json` output. The prompt lives ONCE in
+/// `plan.params.prompt` — candidates reference it by id/file
+/// (UI-REVIEW 缺陷 4), while seed/size/quality stay for reproducibility.
+fn candidate_json(candidate: &ops::CandidateReport) -> Value {
+    json!({
+        "id": candidate.id,
+        "file": candidate.file,
+        "seed": candidate.seed,
+        "size": candidate.size,
+        "quality": candidate.quality,
+    })
+}
+
+/// One generate report in the envelope shape shared by board and
+/// single-target page/component (UI-REVIEW 缺陷 3): always
+/// `{dryRun, kind, target, plan, candidates[]}` at the TOP LEVEL.
+fn report_json(report: &ops::GenerateReport) -> Value {
+    json!({
         "dryRun": report.dry_run,
         "kind": report.kind,
         "target": report.target,
         "plan": serde_json::to_value(&report.plan).expect("plan serializes"),
-        "candidates": report.candidates,
-    });
+        "candidates": report.candidates.iter().map(candidate_json).collect::<Vec<_>>(),
+    })
+}
+
+fn generate_result(report: &ops::GenerateReport) -> CmdResult {
+    let data = report_json(report);
     if report.dry_run {
-        CmdResult::new(format_plan(&report.plan), data)
+        CmdResult::with_detail(
+            format_plan_summary(&report.plan, &report.kind, &report.target),
+            format_plan(&report.plan),
+            data,
+        )
     } else {
         let ids: Vec<&str> = report.candidates.iter().map(|c| c.id.as_str()).collect();
         CmdResult::new(
@@ -554,24 +690,45 @@ fn generate_result(report: &ops::GenerateReport) -> CmdResult {
     }
 }
 
+/// `--all` fan-out: one envelope with a `results` array; every entry keeps
+/// the same `{kind, target, plan, candidates}` shape as single-target runs.
 fn generate_all_result(kind: &str, reports: Vec<ops::GenerateReport>) -> CmdResult {
     let dry_run = reports.iter().all(|r| r.dry_run);
-    let mut human_lines = Vec::new();
+    let mut summaries = Vec::new();
+    let mut details = Vec::new();
+    let mut entries = Vec::new();
     for report in &reports {
         if report.dry_run {
-            human_lines.push(format_plan(&report.plan));
+            summaries.push(format_plan_summary(&report.plan, &report.kind, &report.target));
+            details.push(format_plan(&report.plan));
         } else {
             let ids: Vec<&str> = report.candidates.iter().map(|c| c.id.as_str()).collect();
-            human_lines.push(format!(
+            summaries.push(format!(
                 "{kind} `{}` → candidate(s): {}",
                 report.target,
                 ids.join(", ")
             ));
         }
+        entries.push(json!({
+            "kind": report.kind,
+            "target": report.target,
+            "plan": serde_json::to_value(&report.plan).expect("plan serializes"),
+            "candidates": report.candidates.iter().map(candidate_json).collect::<Vec<_>>(),
+        }));
     }
     let data = json!({
         "dryRun": dry_run,
-        "results": reports,
+        "kind": kind,
+        "results": entries,
     });
-    CmdResult::new(human_lines.join("\n"), data)
+    let summary = if summaries.is_empty() {
+        format!("{kind} --all: no registered targets")
+    } else {
+        summaries.join("; ")
+    };
+    if details.is_empty() {
+        CmdResult::new(summary, data)
+    } else {
+        CmdResult::with_detail(summary, details.join("\n"), data)
+    }
 }
