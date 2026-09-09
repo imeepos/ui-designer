@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -6,6 +6,7 @@ import { useStudio } from "@/state/studio";
 import type { BoardBrief } from "@/lib/api/types";
 import { BRIEF_MAX, DEFAULT_QUALITY, type QualityLevel } from "@/lib/form-schema";
 import { formatSize } from "@/lib/size";
+import { OPEN_TREE_ADD_EVENT } from "@/lib/events";
 import {
   AddComponentForm,
   AddPageForm,
@@ -29,11 +30,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-/** Right column: forms & actions per step (320px, THEME §4). */
+/** Right column: forms & actions for the selected tree node (320px, THEME §4). */
 export function DetailPanel({ onNewProject }: { onNewProject: () => void }) {
   const { t } = useTranslation();
-  const { state, setView } = useStudio();
+  const { state } = useStudio();
   const project = state.project;
+  const view = state.view;
 
   let content;
   if (!project) {
@@ -50,18 +52,24 @@ export function DetailPanel({ onNewProject }: { onNewProject: () => void }) {
         </CardContent>
       </Card>
     );
+  } else if (view.startsWith("component:")) {
+    content = <ComponentWorkbench />;
+  } else if (view.startsWith("page:")) {
+    content = <PageWorkbench />;
   } else {
-    switch (state.view) {
-      case "project":
-        content = <ProjectMetaCard />;
+    switch (view) {
+      case "overview":
+        content = (
+          <>
+            <ProjectMetaCard />
+            <BoardFormCard />
+          </>
+        );
         break;
-      case "board":
-        content = <BoardFormCard />;
-        break;
-      case "page":
+      case "pages":
         content = <PageWorkbench />;
         break;
-      case "component":
+      case "components":
         content = <ComponentWorkbench />;
         break;
     }
@@ -72,15 +80,10 @@ export function DetailPanel({ onNewProject }: { onNewProject: () => void }) {
       data-testid="detail-panel"
       className="flex w-80 shrink-0 flex-col border-l"
     >
-      <div className="flex h-10 shrink-0 items-center justify-between px-4">
+      <div className="flex h-10 shrink-0 items-center px-4">
         <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           {t("panel.detail.title")}
         </h2>
-        {project && state.view !== "board" && (
-          <Button variant="ghost" size="sm" onClick={() => setView("board")}>
-            {t("panel.detail.backToBoard")}
-          </Button>
-        )}
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 pt-0">
         {content}
@@ -91,7 +94,7 @@ export function DetailPanel({ onNewProject }: { onNewProject: () => void }) {
 
 function ProjectMetaCard() {
   const { t } = useTranslation();
-  const { state, setView } = useStudio();
+  const { state } = useStudio();
   const project = state.project;
   if (!project) return null;
 
@@ -118,9 +121,6 @@ function ProjectMetaCard() {
           label={t("panel.detail.project.components")}
           value={String(project.components.length)}
         />
-        <Button size="sm" className="mt-1" onClick={() => setView("board")}>
-          {t("gallery.overview.gotoBoard")}
-        </Button>
       </CardContent>
     </Card>
   );
@@ -252,6 +252,18 @@ function PageWorkbench() {
   const { state, selectPage } = useStudio();
   const project = state.project;
   const [adding, setAdding] = useState(false);
+
+  // Tree "+" entry asks this workbench to reveal the add-page form.
+  useEffect(() => {
+    const open = (event: Event) => {
+      if ((event as CustomEvent<{ kind?: string }>).detail?.kind === "page") {
+        setAdding(true);
+      }
+    };
+    window.addEventListener(OPEN_TREE_ADD_EVENT, open);
+    return () => window.removeEventListener(OPEN_TREE_ADD_EVENT, open);
+  }, []);
+
   if (!project) return null;
 
   const selectedPage = project.pages.find((page) => page.slug === state.selectedPage);
@@ -323,6 +335,18 @@ function ComponentWorkbench() {
   const { state, selectComponent } = useStudio();
   const project = state.project;
   const [adding, setAdding] = useState(false);
+
+  // Tree "+" entry asks this workbench to reveal the add-component form.
+  useEffect(() => {
+    const open = (event: Event) => {
+      if ((event as CustomEvent<{ kind?: string }>).detail?.kind === "component") {
+        setAdding(true);
+      }
+    };
+    window.addEventListener(OPEN_TREE_ADD_EVENT, open);
+    return () => window.removeEventListener(OPEN_TREE_ADD_EVENT, open);
+  }, []);
+
   if (!project) return null;
 
   const selectedComponent = project.components.find(

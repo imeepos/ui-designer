@@ -37,25 +37,19 @@
     "saveOk": "已保存到系统钥匙串。",
     "cleared": "已清除钥匙串中的 API Key。"
   },
-  "steps": {
-    "label": "设计流程",
-    "locked": "先完成前置步骤",
-    "project": {
-      "title": "项目",
-      "desc": "新建或选择项目"
-    },
-    "board": {
-      "title": "总板",
-      "desc": "设计系统总板"
-    },
-    "page": {
-      "title": "页面",
-      "desc": "功能页面设计"
-    },
-    "component": {
-      "title": "组件",
-      "desc": "组件细节设计"
-    }
+  "tree": {
+    "title": "目录",
+    "overview": "总览",
+    "pages": "页面",
+    "components": "组件",
+    "expand": "展开",
+    "collapse": "折叠",
+    "addPage": "添加页面",
+    "addComponent": "添加组件",
+    "emptyCta": "新建项目",
+    "emptyHint": "新建项目后，这里会显示它的设计目录。",
+    "lockedPage": "先在总览生成候选并设置锚点，再开始页面设计。",
+    "lockedComponent": "先完成一个页面（生成并转正），再开始组件设计。"
   },
   "common": {
     "cancel": "取消",
@@ -100,7 +94,6 @@
         "title": "暂未选择内容"
       },
       "empty": "在画廊中选择一项后，这里会显示简报表单、生成按钮与历史版本。",
-      "backToBoard": "返回总板",
       "project": {
         "created": "创建于 {{date}}",
         "brand": "品牌简报",
@@ -254,18 +247,6 @@
         "title": "还没有组件",
         "desc": "在右侧添加组件与类型，生成细节图。"
       }
-    },
-    "overview": {
-      "anchorMissing": "尚未设置锚点，先去总板完成。",
-      "board": "总板",
-      "pages": "页面",
-      "components": "组件",
-      "done": "已完成",
-      "candidates": "候选 {{count}}",
-      "progress": "{{done}}/{{total}} 已转正",
-      "gotoBoard": "去总板",
-      "gotoPages": "去页面",
-      "gotoComponents": "去组件"
     }
   },
   "job": {
@@ -328,7 +309,7 @@
     },
     "ANCHOR_REQUIRED": {
       "message": "尚未设置总板锚点。",
-      "hint": "先在总板候选中点选一张设为锚点。"
+      "hint": "先在总览生成候选并点选一张设为锚点。"
     },
     "ANCHOR_LOCKED": {
       "message": "锚点图不能删除。",

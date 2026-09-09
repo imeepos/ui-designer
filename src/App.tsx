@@ -11,11 +11,6 @@ import { SettingsDialog } from "@/components/settings-dialog";
 import { DetailPanel } from "@/components/panels/detail-panel";
 import { GalleryPanel } from "@/components/panels/gallery-panel";
 import { ProjectsPanel } from "@/components/panels/projects-panel";
-import {
-  Stepper,
-  computeStepStates,
-  stepUnlockedMap,
-} from "@/components/stepper";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useCoreStatus } from "@/hooks/use-core-status";
@@ -36,7 +31,7 @@ export default function App() {
 function AppShell() {
   const { t } = useTranslation();
   const core = useCoreStatus();
-  const { state, apiMode, setView } = useStudio();
+  const { state, apiMode } = useStudio();
   const [createOpen, setCreateOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -47,9 +42,6 @@ function AppShell() {
     window.addEventListener(OPEN_SETTINGS_EVENT, openSettings);
     return () => window.removeEventListener(OPEN_SETTINGS_EVENT, openSettings);
   }, []);
-
-  const stepStates = computeStepStates(state.project, state.view);
-  const unlocked = stepUnlockedMap(state.project);
 
   useEffect(() => {
     document.title = t("app.title");
@@ -93,13 +85,6 @@ function AppShell() {
           <ThemeToggle />
         </div>
       </header>
-
-      <Stepper
-        current={state.view}
-        states={stepStates}
-        unlocked={unlocked}
-        onSelect={setView}
-      />
 
       <main className="flex min-h-0 flex-1">
         <ProjectsPanel />

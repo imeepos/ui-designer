@@ -5,14 +5,14 @@ import { EmptyState } from "@/components/empty-state";
 import { BoardSection } from "@/components/gallery/board-section";
 import { PagesSection } from "@/components/gallery/pages-section";
 import { ComponentsSection } from "@/components/gallery/components-section";
-import { ProjectOverview } from "@/components/gallery/project-overview";
 import { Button } from "@/components/ui/button";
 
-/** Center column: gallery content driven by the four-step view. */
+/** Center column: content of the selected tree node. */
 export function GalleryPanel({ onNewProject }: { onNewProject: () => void }) {
   const { t } = useTranslation();
   const { state } = useStudio();
   const project = state.project;
+  const view = state.view;
 
   let content;
   if (!project) {
@@ -27,18 +27,19 @@ export function GalleryPanel({ onNewProject }: { onNewProject: () => void }) {
         }
       />
     );
+  } else if (view.startsWith("component:")) {
+    content = <ComponentsSection />;
+  } else if (view.startsWith("page:")) {
+    content = <PagesSection />;
   } else {
-    switch (state.view) {
-      case "project":
-        content = <ProjectOverview />;
-        break;
-      case "board":
+    switch (view) {
+      case "overview":
         content = <BoardSection />;
         break;
-      case "page":
+      case "pages":
         content = <PagesSection />;
         break;
-      case "component":
+      case "components":
         content = <ComponentsSection />;
         break;
     }

@@ -10,7 +10,6 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { StepId } from "@/components/stepper";
 import { createApi } from "@/lib/api";
 import type {
   ApiAdapter,
@@ -27,6 +26,36 @@ import { useToast } from "@/state/toast";
 
 export type JobKind = "board" | "page" | "component" | "export";
 
+/**
+ * Tree navigation target (replaces the former horizontal StepId):
+ * - overview / pages / components are the three fixed group nodes;
+ * - `page:<slug>` / `component:<name>` select a leaf under its group.
+ */
+export type TreeViewId =
+  | "overview"
+  | "pages"
+  | "components"
+  | `page:${string}`
+  | `component:${string}`;
+
+/** Fixed group node ids (the tree's static level under the project root). */
+export type TreeGroupId = "overview" | "pages" | "components";
+
+/**
+ * Whether a tree group may be opened: migrated from the former
+ * `stepUnlockedMap` gating (PRD §3) — same invariants, new surface.
+ */
+export function treeNodeUnlocked(
+  project: ProjectDetail | null,
+): Record<TreeGroupId, boolean> {
+  return {
+    overview: project !== null,
+    pages: project?.anchor != null,
+    components:
+      project?.anchor != null && project.pages.some((page) => page.current !== null),
+  };
+}
+
 export interface ActiveJob {
   kind: JobKind;
   /** 0..1 */
@@ -40,7 +69,7 @@ export interface StudioState {
   projects: ProjectSummary[];
   project: ProjectDetail | null;
   projectsLoading: boolean;
-  view: StepId;
+  view: TreeViewId;
   selectedPage: string | null;
   selectedComponent: string | null;
   job: ActiveJob | null;
@@ -48,15 +77,6 @@ export interface StudioState {
 }
 
 const StudioContext = createContext<StudioApi | null>(null);
-
-export function stepUnlocked(project: ProjectDetail | null): Record<StepId, boolean> {
-  return {
-    project: true,
-    board: project !== null,
-    page: project?.anchor != null,
-    component: project?.anchor != null && project.pages.some((page) => page.current !== null),
-  };
-}
 
 export function StudioProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
@@ -70,7 +90,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [project, setProject] = useState<ProjectDetail | null>(null);
-  const [view, setView] = useState<StepId>("project");
+  const [view, setView] = useState<TreeViewId>("overview");
   const [selectedPage, setSelectedPage] = useState<string | null>(null);
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
   const [job, setJob] = useState<ActiveJob | null>(null);
@@ -143,27 +163,24 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     setProject(detail);
     setSelectedPage(null);
     setSelectedComponent(null);
+    // Auto-step equivalent: a fresh/switched project lands on the overview.
+    setView("overview");
   }, []);
 
-  const selectProject = useCallback(
-    async (id: string) => {
-      try {
-        const detail = await api.getProject(id);
-        activateProject(detail);
-        setView("board");
-      } catch (error) {
-        toast.error(error);
-      }
-    },
-    [activateProject, api, toast],
-  );
+  const selectProject = useCallback(async (id: string) => {
+    try {
+      const detail = await api.getProject(id);
+      activateProject(detail);
+    } catch (error) {
+      toast.error(error);
+    }
+  }, [activateProject, api, toast]);
 
   const createProject = useCallback(
     async (input: CreateProjectInput) => {
       try {
         const detail = await api.createProject(input);
         activateProject(detail);
-        setView("board");
         void refreshProjects();
         toast.success(t("toast.success.project"));
       } catch (error) {
@@ -194,7 +211,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         const detail = await api.pickAnchor(project.id, candidateId);
         setProject(detail);
         void refreshProjects();
-        setView("page");
+        // No forced jump (tree era): the success toast invites the user to
+        // start page design; the pages group unlocks in the tree.
         toast.success(t("toast.success.anchor"));
       } catch (error) {
         toast.error(error);
@@ -210,6 +228,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         const detail = await api.addPage(project.id, { slug, brief });
         setProject(detail);
         setSelectedPage(slug);
+        setView(`page:${slug}`);
         void refreshProjects();
         toast.success(t("toast.success.pageAdded", { slug }));
       } catch (error) {
@@ -254,6 +273,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         const detail = await api.addComponent(project.id, { name, type, brief });
         setProject(detail);
         setSelectedComponent(name);
+        setView(`component:${name}`);
         void refreshProjects();
         toast.success(t("toast.success.componentAdded", { name }));
       } catch (error) {
@@ -313,9 +333,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         void refreshProjects();
         if (target.kind === "page") {
           setSelectedPage((prev) => (prev === target.slug ? null : prev));
+          setView((prev) => (prev === `page:${target.slug}` ? "pages" : prev));
         }
         if (target.kind === "component") {
           setSelectedComponent((prev) => (prev === target.name ? null : prev));
+          setView((prev) => (prev === `component:${target.name}` ? "components" : prev));
         }
         toast.success(t("toast.success.deleted"));
       } catch (error) {
@@ -385,7 +407,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 export interface StudioApi {
   state: StudioState;
   apiMode: "mock" | "tauri";
-  setView: (view: StepId) => void;
+  setView: (view: TreeViewId) => void;
   selectPage: (slug: string | null) => void;
   selectComponent: (name: string | null) => void;
   cancelJob: () => void;

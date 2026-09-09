@@ -37,25 +37,19 @@
     "saveOk": "API key saved to the OS keychain.",
     "cleared": "API key removed from the keychain."
   },
-  "steps": {
-    "label": "Design flow",
-    "locked": "Finish the previous steps first",
-    "project": {
-      "title": "Project",
-      "desc": "Create or pick a project"
-    },
-    "board": {
-      "title": "Board",
-      "desc": "Design system board"
-    },
-    "page": {
-      "title": "Page",
-      "desc": "Feature page design"
-    },
-    "component": {
-      "title": "Component",
-      "desc": "Component details"
-    }
+  "tree": {
+    "title": "Library",
+    "overview": "Overview",
+    "pages": "Pages",
+    "components": "Components",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "addPage": "Add page",
+    "addComponent": "Add component",
+    "emptyCta": "New project",
+    "emptyHint": "Create a project and its design tree shows up here.",
+    "lockedPage": "Generate board candidates and set the anchor in Overview first.",
+    "lockedComponent": "Finish one page (generate and pick) before component design."
   },
   "common": {
     "cancel": "Cancel",
@@ -100,7 +94,6 @@
         "title": "Nothing selected"
       },
       "empty": "Pick an item in the gallery to see its brief form, generate button and history.",
-      "backToBoard": "Back to board",
       "project": {
         "created": "Created {{date}}",
         "brand": "Brand brief",
@@ -254,18 +247,6 @@
         "title": "No components yet",
         "desc": "Add a component and its type on the right to generate details."
       }
-    },
-    "overview": {
-      "anchorMissing": "No anchor yet — finish the board step first.",
-      "board": "Board",
-      "pages": "Pages",
-      "components": "Components",
-      "done": "Done",
-      "candidates": "{{count}} candidates",
-      "progress": "{{done}}/{{total}} picked",
-      "gotoBoard": "Go to board",
-      "gotoPages": "Go to pages",
-      "gotoComponents": "Go to components"
     }
   },
   "job": {
@@ -328,7 +309,7 @@
     },
     "ANCHOR_REQUIRED": {
       "message": "No board anchor is set yet.",
-      "hint": "Pick a board candidate as the anchor first."
+      "hint": "Generate candidates in Overview and pick one as the anchor first."
     },
     "ANCHOR_LOCKED": {
       "message": "The anchor board cannot be deleted.",

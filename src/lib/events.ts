@@ -9,3 +9,17 @@ export function requestOpenSettings(): void {
     window.dispatchEvent(new CustomEvent(OPEN_SETTINGS_EVENT));
   }
 }
+
+/**
+ * Tree "+" entries ask the detail panel to reveal the matching add form
+ * (page / component) without threading UI state through the store.
+ */
+export const OPEN_TREE_ADD_EVENT = "rudder:open-tree-add";
+
+export type TreeAddKind = "page" | "component";
+
+export function requestTreeAdd(kind: TreeAddKind): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(OPEN_TREE_ADD_EVENT, { detail: { kind } }));
+  }
+}
