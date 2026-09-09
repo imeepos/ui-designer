@@ -68,3 +68,36 @@ export function AnchorMark({ className }: IconProps) {
     </svg>
   );
 }
+
+/**
+ * Sailing boat: empty-state illustration (THEME §5 v3: helm/compass/anchor/boat).
+ * 白描 ink line-art — hull, mast, two sails, calm water and two gulls,
+ * echoing the 墨航 anchor board (design-china/board/anchor.png).
+ */
+export function BoatMark({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 96 96"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={cn("size-24", className)}
+    >
+      {/* mast */}
+      <path d="M48 18v48" />
+      {/* main sail */}
+      <path d="M52 22c11 8 16 20 17 34l-17 2" />
+      {/* jib sail */}
+      <path d="M44 28c-8 6-12 14-13 24h13" />
+      {/* hull */}
+      <path d="M22 68h52c-3 5-9 8-15 8H37c-6 0-12-3-15-8z" />
+      {/* calm water */}
+      <path d="M12 82c6-4 12-4 18 0s12 4 18 0 12-4 18 0 12 4 18 0" />
+      {/* gulls */}
+      <path d="M66 24c2-2.5 4.5-2.5 6.5 0M74 30c2-2.5 4.5-2.5 6.5 0" />
+    </svg>
+  );
+}

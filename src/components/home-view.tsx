@@ -56,6 +56,7 @@ export function HomeView({ onCreate }: { onCreate: () => void }) {
 
       {state.projects.length === 0 ? (
         <EmptyState
+          mark="boat"
           title={t("home.empty.title")}
           description={t("home.empty.desc")}
           action={
