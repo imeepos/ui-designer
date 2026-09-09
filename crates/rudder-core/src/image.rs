@@ -8,8 +8,9 @@
 //!   resolution is `OPENAI_BASE_URL` env → `config.json` → default. Secrets
 //!   are never stored in files, logged, or printed.
 //! - Response: `b64_json`, decoded to raw bytes.
-//! - Retry: 429/5xx with exponential backoff, at most 3 retries; errors
-//!   carry the HTTP status and a body summary.
+//! - Retry: 429/5xx **and malformed 2xx bodies** (e.g. missing `b64_json`)
+//!   with exponential backoff, at most 3 retries; errors carry the HTTP
+//!   status and a body summary.
 //! - DryRun: `run_*` returns the full request plan (URL, params, multipart
 //!   shape) and performs no network I/O.
 //! - Timeout: 300s per request by default.
@@ -235,7 +236,8 @@ impl ImageClient {
     }
 
     /// Generations: JSON body → `data[].b64_json`. Dry-run returns the plan
-    /// only. Retries 429/5xx with exponential backoff (≤ [`MAX_RETRIES`]).
+    /// only. Retries 429/5xx and malformed 2xx bodies with exponential
+    /// backoff (≤ [`MAX_RETRIES`]).
     pub async fn run_generations(&self, params: &GenerateParams) -> Result<RunOutput> {
         let plan = self.plan_generations(params);
         if self.dry_run {
@@ -340,7 +342,20 @@ impl ImageClient {
                     .bytes()
                     .await
                     .map_err(|e| RudderError::BadResponse { detail: e.to_string() })?;
-                return decode_b64_images(&bytes);
+                match decode_b64_images(&bytes) {
+                    Ok(images) => return Ok(images),
+                    // A 2xx with an unusable body (not JSON, no `data` array,
+                    // missing `b64_json`) is treated as a transient glitch —
+                    // some proxies occasionally degrade the payload — and
+                    // retried under the same backoff budget as 429/5xx.
+                    Err(e) if e.code() == "BAD_RESPONSE" && attempt < MAX_RETRIES => {
+                        let delay = self.backoff * (1u32 << attempt);
+                        tokio::time::sleep(delay).await;
+                        attempt += 1;
+                        continue;
+                    }
+                    Err(e) => return Err(e),
+                }
             }
             let body_summary = body_summary(response).await;
             let retryable = status.as_u16() == 429 || status.is_server_error();

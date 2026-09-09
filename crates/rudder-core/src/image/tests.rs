@@ -192,6 +192,40 @@ async fn mock_retry_on_429_then_500_then_success() {
 }
 
 #[tokio::test]
+async fn mock_retry_on_malformed_2xx_then_success() {
+    // A 2xx whose body has no b64_json (observed in the wild from proxies)
+    // must be retried like 429/5xx instead of failing immediately.
+    let server = MockServer::start(|_req, i| match i {
+        0 => (200, br#"{"data":[{"url":"https://cdn.example/img.png"}]}"#.to_vec()),
+        _ => (200, b64_response(&[PNG_BYTES_A])),
+    });
+    let client = live_client(server.url());
+    let out = client
+        .run_generations(&params("retry me", 1))
+        .await
+        .expect("second attempt succeeds");
+    assert_eq!(out.images, Some(vec![PNG_BYTES_A.to_vec()]));
+    assert_eq!(server.recorded().len(), 2, "malformed body retried once");
+}
+
+#[tokio::test]
+async fn mock_malformed_2xx_exhausted_maps_to_bad_response() {
+    let server = MockServer::start(|_req, _i| (200, br#"{"data":[{}]}"#.to_vec()));
+    let client = live_client(server.url());
+    let err = client
+        .run_generations(&params("never succeeds", 1))
+        .await
+        .expect_err("bad body forever must fail");
+    assert_eq!(err.code(), "BAD_RESPONSE");
+    assert_eq!(err.exit_code(), 2);
+    assert_eq!(
+        server.recorded().len(),
+        1 + MAX_RETRIES as usize,
+        "initial attempt + at most 3 retries"
+    );
+}
+
+#[tokio::test]
 async fn mock_retry_exhausted_maps_to_rate_limited_exit2() {
     let server = MockServer::start(|_req, _i| (429, b"{'error':'quota exhausted'}".to_vec()));
     let client = live_client(server.url());
