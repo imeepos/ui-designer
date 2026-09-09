@@ -36,6 +36,8 @@ fn record(prompt: &str, ids: &[&str], endpoint: &str) -> GenRecord {
         prompt: prompt.into(),
         params: gen_params(ids.len() as u32),
         candidate_ids: ids.iter().map(|s| s.to_string()).collect(),
+        source: None,
+        template_id: None,
     }
 }
 
@@ -92,6 +94,8 @@ fn populated_project(tag: &str) -> PathBuf {
         params: gen_params(2),
         candidate_ids: vec!["0001".into(), "0002".into()],
         dry_run: false,
+        source: None,
+        template_id: None,
     });
 
     save_project(&root, &project).unwrap();

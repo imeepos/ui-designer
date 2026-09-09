@@ -186,6 +186,8 @@ async fn board_pick_requires_candidate_then_sets_anchor() {
             thinking: Some("medium".into()),
         },
         candidate_ids: vec!["0001".into()],
+        source: None,
+        template_id: None,
     });
     save_project(&root, &project).unwrap();
 
@@ -345,5 +347,411 @@ async fn board_generate_report_candidates_carry_seed_and_shape() {
     .await
     .unwrap();
     assert!(plan.plan.params["seed"].is_u64(), "plan params record the seed: {}", plan.plan.params);
+    std::fs::remove_dir_all(&root).ok();
+}
+
+// ---------------------------------------------------------------------------
+// template resolution + --prompt-file (模板协议，PRD §0)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn template_resolution_explicit_then_project_then_default() {
+    let root = seeded_project("templateres");
+    page_add(&root, "landing", "导航 4 项 + hero 双按钮 + 3 特性段").unwrap();
+    let client = dry_client();
+    let base = GenerateOptions { dry_run: true, assume_anchor: true, ..Default::default() };
+
+    // 1. builtin default skeleton.
+    let report = generate(&root, &Target::Page("landing".into()), base.clone(), &client)
+        .await
+        .unwrap();
+    assert_eq!(report.source, "engine");
+    assert_eq!(report.template_id.as_deref(), Some("page-ui-standard"));
+    assert!(report.prompt.contains("five passes"), "{}", report.prompt);
+    assert!(report.prompt.contains("Constraints:"), "engine path injects constraints");
+
+    // 2. project.templateId wins over the builtin default.
+    let mut project = store::load_project(&root).unwrap();
+    project.template_id = Some("page-landing-sections".into());
+    store::save_project(&root, &project).unwrap();
+    let report = generate(&root, &Target::Page("landing".into()), base.clone(), &client)
+        .await
+        .unwrap();
+    assert_eq!(report.template_id.as_deref(), Some("page-landing-sections"));
+    assert!(report.prompt.contains("Section contract:"), "{}", report.prompt);
+
+    // 3. explicit --template wins over project.templateId.
+    let explicit = GenerateOptions {
+        template: Some("page-ui-standard".into()),
+        ..base.clone()
+    };
+    let report = generate(&root, &Target::Page("landing".into()), explicit, &client)
+        .await
+        .unwrap();
+    assert_eq!(report.template_id.as_deref(), Some("page-ui-standard"));
+    assert!(report.prompt.contains("five passes"));
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[tokio::test]
+async fn unknown_or_mismatched_template_is_exit1_with_hint() {
+    let root = seeded_project("badtemplate");
+    page_add(&root, "dash", "简报").unwrap();
+    let client = dry_client();
+
+    // Unknown id → INVALID_ARG (exit 1) with a templates-list hint.
+    let err = generate(
+        &root,
+        &Target::Page("dash".into()),
+        GenerateOptions {
+            template: Some("nope".into()),
+            dry_run: true,
+            assume_anchor: true,
+            ..Default::default()
+        },
+        &client,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(err.code(), "INVALID_ARG");
+    assert_eq!(err.exit_code(), 1);
+    assert!(err.hint().contains("templates list"), "hint: {}", err.hint());
+
+    // Board template on a page target → kind mismatch error.
+    let err = generate(
+        &root,
+        &Target::Page("dash".into()),
+        GenerateOptions {
+            template: Some("brand-identity-lite".into()),
+            dry_run: true,
+            assume_anchor: true,
+            ..Default::default()
+        },
+        &client,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(err.exit_code(), 1);
+    assert!(err.to_string().contains("applies to `board`"), "{err}");
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[tokio::test]
+async fn prompt_file_full_chain_dry_run() {
+    let root = seeded_project("promptfile");
+    page_add(&root, "dashboard", "四张 KPI 卡").unwrap();
+    let client = dry_client();
+    let dir = tmp("promptfile-io");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("page.prompt");
+    std::fs::write(&path, "代理写好的最终提示词\n第二行 Labels: 不会被引擎改写\n").unwrap();
+
+    // Full chain: file read → source recorded → plan carries the text as-is.
+    let report = generate(
+        &root,
+        &Target::Page("dashboard".into()),
+        GenerateOptions {
+            prompt_file: Some(path.clone()),
+            dry_run: true,
+            assume_anchor: true,
+            ..Default::default()
+        },
+        &client,
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.source, "agent-file", "recorded prompt source");
+    assert_eq!(report.template_id, None, "no declared skeleton without --template");
+    assert_eq!(report.prompt, "代理写好的最终提示词\n第二行 Labels: 不会被引擎改写", "trimmed copy of the file");
+    assert_eq!(report.plan.params["prompt"], report.prompt, "the file content IS the request prompt");
+    assert!(!report.prompt.contains("Constraints:"), "nothing is injected on the agent path");
+    // The anchor still rides as Image 1.
+    assert_eq!(report.plan.endpoint, "edits");
+    assert_eq!(report.plan.images[0].role, "anchor");
+
+    // --template alongside --prompt-file is recorded, never assembled.
+    let report = generate(
+        &root,
+        &Target::Page("dashboard".into()),
+        GenerateOptions {
+            prompt_file: Some(path.clone()),
+            template: Some("page-ui-standard".into()),
+            dry_run: true,
+            assume_anchor: true,
+            ..Default::default()
+        },
+        &client,
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.template_id.as_deref(), Some("page-ui-standard"));
+    assert_eq!(report.source, "agent-file");
+    assert!(!report.prompt.contains("five passes"), "skeleton must NOT be assembled");
+    std::fs::remove_dir_all(&root).ok();
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn prompt_file_validation_errors_exit1() {
+    let dir = tmp("promptfile-bad");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // Missing file.
+    let err = read_prompt_file(&dir.join("missing.prompt")).unwrap_err();
+    assert_eq!(err.code(), "INVALID_ARG");
+    assert_eq!(err.exit_code(), 1);
+    assert!(err.to_string().contains("does not exist"), "{err}");
+
+    // Empty file.
+    let empty = dir.join("empty.prompt");
+    std::fs::write(&empty, "   \n  ").unwrap();
+    let err = read_prompt_file(&empty).unwrap_err();
+    assert!(err.to_string().contains("empty"), "{err}");
+
+    // Not UTF-8.
+    let binary = dir.join("binary.prompt");
+    std::fs::write(&binary, [0xFF, 0xFE, 0x00, b'b']).unwrap();
+    let err = read_prompt_file(&binary).unwrap_err();
+    assert!(err.to_string().contains("UTF-8"), "{err}");
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn project_update_template_and_negative_hints() {
+    let root = seeded_project("projtemplate");
+
+    // Set the project-default template (validated to exist).
+    let project = project_update(
+        &root,
+        ProjectUpdate {
+            template: Some("brand-identity-lite".into()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(project.template_id.as_deref(), Some("brand-identity-lite"));
+
+    // Unknown template id → INVALID_ARG.
+    let err = project_update(
+        &root,
+        ProjectUpdate { template: Some("ghost".into()), ..Default::default() },
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), "INVALID_ARG");
+
+    // Append negative hints (deduplicated), then clear them.
+    let project = project_update(
+        &root,
+        ProjectUpdate {
+            add_negative_hints: vec!["不要通用放大镜图标".into(), " no dark mode ".into()],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(project.negative_hints, vec!["不要通用放大镜图标", "no dark mode"]);
+    let project = project_update(
+        &root,
+        ProjectUpdate {
+            add_negative_hints: vec!["不要通用放大镜图标".into()],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(project.negative_hints.len(), 2, "duplicate hint not appended");
+    let project = project_update(
+        &root,
+        ProjectUpdate { clear_negative_hints: true, ..Default::default() },
+    )
+    .unwrap();
+    assert!(project.negative_hints.is_empty());
+
+    // Clear the project-default template.
+    let project = project_update(
+        &root,
+        ProjectUpdate { clear_template: true, ..Default::default() },
+    )
+    .unwrap();
+    assert_eq!(project.template_id, None);
+
+    // Conflicts and empty hints are argument errors.
+    assert_eq!(
+        project_update(
+            &root,
+            ProjectUpdate {
+                template: Some("page-ui-standard".into()),
+                clear_template: true,
+                ..Default::default()
+            },
+        )
+        .unwrap_err()
+        .code(),
+        "INVALID_ARG"
+    );
+    assert_eq!(
+        project_update(
+            &root,
+            ProjectUpdate {
+                add_negative_hints: vec!["x".into()],
+                clear_negative_hints: true,
+                ..Default::default()
+            },
+        )
+        .unwrap_err()
+        .code(),
+        "INVALID_ARG"
+    );
+    assert_eq!(
+        project_update(
+            &root,
+            ProjectUpdate { add_negative_hints: vec!["  ".into()], ..Default::default() },
+        )
+        .unwrap_err()
+        .code(),
+        "INVALID_ARG"
+    );
+
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn old_project_json_without_new_fields_loads_unchanged() {
+    // Backward compatibility: pre-template project.json files (no
+    // templateId / negativeHints / source keys) load with serde defaults.
+    let root = tmp("backward");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(
+        root.join(store::PROJECT_FILE),
+        r#"{
+            "id": "legacy-id",
+            "name": "旧项目",
+            "canvasSize": { "w": 1536, "h": 1024, "preset": "web" },
+            "created_at": "2026-01-01T00:00:00.000Z"
+        }"#,
+    )
+    .unwrap();
+    let project = load_project(&root).unwrap();
+    assert_eq!(project.name, "旧项目");
+    assert_eq!(project.template_id, None);
+    assert!(project.negative_hints.is_empty());
+    std::fs::remove_dir_all(&root).ok();
+}
+
+/// Full-chain REAL run (mock server, no network): agent prompt file →
+/// anchor edits call → candidates + GenRecord/promptLog recorded with
+/// `source: "agent-file"` and the declared template id.
+#[tokio::test]
+async fn prompt_file_real_run_persists_agent_file_lineage() {
+    use crate::test_support::{b64_response, MockServer};
+
+    ensure_test_home();
+
+    const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 1, 2, 3, 4];
+    let server = MockServer::start(move |_req, _i| (200, b64_response(&[PNG])));
+    let client = ImageClient::new(
+        server.url(),
+        Some("k".into()),
+        false,
+        Duration::from_millis(1),
+        Duration::from_secs(5),
+    )
+    .unwrap();
+
+    let root = seeded_project("agentfile-real");
+    page_add(&root, "dashboard", "四张 KPI 卡").unwrap();
+
+    // Anchor exists (as after a real board pick).
+    std::fs::create_dir_all(root.join("board")).unwrap();
+    std::fs::write(root.join("board/anchor.png"), PNG).unwrap();
+    let mut project = load_project(&root).unwrap();
+    project.anchor = Some(store::Anchor {
+        candidate_id: "0001".into(),
+        prompt: String::new(),
+        seed: Some(1),
+        created_at: store::now_rfc3339(),
+    });
+    save_project(&root, &project).unwrap();
+
+    let dir = tmp("agentfile-real-io");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("page.prompt");
+    std::fs::write(&path, "代理写好的最终提示词（真实链路）").unwrap();
+
+    let report = generate(
+        &root,
+        &Target::Page("dashboard".into()),
+        GenerateOptions {
+            prompt_file: Some(path.clone()),
+            template: Some("page-ui-standard".into()),
+            n: Some(1),
+            quality: Some("low".into()),
+            ..Default::default()
+        },
+        &client,
+    )
+    .await
+    .unwrap();
+    assert!(!report.dry_run);
+    assert_eq!(report.source, "agent-file");
+    assert_eq!(report.candidates.len(), 1);
+    assert!(root.join("pages/dashboard/candidates/0001.png").is_file());
+
+    // One multipart edits call carried the file text verbatim.
+    let reqs = server.recorded();
+    assert_eq!(reqs.len(), 1);
+    assert_eq!(reqs[0].path, "/v1/images/edits");
+    let body = reqs[0].body_str();
+    assert!(body.contains("代理写好的最终提示词（真实链路）"), "{body}");
+
+    // Lineage: GenRecord on the page + promptLog both record the source
+    // and the declared template id.
+    let project = load_project(&root).unwrap();
+    let record = &project.page("dashboard").unwrap().generations[0];
+    assert_eq!(record.source.as_deref(), Some("agent-file"));
+    assert_eq!(record.template_id.as_deref(), Some("page-ui-standard"));
+    assert_eq!(record.prompt, "代理写好的最终提示词（真实链路）");
+    let log = project.prompt_log.last().unwrap();
+    assert_eq!(log.source.as_deref(), Some("agent-file"));
+    assert_eq!(log.template_id.as_deref(), Some("page-ui-standard"));
+
+    std::fs::remove_dir_all(&root).ok();
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// Engine-path real run records `source: "engine"` + the resolved template.
+#[tokio::test]
+async fn engine_real_run_persists_engine_lineage() {
+    use crate::test_support::{b64_response, MockServer};
+
+    ensure_test_home();
+    const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 9, 8, 7, 6];
+    let server = MockServer::start(move |_req, _i| (200, b64_response(&[PNG])));
+    let client = ImageClient::new(
+        server.url(),
+        Some("k".into()),
+        false,
+        Duration::from_millis(1),
+        Duration::from_secs(5),
+    )
+    .unwrap();
+
+    let root = seeded_project("engine-real");
+    let report = generate(
+        &root,
+        &Target::Board,
+        GenerateOptions { n: Some(1), quality: Some("low".into()), ..Default::default() },
+        &client,
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.source, "engine");
+    assert_eq!(report.template_id.as_deref(), Some("board-design-system"));
+
+    let project = load_project(&root).unwrap();
+    let record = &project.board_generations[0];
+    assert_eq!(record.source.as_deref(), Some("engine"));
+    assert_eq!(record.template_id.as_deref(), Some("board-design-system"));
+    assert!(record.prompt.contains("Purpose: a UI design system board"));
+    assert!(record.prompt.contains("Constraints:"));
     std::fs::remove_dir_all(&root).ok();
 }

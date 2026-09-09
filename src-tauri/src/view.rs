@@ -366,6 +366,8 @@ mod tests {
                 thinking: None,
             },
             candidate_ids: vec![id.to_string()],
+            source: None,
+            template_id: None,
         }
     }
 
@@ -440,6 +442,8 @@ mod tests {
             },
             candidate_ids: vec!["0001".into()],
             dry_run: false,
+            source: None,
+            template_id: None,
         });
         store::save_project(&root, &project).unwrap();
         store::atomic_write(&root.join("pages/dashboard/current.png"), b"current").unwrap();

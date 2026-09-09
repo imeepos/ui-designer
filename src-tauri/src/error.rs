@@ -65,7 +65,9 @@ impl CommandError {
 
     fn map_core(err: &RudderError, exists_code: &str, io_code: &str) -> Self {
         let code = match err {
-            RudderError::SizeInvalid { .. } | RudderError::InvalidArg { .. } => {
+            RudderError::SizeInvalid { .. }
+            | RudderError::InvalidArg { .. }
+            | RudderError::TemplateNotFound { .. } => {
                 codes::VALIDATION_ERROR
             }
             RudderError::CredentialMissing => codes::NO_CREDENTIALS,

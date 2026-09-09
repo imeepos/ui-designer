@@ -9,6 +9,7 @@ use crate::image::{
     ImageClient, ImageRef, GenerateParams, RequestPlan, MODEL,
 };
 use crate::prompt;
+use crate::templates;
 use crate::store::{
     self, candidate_path, candidates_dir, load_project, promote_candidate, reserve_candidate_ids,
     save_project, Component, GenParams, GenRecord, Page, Project, PromptLogEntry,
@@ -42,6 +43,14 @@ pub struct GenerateOptions {
     pub thinking: Option<String>,
     /// Extra layout reference images (passed after the anchor).
     pub refs: Vec<PathBuf>,
+    /// Template skeleton id. Resolution: explicit here → `project.templateId`
+    /// → builtin default for the kind. With `--prompt-file` it is recorded
+    /// only (reproducibility lineage), never assembled.
+    pub template: Option<String>,
+    /// Agent-authored final prompt file (PRD §0 代理操作面): the file content
+    /// IS the prompt — the engine neither rewrites nor injects anything.
+    /// The anchor still rides as Image 1 for page/component targets.
+    pub prompt_file: Option<PathBuf>,
     /// Final dry-run decision (CLI: `--dry-run` or no `--yes`).
     pub dry_run: bool,
     /// e2e self-test only: build page/component plans before a board exists.
@@ -71,6 +80,11 @@ pub struct GenerateReport {
     pub target: String,
     pub prompt: String,
     pub plan: RequestPlan,
+    /// Where the prompt came from: `engine` | `agent-file`.
+    pub source: String,
+    /// Template skeleton used (assembly or declared lineage reference).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
     /// Empty in dry-run mode.
     pub candidates: Vec<CandidateReport>,
 }
@@ -194,6 +208,8 @@ fn log_marker(kind: &str, target: &str) -> PromptLogEntry {
         },
         candidate_ids: Vec::new(),
         dry_run: false,
+        source: None,
+        template_id: None,
     }
 }
 
@@ -207,14 +223,54 @@ pub struct ProjectUpdate {
     pub name: Option<String>,
     pub brand_brief: Option<String>,
     pub style_brief: Option<String>,
+    /// Set the project-default template id (validated to exist).
+    pub template: Option<String>,
+    /// Reset the project-default template (builtin default applies again).
+    pub clear_template: bool,
+    /// Append project-level exclusion hints (repeatable flag).
+    pub add_negative_hints: Vec<String>,
+    /// Remove all project-level exclusion hints.
+    pub clear_negative_hints: bool,
 }
 
-/// `rudder project update` — amend project metadata (name / briefs).
+/// `rudder project update` — amend project metadata (name / briefs /
+/// template default / negative hints).
 pub fn project_update(root: &Path, update: ProjectUpdate) -> Result<Project> {
-    if update.name.is_none() && update.brand_brief.is_none() && update.style_brief.is_none() {
+    if update.name.is_none()
+        && update.brand_brief.is_none()
+        && update.style_brief.is_none()
+        && update.template.is_none()
+        && !update.clear_template
+        && update.add_negative_hints.is_empty()
+        && !update.clear_negative_hints
+    {
         return Err(RudderError::InvalidArg {
-            detail: "nothing to update: pass --name, --brand-brief and/or --style-brief".into(),
+            detail: "nothing to update: pass --name, --brand-brief, --style-brief, --template, \
+                     --clear-template, --negative-hint and/or --clear-negative-hints"
+                .into(),
         });
+    }
+    if update.template.is_some() && update.clear_template {
+        return Err(RudderError::InvalidArg {
+            detail: "--template and --clear-template are mutually exclusive".into(),
+        });
+    }
+    if !update.add_negative_hints.is_empty() && update.clear_negative_hints {
+        return Err(RudderError::InvalidArg {
+            detail: "--negative-hint and --clear-negative-hints are mutually exclusive".into(),
+        });
+    }
+    if let Some(id) = &update.template {
+        // Validate early: a project default that fails to load would break
+        // every later generate.
+        templates::load_builtin(id)?;
+    }
+    for hint in &update.add_negative_hints {
+        if hint.trim().is_empty() {
+            return Err(RudderError::InvalidArg {
+                detail: "--negative-hint must not be empty".into(),
+            });
+        }
     }
     let mut project = load_project(root)?;
     if let Some(name) = update.name {
@@ -229,6 +285,21 @@ pub fn project_update(root: &Path, update: ProjectUpdate) -> Result<Project> {
     }
     if let Some(brief) = update.style_brief {
         project.style_brief = brief.trim().to_string();
+    }
+    if update.clear_template {
+        project.template_id = None;
+    }
+    if let Some(id) = update.template {
+        project.template_id = Some(id.trim().to_string());
+    }
+    if update.clear_negative_hints {
+        project.negative_hints.clear();
+    }
+    for hint in update.add_negative_hints {
+        let hint = hint.trim().to_string();
+        if !project.negative_hints.iter().any(|h| h == &hint) {
+            project.negative_hints.push(hint);
+        }
     }
     project.prompt_log.push(log_marker("project-update", &project.name));
     save_project(root, &project)?;
@@ -355,6 +426,8 @@ fn set_page_lineage(
                 },
                 candidate_ids: vec![candidate_id.to_string()],
                 dry_run: false,
+                source: None,
+                template_id: None,
             });
     }
     Ok(())
@@ -517,28 +590,149 @@ fn reference_images(
     Ok(refs)
 }
 
+/// Resolve the prompt for one generate call.
+///
+/// - `--prompt-file` (agent path): the file content IS the prompt. The file
+///   must exist, be valid UTF-8 and non-empty (exit 1 with hint otherwise).
+///   Nothing is injected — the external coding agent is fully responsible.
+///   Page/component targets still ride the anchor as Image 1.
+/// - engine path: template resolution is explicit `--template` >
+///   `project.templateId` > builtin default, then the skeleton is filled and
+///   the constraint table appended.
+///
+/// Returns `(prompt, source, template_id)`.
+fn resolve_prompt(
+    project: &Project,
+    target: &Target,
+    opts: &GenerateOptions,
+) -> Result<(String, &'static str, Option<String>)> {
+    // Template selection (recorded-only when assembling nothing).
+    let declared_template: Option<templates::Template> = match opts.template.as_deref() {
+        Some(id) => {
+            let template = templates::load_builtin(id)?;
+            if opts.prompt_file.is_none() {
+                check_template_kind(&template, target.kind(), "--template")?;
+            }
+            Some(template)
+        }
+        None if opts.prompt_file.is_none() => {
+            let template = match &project.template_id {
+                Some(id) => {
+                    let template = templates::load_builtin(id)?;
+                    check_template_kind(&template, target.kind(), "project.templateId")?;
+                    template
+                }
+                None => {
+                    templates::load_builtin(templates::default_template_id(target.kind()))?
+                }
+            };
+            Some(template)
+        }
+        None => None,
+    };
+
+    match &opts.prompt_file {
+        Some(path) => {
+            // The anchor contract holds on the agent path too.
+            match target {
+                Target::Page(slug) => {
+                    if project.page(slug).is_none() {
+                        return Err(RudderError::NotFound { what: format!("page `{slug}`") });
+                    }
+                    require_anchor(project, opts, opts.dry_run)?;
+                }
+                Target::Component(name) => {
+                    if project.component(name).is_none() {
+                        return Err(RudderError::NotFound {
+                            what: format!("component `{name}`"),
+                        });
+                    }
+                    require_anchor(project, opts, opts.dry_run)?;
+                }
+                Target::Board => {}
+            }
+            let prompt = read_prompt_file(path)?;
+            Ok((prompt, prompt::SOURCE_AGENT_FILE, declared_template.map(|t| t.id)))
+        }
+        None => {
+            let template = declared_template.as_ref().ok_or_else(|| {
+                RudderError::InvalidArg { detail: "internal: engine path requires a template".into() }
+            })?;
+            let prompt = match target {
+                Target::Board => prompt::compose_board(project, Some(template))?,
+                Target::Page(slug) => {
+                    let page = project
+                        .page(slug)
+                        .ok_or_else(|| RudderError::NotFound { what: format!("page `{slug}`") })?;
+                    require_anchor(project, opts, opts.dry_run)?;
+                    prompt::compose_page(project, page, Some(template))?
+                }
+                Target::Component(name) => {
+                    let component = project.component(name).ok_or_else(|| {
+                        RudderError::NotFound { what: format!("component `{name}`") }
+                    })?;
+                    require_anchor(project, opts, opts.dry_run)?;
+                    prompt::compose_component(project, component, Some(template))?
+                }
+            };
+            Ok((prompt, prompt::SOURCE_ENGINE, Some(template.id.clone())))
+        }
+    }
+}
+
+/// Reject a template whose `appliesTo` doesn't match the generate kind.
+fn check_template_kind(
+    template: &templates::Template,
+    kind: &str,
+    selected_via: &str,
+) -> Result<()> {
+    if template.applies_to != kind {
+        return Err(RudderError::InvalidArg {
+            detail: format!(
+                "template `{}` applies to `{}`, not `{kind}` (selected via {selected_via}; \
+                 run `rudder templates list`)",
+                template.id, template.applies_to
+            ),
+        });
+    }
+    Ok(())
+}
+
+/// Read an agent-authored prompt file: must exist, decode as UTF-8 and be
+/// non-empty after trimming. All failures are argument errors (exit 1).
+pub fn read_prompt_file(path: &Path) -> Result<String> {
+    let bytes = std::fs::read(path).map_err(|e| RudderError::InvalidArg {
+        detail: format!(
+            "prompt file {} does not exist or cannot be read ({e}); \
+             pass --prompt-file <path> to an existing non-empty UTF-8 text file",
+            path.display()
+        ),
+    })?;
+    let text = String::from_utf8(bytes).map_err(|_| RudderError::InvalidArg {
+        detail: format!(
+            "prompt file {} is not valid UTF-8; \
+             save it as UTF-8 (no BOM required) and retry",
+            path.display()
+        ),
+    })?;
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Err(RudderError::InvalidArg {
+            detail: format!(
+                "prompt file {} is empty; write the final prompt text into it first",
+                path.display()
+            ),
+        });
+    }
+    Ok(trimmed.to_string())
+}
+
 /// Unified generate for board / page / component.
 pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, client: &ImageClient) -> Result<GenerateReport> {
     let config = Config::load();
     let project = load_project(root)?;
 
-    let prompt = match target {
-        Target::Board => prompt::board_prompt(&project),
-        Target::Page(slug) => {
-            let page = project
-                .page(slug)
-                .ok_or_else(|| RudderError::NotFound { what: format!("page `{slug}`") })?;
-            require_anchor(&project, &opts, opts.dry_run)?;
-            prompt::page_prompt(&project, page)
-        }
-        Target::Component(name) => {
-            let component = project
-                .component(name)
-                .ok_or_else(|| RudderError::NotFound { what: format!("component `{name}`") })?;
-            require_anchor(&project, &opts, opts.dry_run)?;
-            prompt::component_prompt(&project, component)
-        }
-    };
+    let (prompt, source, template_id) = resolve_prompt(&project, target, &opts)?;
 
     let params = resolve_generation_params(&opts, &config, prompt.clone(), &project.canvas_size, n_default_for(target, &config))?;
 
@@ -561,6 +755,8 @@ pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, clien
             target: target.target_name(),
             prompt,
             plan,
+            source: source.to_string(),
+            template_id,
             candidates: Vec::new(),
         });
     }
@@ -602,6 +798,8 @@ pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, clien
             thinking: params.thinking.clone(),
         },
         candidate_ids: ids.clone(),
+        source: Some(source.to_string()),
+        template_id: template_id.clone(),
     };
 
     let mut project = load_project(root)?;
@@ -634,6 +832,8 @@ pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, clien
         &record.params,
         &ids,
         false,
+        source,
+        template_id.as_deref(),
     ));
     save_project(root, &project)?;
 
@@ -660,6 +860,8 @@ pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, clien
         target: target.target_name(),
         prompt,
         plan,
+        source: source.to_string(),
+        template_id,
         candidates,
     })
 }

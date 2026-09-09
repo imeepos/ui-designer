@@ -88,6 +88,12 @@ enum Command {
         /// Optional filter: pages | components.
         arg: Option<String>,
     },
+    /// Prompt template protocol (PRD §0): skeletons + fill guides for
+    /// external coding agents to fill with their own LLM.
+    Templates {
+        #[command(subcommand)]
+        command: TemplatesCommand,
+    },
     /// Export the asset bundle (images + manifest.json + PROMPTS.md + DESIGN.template.md).
     Export {
         /// Output directory (default: ./export).
@@ -113,6 +119,15 @@ enum Command {
 }
 
 #[derive(Subcommand, Debug)]
+enum TemplatesCommand {
+    /// List built-in templates (id, target product, slot names).
+    List,
+    /// Show one template's skeleton + fillGuide (agents read this, fill the
+    /// slots with their own LLM, and feed the result via --prompt-file).
+    Show { id: String },
+}
+
+#[derive(Subcommand, Debug)]
 enum BoardCommand {
     /// Generate board candidates (board/candidates/NNNN.png).
     Generate {
@@ -130,6 +145,13 @@ enum BoardCommand {
         /// Extra inspiration reference images (switches to the edits endpoint).
         #[arg(long = "ref")]
         refs: Vec<PathBuf>,
+        /// Template skeleton id (default: project.templateId, else builtin).
+        #[arg(long)]
+        template: Option<String>,
+        /// Agent-authored final prompt file: its content IS the prompt (the
+        /// engine neither rewrites nor injects). --template is recorded only.
+        #[arg(long = "prompt-file")]
+        prompt_file: Option<PathBuf>,
     },
     /// Pick the anchor: candidate → board/anchor.png.
     Pick {
@@ -139,8 +161,9 @@ enum BoardCommand {
 
 #[derive(Subcommand, Debug)]
 enum ProjectCommand {
-    /// Amend project metadata (`--name`, `--brand-brief`, `--style-brief`;
-    /// at least one required) — the supported way to iterate on briefs.
+    /// Amend project metadata (`--name`, `--brand-brief`, `--style-brief`,
+    /// `--template`, `--negative-hint`; at least one required) — the
+    /// supported way to iterate on briefs.
     Update {
         /// New project display name.
         #[arg(long)]
@@ -151,6 +174,19 @@ enum ProjectCommand {
         /// Replace the style brief (board mood + generation invariants).
         #[arg(long = "style-brief")]
         style_brief: Option<String>,
+        /// Set the project-default prompt template id (validated to exist).
+        #[arg(long)]
+        template: Option<String>,
+        /// Reset the project-default template (builtin default applies).
+        #[arg(long = "clear-template", default_value_t = false)]
+        clear_template: bool,
+        /// Append a project-level exclusion hint (repeatable; injected into
+        /// the prompt's explicit-negatives constraint).
+        #[arg(long = "negative-hint")]
+        negative_hints: Vec<String>,
+        /// Remove all project-level exclusion hints.
+        #[arg(long = "clear-negative-hints", default_value_t = false)]
+        clear_negative_hints: bool,
     },
 }
 
@@ -181,6 +217,13 @@ enum PageCommand {
         /// Extra layout reference images (passed after the anchor).
         #[arg(long = "ref")]
         refs: Vec<PathBuf>,
+        /// Template skeleton id (default: project.templateId, else builtin).
+        #[arg(long)]
+        template: Option<String>,
+        /// Agent-authored final prompt file: its content IS the prompt.
+        /// Single target only (not --all). --template is recorded only.
+        #[arg(long = "prompt-file")]
+        prompt_file: Option<PathBuf>,
     },
     /// Promote a candidate to pages/<slug>/current.png (old current → history/).
     Pick {
@@ -226,6 +269,13 @@ enum ComponentCommand {
         thinking: Option<String>,
         #[arg(long = "ref")]
         refs: Vec<PathBuf>,
+        /// Template skeleton id (default: project.templateId, else builtin).
+        #[arg(long)]
+        template: Option<String>,
+        /// Agent-authored final prompt file: its content IS the prompt.
+        /// Single target only (not --all). --template is recorded only.
+        #[arg(long = "prompt-file")]
+        prompt_file: Option<PathBuf>,
     },
     /// Promote a candidate to components/<name>/current.png (old current → history/).
     Pick {
@@ -313,12 +363,17 @@ fn spend_allowed(cli: &Cli) -> bool {
     cli.yes && !cli.dry_run
 }
 
+// Thin flag-bagging for the generate subcommands; the count mirrors clap's
+// flag surface and carries no logic.
+#[allow(clippy::too_many_arguments)]
 fn generate_opts(
     n: Option<u32>,
     quality: Option<String>,
     seed: Option<u64>,
     thinking: Option<String>,
     refs: Vec<PathBuf>,
+    template: Option<String>,
+    prompt_file: Option<PathBuf>,
     cli: &Cli,
 ) -> GenerateOptions {
     GenerateOptions {
@@ -327,6 +382,8 @@ fn generate_opts(
         seed,
         thinking,
         refs,
+        template,
+        prompt_file,
         dry_run: !spend_allowed(cli),
         assume_anchor: false,
     }
@@ -372,13 +429,13 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
         }
 
         Command::Board { command } => match command {
-            BoardCommand::Generate { n, quality, seed, thinking, refs } => {
+            BoardCommand::Generate { n, quality, seed, thinking, refs, template, prompt_file } => {
                 let root = resolve_root(cli.project.as_ref())?;
                 let client = build_client(cli)?;
                 let report = ops::generate(
                     &root,
                     &Target::Board,
-                    generate_opts(*n, quality.clone(), *seed, thinking.clone(), refs.clone(), cli),
+                    generate_opts(*n, quality.clone(), *seed, thinking.clone(), refs.clone(), template.clone(), prompt_file.clone(), cli),
                     &client,
                 )
                 .await?;
@@ -395,7 +452,7 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
         },
 
         Command::Project { command } => match command {
-            ProjectCommand::Update { name, brand_brief, style_brief } => {
+            ProjectCommand::Update { name, brand_brief, style_brief, template, clear_template, negative_hints, clear_negative_hints } => {
                 let root = resolve_root(cli.project.as_ref())?;
                 let project = ops::project_update(
                     &root,
@@ -403,19 +460,27 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
                         name: name.clone(),
                         brand_brief: brand_brief.clone(),
                         style_brief: style_brief.clone(),
+                        template: template.clone(),
+                        clear_template: *clear_template,
+                        add_negative_hints: negative_hints.clone(),
+                        clear_negative_hints: *clear_negative_hints,
                     },
                 )?;
                 Ok(CmdResult::new(
                     format!(
-                        "project updated: name `{}` · brand brief {} char(s) · style brief {} char(s)",
+                        "project updated: name `{}` · brand brief {} char(s) · style brief {} char(s) · template {} · negative hints {}",
                         project.name,
                         project.brand_brief.chars().count(),
-                        project.style_brief.chars().count()
+                        project.style_brief.chars().count(),
+                        project.template_id.as_deref().unwrap_or("-"),
+                        project.negative_hints.len(),
                     ),
                     json!({
                         "name": project.name,
                         "brandBrief": project.brand_brief,
                         "styleBrief": project.style_brief,
+                        "templateId": project.template_id,
+                        "negativeHints": project.negative_hints,
                     }),
                 ))
             }
@@ -438,16 +503,23 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
                     json!({ "pages": status.pages }),
                 ))
             }
-            PageCommand::Generate { target, n, quality, seed, thinking, refs } => {
+            PageCommand::Generate { target, n, quality, seed, thinking, refs, template, prompt_file } => {
                 let root = resolve_root(cli.project.as_ref())?;
                 let client = build_client(cli)?;
+                if prompt_file.is_some() && (target == "--all" || target == "all") {
+                    return Err(RudderError::InvalidArg {
+                        detail: "--prompt-file writes ONE page's final prompt; target a single \
+                                 slug (or drop --prompt-file to use the engine path for --all)"
+                            .into(),
+                    });
+                }
                 let slugs = expand_targets(&root, target, true)?;
                 let mut reports = Vec::new();
                 for slug in slugs {
                     let report = ops::generate(
                         &root,
                         &Target::Page(slug.clone()),
-                        generate_opts(*n, quality.clone(), *seed, thinking.clone(), refs.clone(), cli),
+                        generate_opts(*n, quality.clone(), *seed, thinking.clone(), refs.clone(), template.clone(), prompt_file.clone(), cli),
                         &client,
                     )
                     .await?;
@@ -496,16 +568,23 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
                     json!({ "components": status.components }),
                 ))
             }
-            ComponentCommand::Generate { target, n, quality, seed, thinking, refs } => {
+            ComponentCommand::Generate { target, n, quality, seed, thinking, refs, template, prompt_file } => {
                 let root = resolve_root(cli.project.as_ref())?;
                 let client = build_client(cli)?;
+                if prompt_file.is_some() && (target == "--all" || target == "all") {
+                    return Err(RudderError::InvalidArg {
+                        detail: "--prompt-file writes ONE component's final prompt; target a \
+                                 single name (or drop --prompt-file to use the engine path for --all)"
+                            .into(),
+                    });
+                }
                 let names = expand_targets(&root, target, false)?;
                 let mut reports = Vec::new();
                 for name in names {
                     let report = ops::generate(
                         &root,
                         &Target::Component(name.clone()),
-                        generate_opts(*n, quality.clone(), *seed, thinking.clone(), refs.clone(), cli),
+                        generate_opts(*n, quality.clone(), *seed, thinking.clone(), refs.clone(), template.clone(), prompt_file.clone(), cli),
                         &client,
                     )
                     .await?;
@@ -557,6 +636,61 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
             };
             Ok(CmdResult::new(human, data))
         }
+
+        Command::Templates { command } => match command {
+            TemplatesCommand::List => {
+                let manifest = rudder_core::templates::builtin_manifest()?;
+                let ids: Vec<&str> = manifest.templates.iter().map(|t| t.id.as_str()).collect();
+                let human = format!(
+                    "{} template(s): {} (fill guides: `rudder templates show <id> --json`)",
+                    ids.len(),
+                    ids.join(", ")
+                );
+                // Detailed per-template listing goes to stderr (human mode);
+                // agents read the --json envelope.
+                for entry in &manifest.templates {
+                    eprintln!(
+                        "{} [{}] {} — {} · slots: {}",
+                        entry.id,
+                        entry.applies_to,
+                        entry.name.zh,
+                        entry.summary.zh,
+                        entry.slots.join(", ")
+                    );
+                }
+                Ok(CmdResult::new(
+                    human,
+                    serde_json::to_value(&manifest).expect("manifest serializes"),
+                ))
+            }
+            TemplatesCommand::Show { id } => {
+                let template = rudder_core::templates::load_builtin(id)?;
+                // Human mode: the skeleton + fill guide rendered readably on
+                // stderr; agents use --json for the raw template object.
+                eprintln!("—— skeleton ({}) ——", template.id);
+                eprintln!("{}", template.skeleton);
+                eprintln!("—— fillGuide ——");
+                eprintln!("{}", template.fill_guide.how_to);
+                for guide in &template.fill_guide.slots {
+                    eprintln!("\n[{slot}]", slot = guide.slot);
+                    eprintln!("  要什么: {}", guide.what);
+                    if !guide.good_example.is_empty() {
+                        eprintln!("  好例子: {}", guide.good_example);
+                    }
+                    for mistake in &guide.common_mistakes {
+                        eprintln!("  常见错误: {mistake}");
+                    }
+                }
+                Ok(CmdResult::new(
+                    format!(
+                        "template `{}` ({}) — fill each slot per the guide, then pass the final \
+                         text via --prompt-file",
+                        template.id, template.applies_to
+                    ),
+                    serde_json::to_value(&template).expect("template serializes"),
+                ))
+            }
+        },
 
         Command::Export { out, with_candidates } => {
             let root = resolve_root(cli.project.as_ref())?;
@@ -762,6 +896,8 @@ fn report_json(report: &ops::GenerateReport) -> Value {
         "dryRun": report.dry_run,
         "kind": report.kind,
         "target": report.target,
+        "source": report.source,
+        "templateId": report.template_id,
         "plan": serde_json::to_value(&report.plan).expect("plan serializes"),
         "candidates": report.candidates.iter().map(candidate_json).collect::<Vec<_>>(),
     })
@@ -812,6 +948,8 @@ fn generate_all_result(kind: &str, reports: Vec<ops::GenerateReport>) -> CmdResu
         entries.push(json!({
             "kind": report.kind,
             "target": report.target,
+            "source": report.source,
+            "templateId": report.template_id,
             "plan": serde_json::to_value(&report.plan).expect("plan serializes"),
             "candidates": report.candidates.iter().map(candidate_json).collect::<Vec<_>>(),
         }));

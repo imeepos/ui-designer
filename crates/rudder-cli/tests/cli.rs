@@ -1008,3 +1008,290 @@ fn export_warns_on_generated_but_unpicked_targets() {
     assert!(!out_dir.join("pages/dashboard/current.png").exists());
     assert_eq!(envelope["data"]["files"], 0);
 }
+
+// ---------------------------------------------------------------------------
+// template protocol: templates list/show + --template + --prompt-file (PRD §0)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn templates_list_and_show_expose_fill_guides() {
+    let sb = Sandbox::new("tpl-list");
+
+    // `templates list --json`: the manifest with attribution + 5 templates.
+    let out = sb.rudder().args(["templates", "list", "--json"]).output().expect("templates list");
+    assert_eq!(exit_code(&out), 0, "stderr: {}", stderr_text(&out));
+    let envelope = parse_envelope(&out);
+    assert_eq!(envelope["ok"], true);
+    let templates = envelope["data"]["templates"].as_array().expect("templates array");
+    assert_eq!(templates.len(), 5);
+    let ids: Vec<&str> = templates.iter().filter_map(|t| t["id"].as_str()).collect();
+    assert_eq!(
+        ids,
+        vec![
+            "board-design-system",
+            "page-ui-standard",
+            "page-landing-sections",
+            "component-sheet-grid",
+            "brand-identity-lite",
+        ]
+    );
+    assert_eq!(envelope["data"]["attribution"]["license"], "MIT");
+    assert!(
+        envelope["data"]["attribution"]["url"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("awesome-gpt-image-2"),
+        "attribution must cite the source"
+    );
+    assert!(envelope["data"]["slotVocabulary"].is_object(), "slot vocabulary for agents");
+    assert!(!envelope["data"]["fillProtocol"].as_str().unwrap_or_default().is_empty());
+
+    // `templates show <id> --json`: skeleton + fillGuide, no project needed.
+    let out = sb
+        .rudder()
+        .args(["templates", "show", "page-landing-sections", "--json"])
+        .output()
+        .expect("templates show");
+    assert_eq!(exit_code(&out), 0);
+    let envelope = parse_envelope(&out);
+    assert_eq!(envelope["data"]["id"], "page-landing-sections");
+    assert_eq!(envelope["data"]["appliesTo"], "page");
+    let skeleton = envelope["data"]["skeleton"].as_str().expect("skeleton string");
+    assert!(skeleton.contains("{anchor.reference}"), "skeleton keeps slot placeholders");
+    assert!(skeleton.contains("{page.brief}"));
+    let guide = envelope["data"]["fillGuide"].as_object().expect("fillGuide object");
+    assert!(guide.contains_key("howTo"));
+    let guide_slots = guide["slots"].as_array().expect("guide slots");
+    assert!(!guide_slots.is_empty());
+    let first = &guide_slots[0];
+    assert!(first["what"].is_string(), "per-slot 'what'");
+    assert!(first["commonMistakes"].is_array(), "per-slot commonMistakes");
+
+    // Human mode: skeleton + guide on stderr, summary on stdout.
+    let out = sb.rudder().args(["templates", "show", "page-ui-standard"]).output().expect("show human");
+    assert_eq!(exit_code(&out), 0);
+    let stderr = stderr_text(&out);
+    assert!(stderr.contains("skeleton"), "{stderr}");
+    assert!(stderr.contains("fillGuide"), "{stderr}");
+    assert!(stderr.contains("好例子"), "{stderr}");
+
+    // Unknown id → exit 1 with a templates-list hint.
+    let out = sb
+        .rudder()
+        .args(["templates", "show", "ghost", "--json"])
+        .output()
+        .expect("show unknown");
+    assert_eq!(exit_code(&out), 1);
+    let envelope = parse_envelope(&out);
+    assert_eq!(envelope["error"]["code"], "INVALID_ARG");
+    assert!(
+        envelope["error"]["hint"].as_str().unwrap_or_default().contains("templates list"),
+        "hint points at templates list"
+    );
+}
+
+#[test]
+fn prompt_file_full_chain_dry_run_and_validation() {
+    let sb = Sandbox::new("promptfile");
+    let dir = sb.project_dir("proj");
+    sb.rudder().args(["init", "pf", "--dir"]).arg(&dir).output().expect("init");
+
+    let prompt_path = sb.root.join("final-page.prompt");
+    fs::write(&prompt_path, "总板风格沿用：海军蓝+黄铜。\n页面：dashboard，四张 KPI 卡 + 折线图。\n").expect("prompt file");
+
+    // Full chain dry-run: the file content IS the prompt; source=agent-file;
+    // the engine injected nothing.
+    let out = sb
+        .rudder()
+        .args(["board", "generate", "--n", "1", "--prompt-file"])
+        .arg(&prompt_path)
+        .arg("--project")
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("board generate --prompt-file");
+    assert_eq!(exit_code(&out), 0, "stderr: {}", stderr_text(&out));
+    let envelope = parse_envelope(&out);
+    assert_eq!(envelope["data"]["source"], "agent-file");
+    assert!(envelope["data"]["templateId"].is_null(), "no declared template");
+    let expected = fs::read_to_string(&prompt_path).unwrap();
+    assert_eq!(
+        envelope["data"]["plan"]["params"]["prompt"].as_str().unwrap_or_default().trim(),
+        expected.trim(),
+        "file content passes through verbatim"
+    );
+    assert!(
+        !envelope["data"]["plan"]["params"]["prompt"].as_str().unwrap().contains("Constraints:"),
+        "agent path injects nothing"
+    );
+
+    // --template alongside --prompt-file: recorded only, prompt untouched.
+    let out = sb
+        .rudder()
+        .args(["board", "generate", "--n", "1", "--prompt-file"])
+        .arg(&prompt_path)
+        .args(["--template", "board-design-system", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("board generate --prompt-file --template");
+    assert_eq!(exit_code(&out), 0);
+    let envelope = parse_envelope(&out);
+    assert_eq!(envelope["data"]["source"], "agent-file");
+    assert_eq!(envelope["data"]["templateId"], "board-design-system");
+    assert!(
+        !envelope["data"]["plan"]["params"]["prompt"].as_str().unwrap().contains("COLOR PALETTE"),
+        "skeleton must not be assembled on the agent path"
+    );
+
+    // Missing file → exit 1 with hint.
+    let out = sb
+        .rudder()
+        .args(["board", "generate", "--prompt-file", "/nonexistent/prompt.txt", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("missing prompt file");
+    assert_eq!(exit_code(&out), 1, "argument errors exit 1");
+    let envelope = parse_envelope(&out);
+    assert_eq!(envelope["error"]["code"], "INVALID_ARG");
+    assert!(envelope["error"]["message"].as_str().unwrap_or_default().contains("prompt file"));
+
+    // Empty file → exit 1.
+    let empty_path = sb.root.join("empty.prompt");
+    fs::write(&empty_path, "  \n").unwrap();
+    let out = sb
+        .rudder()
+        .args(["board", "generate", "--prompt-file"])
+        .arg(&empty_path)
+        .arg("--project")
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("empty prompt file");
+    assert_eq!(exit_code(&out), 1);
+    let envelope = parse_envelope(&out);
+    assert!(envelope["error"]["message"].as_str().unwrap_or_default().contains("empty"));
+
+    // Unknown template id → exit 1 + hint (independent of prompt-file).
+    let out = sb
+        .rudder()
+        .args(["board", "generate", "--template", "ghost", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("unknown template");
+    assert_eq!(exit_code(&out), 1);
+    let envelope = parse_envelope(&out);
+    assert_eq!(envelope["error"]["code"], "INVALID_ARG");
+    assert!(
+        envelope["error"]["hint"].as_str().unwrap_or_default().contains("templates list"),
+        "hint: {envelope}"
+    );
+}
+
+#[test]
+fn template_selection_and_negative_hints_land_in_the_prompt() {
+    let sb = Sandbox::new("tpl-prompt");
+    let dir = sb.project_dir("proj");
+    sb.rudder()
+        .args(["init", "模板项目", "--dir"])
+        .arg(&dir)
+        .args(["--brief", "海军蓝 SaaS"])
+        .output()
+        .expect("init");
+
+    // Default board skeleton via the engine path, with constraints injected.
+    let out = sb
+        .rudder()
+        .args(["board", "generate", "--n", "1", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("board generate default");
+    assert_eq!(exit_code(&out), 0);
+    let envelope = parse_envelope(&out);
+    assert_eq!(envelope["data"]["source"], "engine");
+    assert_eq!(envelope["data"]["templateId"], "board-design-system");
+    let prompt = envelope["data"]["plan"]["params"]["prompt"].as_str().unwrap();
+    assert!(prompt.contains("COLOR PALETTE"));
+    assert!(prompt.contains("Constraints:"));
+    assert!(prompt.contains("- board-cohesion:"));
+    assert!(!prompt.contains("- consistency-first:"));
+
+    // project update: set the default template + append negative hints.
+    let out = sb
+        .rudder()
+        .args(["project", "update", "--template", "brand-identity-lite", "--negative-hint", "不要通用放大镜图标", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("project update");
+    assert_eq!(exit_code(&out), 0, "stderr: {}", stderr_text(&out));
+    let envelope = parse_envelope(&out);
+    assert_eq!(envelope["data"]["templateId"], "brand-identity-lite");
+    assert_eq!(envelope["data"]["negativeHints"], serde_json::json!(["不要通用放大镜图标"]));
+
+    // The project default template now drives board prompts; negative hints
+    // ride the explicit-negatives constraint row.
+    let out = sb
+        .rudder()
+        .args(["board", "generate", "--n", "1", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("board generate with project default");
+    let envelope = parse_envelope(&out);
+    assert_eq!(envelope["data"]["templateId"], "brand-identity-lite", "project.templateId wins over builtin");
+    let prompt = envelope["data"]["plan"]["params"]["prompt"].as_str().unwrap();
+    assert!(prompt.contains("pure white background"), "{prompt}");
+    assert!(prompt.contains("NEVER DO"));
+    assert!(
+        prompt.contains("additionally forbidden per project: 不要通用放大镜图标"),
+        "{prompt}"
+    );
+
+    // Explicit --template beats the project default.
+    let out = sb
+        .rudder()
+        .args(["board", "generate", "--n", "1", "--template", "board-design-system", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("board generate explicit template");
+    let envelope = parse_envelope(&out);
+    assert_eq!(envelope["data"]["templateId"], "board-design-system");
+    let prompt = envelope["data"]["plan"]["params"]["prompt"].as_str().unwrap();
+    assert!(prompt.contains("COLOR PALETTE"));
+
+    // Clear the project default; clear negative hints.
+    let out = sb
+        .rudder()
+        .args(["project", "update", "--clear-template", "--clear-negative-hints", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("project update clear");
+    assert_eq!(exit_code(&out), 0);
+    let envelope = parse_envelope(&out);
+    assert!(envelope["data"]["templateId"].is_null());
+    assert_eq!(envelope["data"]["negativeHints"], serde_json::json!([]));
+
+    // Template/kind mismatch exits 1.
+    let out = sb
+        .rudder()
+        .args(["board", "generate", "--n", "1", "--template", "page-ui-standard", "--project"])
+        .arg(&dir)
+        .arg("--json")
+        .output()
+        .expect("kind mismatch");
+    assert_eq!(exit_code(&out), 1);
+    let envelope = parse_envelope(&out);
+    assert!(
+        envelope["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("applies to `page`"),
+        "{envelope}"
+    );
+}

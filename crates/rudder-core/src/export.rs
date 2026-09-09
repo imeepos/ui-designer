@@ -53,6 +53,10 @@ pub struct ManifestImage {
     pub size: String,
     pub quality: String,
     pub endpoint: String,
+    /// `engine` | `agent-file` — always serialized (`null` on old records).
+    pub source: Option<String>,
+    /// Template skeleton used for this image (lineage for reproducibility).
+    pub template_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub generated_at: Option<String>,
 }
@@ -88,6 +92,8 @@ fn board_image(project: &Project, id: &str, file: &str) -> ManifestImage {
         size: record.map(|r| r.params.size.clone()).unwrap_or_else(|| project.canvas_size.to_api_string()),
         quality: record.map(|r| r.params.quality.clone()).unwrap_or_default(),
         endpoint: record.map(|r| r.endpoint.clone()).unwrap_or_default(),
+        source: record.and_then(|r| r.source.clone()),
+        template_id: record.and_then(|r| r.template_id.clone()),
         generated_at: record.map(|r| r.at.clone()),
     }
 }
@@ -351,6 +357,8 @@ fn page_manifest(page: &Page, rel: &str, record: Option<&GenRecord>) -> serde_js
         "size": record.map(|r| r.params.size.clone()).unwrap_or_default(),
         "quality": record.map(|r| r.params.quality.clone()).unwrap_or_default(),
         "endpoint": record.map(|r| r.endpoint.clone()).unwrap_or_default(),
+        "source": record.and_then(|r| r.source.clone()),
+        "templateId": record.and_then(|r| r.template_id.clone()),
         "generatedAt": record.map(|r| r.at.clone()),
         "updatedAt": page.updated_at,
     })
@@ -368,6 +376,8 @@ fn component_manifest(component: &Component, rel: &str, record: Option<&GenRecor
         "size": record.map(|r| r.params.size.clone()).unwrap_or_default(),
         "quality": record.map(|r| r.params.quality.clone()).unwrap_or_default(),
         "endpoint": record.map(|r| r.endpoint.clone()).unwrap_or_default(),
+        "source": record.and_then(|r| r.source.clone()),
+        "templateId": record.and_then(|r| r.template_id.clone()),
         "generatedAt": record.map(|r| r.at.clone()),
         "updatedAt": component.updated_at,
     })

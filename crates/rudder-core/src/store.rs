@@ -49,6 +49,14 @@ pub struct GenRecord {
     pub prompt: String,
     pub params: GenParams,
     pub candidate_ids: Vec<String>,
+    /// Where the prompt came from: `engine` (assembled) or `agent-file`
+    /// (`--prompt-file`, PRD §0 代理操作面). `None` on pre-v0.2 records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Template skeleton used — engine assembly, or the declared
+    /// reproducibility reference alongside an agent-authored prompt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
 }
 
 /// The picked design-system board (the style anchor).
@@ -143,6 +151,12 @@ pub struct PromptLogEntry {
     /// but kept for parity with future desktop-side logging).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub dry_run: bool,
+    /// `engine` | `agent-file` (see [`GenRecord::source`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Template skeleton used for this batch (see [`GenRecord::template_id`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
 }
 
 /// Root project metadata — `project.json`.
@@ -156,6 +170,17 @@ pub struct Project {
     pub brand_brief: String,
     #[serde(default)]
     pub style_brief: String,
+    /// Default prompt template for this project (`rudder project update
+    /// --template <id>`); explicit `--template` wins over this, then the
+    /// builtin default applies. `None` → builtin defaults.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
+    /// Project-level custom exclusions appended to the prompt's
+    /// `explicit-negatives` constraint row (`rudder project update
+    /// --negative-hint`, repeatable). Empty by default; old project.json
+    /// files without the field load unchanged.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub negative_hints: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anchor: Option<Anchor>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -179,6 +204,8 @@ impl Project {
             canvas_size,
             brand_brief: brand_brief.to_string(),
             style_brief: style_brief.to_string(),
+            template_id: None,
+            negative_hints: Vec::new(),
             anchor: None,
             pages: Vec::new(),
             components: Vec::new(),
