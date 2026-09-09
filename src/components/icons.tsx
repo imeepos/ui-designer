@@ -71,8 +71,8 @@ export function AnchorMark({ className }: IconProps) {
 
 /**
  * Sailing boat: empty-state illustration (THEME §5 v3: helm/compass/anchor/boat).
- * 白描 ink line-art — hull, mast, two sails, calm water and two gulls,
- * echoing the 墨航 anchor board (design-china/board/anchor.png).
+ * Baimiao (ink line-art) — hull, mast, two sails, calm water and two gulls,
+ * echoing the MoHang anchor board (design-china/board/anchor.png).
  */
 export function BoatMark({ className }: IconProps) {
   return (
