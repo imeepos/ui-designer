@@ -69,7 +69,7 @@ function AppShell() {
             </Button>
           )}
           <HelmMark className="size-5 shrink-0 text-primary" />
-          <span className="truncate text-sm font-semibold">{t("app.title")}</span>
+          <span className="truncate font-serif text-sm font-semibold tracking-wide">{t("app.title")}</span>
           {inWorkspace && state.project ? (
             <span className="flex min-w-0 items-center gap-1.5">
               <span aria-hidden="true" className="text-muted-foreground">/</span>

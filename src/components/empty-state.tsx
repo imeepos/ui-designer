@@ -35,7 +35,7 @@ export function EmptyState({ title, description, action, mark = "compass", class
     >
       <Mark className="mb-6 size-[176px] text-primary" />
       <div className="flex flex-col items-center gap-1 text-center">
-        <p className="text-lg font-medium text-foreground">{title}</p>
+        <p className="font-serif text-lg font-medium text-foreground">{title}</p>
         {description && (
           <p className="max-w-72 text-xs text-muted-foreground">{description}</p>
         )}

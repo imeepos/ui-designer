@@ -1,48 +1,63 @@
-# 舵 Rudder · 主题规范（舵主题）v2
+# 舵 Rudder · 主题规范（舵主题）v3「墨航」
 
 > 本规范约束**舵工具自身**的界面视觉，也是「舵主题」一词的定义。实现方式：TailwindCSS 4 + shadcn/ui CSS 变量（`:root` / `.dark`），light/dark 双模式。
-> v2（Phase 5 裁决）：采纳自举锚点图色系与四档圆角（docs/UI-REVIEW.md 负责人裁决节）。
+> v3（中国风重设计）：采纳 `design-china/` 自举设计集（苍青墨航色系），中国风转译见 `docs/RESEARCH-CHINA-UI.md`。v2（海军蓝航海风）留档于 git 历史。
 
-## 1. 设计气质
-舵 = 航海掌舵。气质关键词：**沉稳、专业、克制的工具感**——深海军蓝为主舵向，黄铜色为转向舵柄的点缀，大面积中性色承载内容。无渐变滥用、无重阴影、无花哨动效（仅 150ms ease-out 微动效）。
+## 1. 设计气质：墨航 Ink-Voyage
 
-## 2. 色板（CSS 变量，OKLCH 观感描述）
-色系来源＝自举锚点图（design-assets/board/anchor.png）：深海军蓝主舵向、琥珀金黄铜点缀、纸白底。
+同一片海，从「深海军蓝的军舰」驶入「宋代水墨的绢本手卷」。气质关键词：**素雅、书卷、克制的工具感**——苍青（青瓷系）为主舵向，缃色为焦点舵柄，朱砂印章是全卷唯一浓色点缀，宣纸底大面积留白承载内容。白描线稿表达航海母题（舵轮/罗盘/帆舟/锚）。无渐变、无重阴影、无花哨动效（仅 150ms ease-out 微动效）；**边框优先于阴影**（1px 发丝界格）。
 
-| Token | Light | Dark | 用途 |
-|---|---|---|---|
-| `--background` | 纸白 #FAFAF8（微暖） | 深夜海军 #0E1626 | 画布底 |
-| `--foreground` | 墨石 #2F3A44 | 雾白 #E8ECF4 | 正文 |
-| `--primary` | 深海军蓝 #0B3D91 | 提亮舵蓝 #5C88DD | 主按钮/激活态/选中框 |
-| `--primary-foreground` | #FFFFFF | #0B1220 | 主按钮文字 |
-| `--accent`（舵柄黄铜） | 琥珀金 #D4A017 | 琥珀金 #D4A017（保持可读） | 步骤条当前步、锚点标记、焦点环 |
-| `--accent-foreground` | 深铜棕 #14213A | #14213A | 黄铜底上的文字（深色字保证对比） |
-| `--muted` | #EEF1F5 | #172238 | 次级面板/骨架屏 |
-| `--muted-foreground` | 中灰 #6B7280 | 雾灰蓝 #93A2BE | 说明文字 |
-| `--border` | 浅石灰 #E2E8F0 | #24304D | 分隔线/卡片描边 |
-| `--input` | 石灰 #CBD5E1 | #24304D | 输入框描边 |
-| `--card` | #FFFFFF | #131E33 | 卡片面 |
-| `--destructive` | #DC2626 | #F87171 | 删除/错误 |
+## 2. 色板（CSS 变量）
 
-**dark 派生规则**（v2）：海军蓝整体提亮（#0B3D91 → #5C88DD）保证深底可读与白字按钮达标；纸白转深夜蓝（#FAFAF8 → #0E1626），内容面相应加深一档；琥珀金 #D4A017 保持原值——在深底上对比度 ≈ 7.5:1，无需调整。
-**对比度自审（WCAG AA）**：light 主色对白底 10.0:1、正文对纸白 11.1:1、说明文字 #6B7280 对纸白 4.5:1、黄铜底深字 6.7:1；dark 主色底白字/深字均 ≥ 4.5:1，说明文字 ≥ 4.6:1。黄铜 #D4A017 在浅底上仅作填充/描边/图形，不作正文色（对浅底 ≈ 2.2:1）。
+色系来源＝墨航锚点图（`design-china/board/anchor.png`）；传统色名与转译依据见 RESEARCH-CHINA-UI.md §3。
+
+| Token | Light | Dark | 传统色 | 用途 |
+|---|---|---|---|---|
+| `--background` | 宣纸 #F7F5EE | 墨绢 #161C1E | 宣纸 / 墨绢 | 画布底 |
+| `--foreground` | 墨玄 #3A4247 | 雾白 #E9ECE8 | 墨玄 | 正文（纸底 ≈9.3:1） |
+| `--primary` | 苍青 #2C6E78 | 提亮苍青 #6FB4BD | 苍青（天水碧加深） | 主按钮/激活态/选中框/白描线稿 |
+| `--primary-foreground` | #FFFFFF | #0F1517 | — | 主按钮文字（≈5.8:1 / ≈7.8:1） |
+| `--accent`（缃色） | 缃色 #D9A514 | 缃色 #D9A514（原值保持） | 缃色 | 步条当前步、锚点徽标、焦点环 |
+| `--accent-foreground` | #2A2410 | #1C1607 | — | 金底深字（≈6.9:1 / ≈7.5:1） |
+| `--destructive` | 朱砂 #C3402B | 朱砂·亮 #E08873 | 朱砂 | 删除/错误（兼印章红） |
+| `--muted` | #EFECE3 | #212A2D | 纸灰 | 次级面板/骨架屏 |
+| `--muted-foreground` | 墨灰·深 #5C6E80 | #9AB0B5 | 墨灰 | 说明文字（≈4.8:1 / ≈7.6:1） |
+| `--border` | 淡墨 #E3E4DC | #2C3639 | 淡墨 | 发丝分隔线/卡片描边 |
+| `--input` | #D6D8CE | #2C3639 | — | 输入框描边 |
+| `--card` | #FFFFFF | #1D2527 | 纸白 | 卡片面 |
+
+**朱砂使用纪律**：只允许 destructive 语义与品牌印章装饰；禁作大面积色块或正文色。
+**dark 派生规则**：宣纸→墨绢、纸白→加深一档；苍青提亮（#2C6E78→#6FB4BD）保深底可读与深字按钮达标；缃色原值保持（深底 ≈7.5:1）；朱砂提亮保文字对比。
 
 ## 3. 字体与字阶
-- 字族：`Inter, "PingFang SC", "Noto Sans SC", system-ui, sans-serif`；等宽（prompt/JSON 展示）：`"JetBrains Mono", ui-monospace`。
-- 字阶：12 / 13（默认正文）/ 14（强调）/ 18（区块题）/ 24（页题）；行高 1.5；正文 `tracking-normal`，标签可 `tracking-wide` 全大写小字号。
+
+- 无衬线（正文）：`Inter, "PingFang SC", "Noto Sans SC", system-ui, sans-serif`。
+- **宋体展示字（v3 新增，`font-serif` 工具类）**：`"Noto Serif SC", "Songti SC", "STSong", "SimSun", serif`——用于**页题/品牌标题/空态标题**；工具高密度小标题仍走无衬线，避免满屏书卷气拖慢扫读。
+- 等宽（prompt/JSON/seed）：`"JetBrains Mono", ui-monospace`。
+- 字阶：12 / 13（默认正文）/ 14（强调）/ 18（区块题）/ 24（页题）；行高 1.5；标签可 `tracking-wide`。
 
 ## 4. 几何与间距
-- 圆角四档（v2 裁决，锚点图口径）：**按钮 `4px` / 输入 `6px` / 卡片 `8px` / 弹窗 `12px`**；`--radius: 0.5rem`（8px）为基准派生——`--radius-sm` 4px、`--radius-md` 6px、`--radius-lg` 8px、`--radius-xl` 12px。徽标 `999px` 全圆。
+
+- 圆角四档（承 v2，方中带圆如界格）：**按钮 4px / 输入 6px / 卡片 8px / 弹窗 12px**；`--radius: 0.5rem` 派生 `sm/md/lg/xl`；徽标 `999px` 全圆。
 - 间距：8px 基数；面板内边距 16px；区块间 24px；三栏栏宽 左 240px / 右 320px / 中自适应。
 - 边框优先于阴影：`1px solid var(--border)`；阴影仅浮层（`0 8px 24px rgba(2,8,23,.08)`）。
 
-## 5. 组件姿态（shadcn 基础上的定制）
-- Button：primary 实心海军蓝；secondary 用 muted 反色；ghost 用于画廊 hover 操作。均无圆角外的花饰。
-- 步骤条（四步流程）：完成步=primary 对勾，当前步=accent 黄铜圆点+加粗，未来步=muted 置灰。
+## 5. 组件姿态
+
+- Button：primary 实心苍青；secondary 纸灰反色；ghost 用于画廊 hover 操作（hover 走 muted，不走缃色）。
+- 步骤条（四步流程）：完成步=primary 苍青对勾，当前步=accent 缃色圆点+加粗，未来步=muted 置灰。
+- 锚点徽标/血缘当前态：缃色底 + 深字（bg-accent）。
 - 卡片缩略图：1px border + hover 时 primary 描边 + 右上角浮现 ghost 操作（重生成/删除/放大）。
 - 生成中：骨架屏 + 一行 muted 文案（"生成中，约需 30~120 秒…"），可取消。
-- 空状态插画规范（v2 落地）：居中细线插画 **160~200px**（实现取 176px）、**1.5px 线宽**、**海军蓝单色**（light 用 `--primary`，dark 同）、插画下留白 24px；题材限**舵轮 / 罗盘 / 锚**三选一（纯 CSS/内联 SVG，禁照片与多色）+ 一个 primary CTA。
+- 空态插画规范（承 v2，色随 v3）：居中细线插画 176px、1.5px 线宽、**primary 苍青单色白描**、下留白 24px；题材限**舵轮 / 罗盘 / 锚**（帆舟为重设计概念图延伸，实现暂取三件套）+ 一个 primary CTA；标题用 `font-serif`。
+- 品牌标识：页头保留舵轮线稿标（primary）；朱砂「舵」字方印仅出现在设计资产与文档插图，实现层面暂不引入（避免 destructive 色语义混用）。
 
 ## 6. 多语言与文案基调
+
 - zh-CN 简洁专业（"生成设计系统总板"），en 同义（"Generate design system board"）。
 - 数字/尺寸用等宽字体；金额与耗时文案不做夸张修辞。
+
+## 7. 设计资产与追溯
+
+- v3 自举设计集：`design-china/`（总板锚点 + library/gallery/detail 三屏 + stepper-buttons 组件图 + 全部 prompt 与 manifest，`rudder export` 包在 `design-china/export/`）。
+- 重设计方案与实现映射：`docs/REDESIGN-CHINA.md`。

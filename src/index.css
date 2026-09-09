@@ -2,54 +2,57 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* 舵主题 · light（docs/THEME.md §2 v2，自举锚点图色系）*/
+/* 舵主题 · light —— 「墨航」中国风 v3（docs/THEME.md §2 v3，自举 design-china/board/anchor.png）
+   苍青主舵向 · 缃色焦点 · 朱砂印章点缀 · 宣纸底 · 淡墨发丝分隔 */
 :root {
-  --background: #fafaf8;
-  --foreground: #2f3a44;
+  --background: #f7f5ee; /* 宣纸 */
+  --foreground: #3a4247; /* 墨玄，纸底 ≈9.3:1 */
   --card: #ffffff;
-  --card-foreground: #2f3a44;
+  --card-foreground: #3a4247;
   --popover: #ffffff;
-  --popover-foreground: #2f3a44;
-  --primary: #0b3d91;
+  --popover-foreground: #3a4247;
+  --primary: #2c6e78; /* 苍青，白字 ≈5.8:1 / 纸底 ≈5.3:1 */
   --primary-foreground: #ffffff;
-  --secondary: #eef1f5;
-  --secondary-foreground: #2f3a44;
-  --muted: #eef1f5;
-  --muted-foreground: #6b7280;
-  --accent: #d4a017;
-  --accent-foreground: #14213a;
-  --destructive: #dc2626;
-  --border: #e2e8f0;
-  --input: #cbd5e1;
-  --ring: #d4a017;
-  /* THEME §4 v2：基准 8px（卡片），四档派生见 @theme inline */
+  --secondary: #edeae0; /* 纸灰 */
+  --secondary-foreground: #3a4247;
+  --muted: #efece3;
+  --muted-foreground: #5c6e80; /* 墨灰·深，纸底 ≈4.8:1 */
+  --accent: #d9a514; /* 缃色：步条当前步、锚点徽标、焦点环 */
+  --accent-foreground: #2a2410; /* 金底深字 ≈6.9:1 */
+  --destructive: #c3402b; /* 朱砂（兼印章红） */
+  --border: #e3e4dc; /* 淡墨发丝线 */
+  --input: #d6d8ce;
+  --ring: #d9a514;
+  /* THEME §4：基准 8px（卡片），四档派生见 @theme inline */
   --radius: 0.5rem;
 }
 
-/* 舵主题 · dark（THEME §2 v2 派生规则：海军蓝提亮、纸白转深夜、琥珀金保持）*/
+/* 舵主题 · dark —— 墨绢夜航（THEME §2 v3 派生规则：苍青提亮、宣纸转墨绢、缃色保持、朱砂提亮）*/
 .dark {
-  --background: #0e1626;
-  --foreground: #e8ecf4;
-  --card: #131e33;
-  --card-foreground: #e8ecf4;
-  --popover: #131e33;
-  --popover-foreground: #e8ecf4;
-  --primary: #5c88dd;
-  --primary-foreground: #0b1220;
-  --secondary: #1a2740;
-  --secondary-foreground: #e8ecf4;
-  --muted: #172238;
-  --muted-foreground: #93a2be;
-  --accent: #d4a017;
-  --accent-foreground: #14213a;
-  --destructive: #f87171;
-  --border: #24304d;
-  --input: #24304d;
-  --ring: #d4a017;
+  --background: #161c1e; /* 墨绢 */
+  --foreground: #e9ece8; /* 雾白 */
+  --card: #1d2527;
+  --card-foreground: #e9ece8;
+  --popover: #1d2527;
+  --popover-foreground: #e9ece8;
+  --primary: #6fb4bd; /* 提亮苍青，墨绢上 ≈6.6:1；实心底配深字 ≈7.8:1 */
+  --primary-foreground: #0f1517;
+  --secondary: #232c2f;
+  --secondary-foreground: #e9ece8;
+  --muted: #212a2d;
+  --muted-foreground: #9ab0b5; /* ≈7.6:1 */
+  --accent: #d9a514; /* 缃色原值：深底 ≈7.5:1，无需调整 */
+  --accent-foreground: #1c1607;
+  --destructive: #e08873; /* 朱砂·亮，墨绢上 ≈5.1:1 */
+  --border: #2c3639;
+  --input: #2c3639;
+  --ring: #d9a514;
 }
 
 @theme inline {
   --font-sans: Inter, "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  /* THEME §3 v3：宋体展示字（页题/品牌/空态题），正文仍走无衬线保证工具密度 */
+  --font-serif: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --color-background: var(--background);
@@ -71,7 +74,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* THEME §4 v2 四档圆角：按钮 4px / 输入 6px / 卡片 8px / 弹窗 12px（徽标 999px）*/
+  /* THEME §4 四档圆角：按钮 4px / 输入 6px / 卡片 8px / 弹窗 12px（徽标 999px）——方中带圆，不变 */
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
