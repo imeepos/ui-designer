@@ -1,0 +1,180 @@
+# PROMPTS.md — 舵 · 墨航 Rudder Ink-Voyage
+
+Full prompt/parameter log, newest last. Project `舵 · 墨航 Rudder Ink-Voyage` (id `e3f6ff16-908b-4dca-aac8-0a31900c1c33`), canvas 1536x1024.
+
+## 1. page-add `library` — -
+
+- at: `2026-09-09T15:22:08.712Z`
+- params: model=`-` size=`-` quality=`-` n=0
+
+```
+[page-add] library
+```
+
+## 2. page-add `gallery` — -
+
+- at: `2026-09-09T15:22:08.901Z`
+- params: model=`-` size=`-` quality=`-` n=0
+
+```
+[page-add] gallery
+```
+
+## 3. page-add `detail` — -
+
+- at: `2026-09-09T15:22:08.997Z`
+- params: model=`-` size=`-` quality=`-` n=0
+
+```
+[page-add] detail
+```
+
+## 4. component-add `stepper-buttons` — -
+
+- at: `2026-09-09T15:22:09.121Z`
+- params: model=`-` size=`-` quality=`-` n=0
+
+```
+[component-add] stepper-buttons
+```
+
+## 5. board — generations
+
+- at: `2026-09-09T15:23:15.266Z`
+- params: model=`gpt-image-2` size=`1536x1024` quality=`low` n=4 seed=`9996298467514345` thinking=`medium`
+- candidates: 0001, 0002, 0003, 0004
+
+```
+Purpose: a UI design system board (风格总板) for a desktop developer tool — one flat, print-like spec sheet, landscape 1536x1024, LIGHT mode only, flat vector, crisp and legible.
+
+Product: 「舵 · 墨航」Rudder Ink-Voyage — an AI UI design studio for developers. Brand mood: Song-dynasty literati aesthetics (宋代美学) fused with a nautical soul — ink-wash painting (水墨), rice-paper background, celadon palette (青瓷), one vermilion seal-stamp accent (朱砂印章), rudder/compass/sailing-boat motifs drawn as thin single-color line art (白描).
+
+Overall style: calm, scholarly, professional tool aesthetic. Generous whitespace (留白), hairline borders instead of shadows, extremely restrained ornament. NO red-gold festive palette, NO dragons or clouds motifs, NO heavy gradients, NO photos, NO 3D.
+
+HEADER: top-left a small vermilion square seal stamp with the white character 「舵」+ wordmark "舵 · 墨航 Rudder Ink-Voyage"; top-right caption "DESIGN SYSTEM BOARD · 风格总板".
+
+1. COLOR PALETTE 色彩 — a row of 8 rounded swatches, each with hex label and Chinese+English name:
+#2C6E78 苍青 (Primary)
+#5AA4AE 天水碧 (Celadon · Secondary)
+#C3402B 朱砂 (Seal Red · Errors only)
+#D9A514 缃色 (Gold · Focus ring)
+#3A4247 墨玄 (Ink · Text)
+#66788A 墨灰 (Ink Gray · Secondary text)
+#E3E4DC 淡墨 (Hairline Border)
+#F7F5EE 宣纸 (Paper · Background)
+
+2. TYPOGRAPHY 字体 — type specimen:
+Serif display (Noto Serif SC): "舵 · 墨航" 40px bold, below it "墨色生辉，航向自明" 24px semibold.
+Sans body (Inter + PingFang SC): 16px regular "让每一次设计，都有罗盘可依。"
+Mono (JetBrains Mono): "#2C6E78 · 1536×1024".
+One full latin line Aa Bb … Zz and digits 0123456789.
+
+3. COMPONENT SAMPLES 组件 — on paper-white background, hairline borders:
+Button: primary solid #2C6E78 with white text "生成总板"; secondary white with 1px ink border "取消"; ghost text-only "查看大图"; destructive #C3402B "删除".
+Input: white field, 1px #E3E4DC border, radius 6px, label "项目名称", placeholder "输入项目名…", focused state with 2px #D9A514 outline ring.
+Select dropdown closed with label "画布尺寸".
+Card: project card, 1px border, radius 8px, small celadon thumbnail, title "远洋航运 SaaS", gray caption "2026-09-09".
+Toggle switch ON in #2C6E78 and OFF; checkbox checked in #2C6E78 and unchecked.
+Stepper with 4 steps labeled exactly "项目 → 总板 → 页面 → 组件": step 1 done (celadon check), step 2 current (#D9A514 gold dot + bold label), steps 3-4 gray future.
+
+4. ICON STYLE 图标 — one row of 6 line icons, 1.5px uniform stroke, single ink color #3A4247, labeled under each: rudder wheel 舵轮, compass 罗盘, sailing boat 帆舟, anchor 锚, scroll 卷轴, brush 毛笔.
+
+5. SPACING & RADIUS 间距与圆角 — spacing scale squares 4/8/16/24/32 px; corner radius samples labeled 4px (button 按钮), 6px (input 输入框), 8px (card 卡片), 12px (dialog 弹窗). Footnote line: "边框优先于阴影 · 留白 24px".
+
+Layout: five numbered sections separated by thin horizontal rules, paper background #F7F5EE with a very subtle rice-paper grain. Flat spec-sheet composition, generous margins, all text sharp and readable, no clutter.
+```
+
+## 6. page `library` — edits
+
+- at: `2026-09-09T15:27:27.401Z`
+- params: model=`gpt-image-2` size=`1536x1024` quality=`medium` n=1 seed=`8626366342034078930` thinking=`medium`
+- candidates: 0001
+
+```
+Purpose: redesign of the "项目库 project library" screen of the desktop app 「舵 · 墨航」Rudder Ink-Voyage — an AI UI design studio for developers. Desktop app window, 1536x1024, LIGHT mode, flat UI, crisp legible text.
+
+Image 1 is this product's design system board (风格总板). STRICTLY reuse its palette, typography, corner radii, hairline-border component styles and seal logo. No new colors.
+
+Style: Song-dynasty literati tool aesthetic — rice-paper background #F7F5EE, celadon primary #2C6E78, hairline borders #E3E4DC, generous whitespace, ink line-art. No shadows except one soft float shadow. NO red-gold festive look, NO dragons, NO gradients.
+
+LAYOUT (three columns + top bar):
+- Top bar: left = vermilion seal 「舵」+ "舵 · 墨航"; right = "导出资产包" ghost button, language toggle 中文|EN, moon icon, gear icon.
+- Left rail 240px, paper panel with 1px right border: search input "搜索项目…"; below a vertical list of projects, each item = small celadon thumbnail + name + gray date: "远洋航运 SaaS", "山茶客 茶饮小程序", "墨航 官网". Bottom: primary celadon button "新建项目".
+- Center column: screen title "项目库"; an empty-state area with generous whitespace: a thin 1.5px ink line-art sailing boat on calm water waves (白描, single color #3A4247), caption below "尚无项目，从一个念头开始。", primary button "新建项目".
+- Right panel 320px card "项目详情": form fields stacked — label "项目名称" + text input "输入项目名…"; label "画布尺寸" + select showing "Web · 1536×1024"; label "品牌简报" + textarea placeholder "两句话描述品牌气质…"; primary full-width button "创建项目".
+- Small vermilion seal stamp watermark in bottom-right corner of the window.
+
+Labels verbatim: 项目库|搜索项目…|新建项目|项目详情|项目名称|输入项目名…|画布尺寸|品牌简报|创建项目|远洋航运 SaaS|山茶客 茶饮小程序|墨航 官网|导出资产包|中文|EN|尚无项目，从一个念头开始。
+```
+
+## 7. page `detail` — edits
+
+- at: `2026-09-09T15:32:05.278Z`
+- params: model=`gpt-image-2` size=`1536x1024` quality=`medium` n=1 seed=`8112657165281525238` thinking=`medium`
+- candidates: 0001
+
+```
+Purpose: redesign of the "详情 detail" screen of the desktop app 「舵 · 墨航」Rudder Ink-Voyage — an AI UI design studio for developers. Desktop app window, 1536x1024, LIGHT mode, flat UI, crisp legible text.
+
+Image 1 is this product's design system board (风格总板). STRICTLY reuse its palette, typography, corner radii, hairline-border component styles and seal logo. No new colors.
+
+Style: Song-dynasty literati tool aesthetic — rice-paper background #F7F5EE, celadon primary #2C6E78, hairline borders #E3E4DC, generous whitespace. NO red-gold festive look, NO dragons, NO gradients.
+
+LAYOUT:
+- Top bar: left = vermilion seal 「舵」+ "远洋航运 SaaS"; right = "导出资产包" ghost button, 中文|EN toggle, moon icon, gear icon.
+- Center: a large preview of the design-system board image displayed on a paper mat with 1px hairline border and one soft shadow, rounded 8px; under the preview a mono caption line: "1536×1024 · quality high · seed 2147001".
+- Below preview: a horizontal lineage strip titled "血缘" — 4 small square thumbnails in a row connected by thin arrows, the last one highlighted with celadon ring and a small tag "当前".
+- Right panel 320px card "锚点信息": mono definition list — "模型: gpt-image-2", "质量: high", "seed: 2147001", "生成于: 2026-09-09"; divider; buttons stacked: secondary button "切换锚点", ghost button "重新生成", destructive button "删除候选".
+- Left rail 240px same as library screen: search + project list.
+- Small vermilion seal stamp watermark bottom-right.
+
+Labels verbatim: 锚点信息|模型|质量|seed|生成于|切换锚点|重新生成|删除候选|血缘|当前|远洋航运 SaaS|导出资产包|中文|EN|1536×1024 · quality high · seed 2147001|gpt-image-2|high|2147001|2026-09-09
+```
+
+## 8. component `stepper-buttons` — edits
+
+- at: `2026-09-09T15:33:34.016Z`
+- params: model=`gpt-image-2` size=`1536x1024` quality=`medium` n=1 seed=`14184781854005750178` thinking=`medium`
+- candidates: 0001
+
+```
+Purpose: component detail sheet (组件细节图) for 「舵 · 墨航」Rudder Ink-Voyage — an AI UI design studio for developers. One flat spec grid, 1536x1024, LIGHT mode, print-like, crisp legible text.
+
+Image 1 is this product's design system board (风格总板). STRICTLY reuse its palette, typography, corner radii and hairline-border component styles. No new colors.
+
+Style: Song-dynasty literati tool aesthetic — rice-paper background #F7F5EE, celadon primary #2C6E78, hairline borders #E3E4DC, gold #D9A514 focus accents, vermilion #C3402B only for destructive and seal stamp.
+
+SHEET CONTENT — component family "步骤条与按钮 Stepper & Buttons", organized as a labeled spec grid with thin separators:
+1. Stepper 四步步条 — three states row by row: (a) done step = celadon circle with white check; (b) current step = gold #D9A514 ring dot + bold label; (c) future step = gray outline circle. Steps labeled exactly "项目 | 总板 | 页面 | 组件". Show one horizontal connector line variant and one compact variant.
+2. Buttons 按钮 — grid of variants × states: primary solid #2C6E78 (default / hover darkened / disabled 40%), secondary white + 1px ink border, ghost text button, destructive #C3402B; each state labeled in small gray text: 默认 / 悬停 / 禁用.
+3. Inputs 输入框 — default, focused (2px gold ring), error (vermilion border + hint text "此项必填"), disabled; label "项目名称".
+4. Tags 徽标 — small rounded-full badges: "锚点" (gold fill, dark text), "生成中" (celadon outline), "失败" (vermilion outline).
+Header: seal 「舵」+ title "组件规格 · 步骤条与按钮". Footnote: "线宽 1.5px · 圆角 按钮4 输入6 卡片8 弹窗12 · 焦点环 缃色".
+
+Labels verbatim: 项目|总板|页面|组件|默认|悬停|禁用|锚点|生成中|失败|项目名称|此项必填|组件规格 · 步骤条与按钮|线宽 1.5px · 圆角 按钮4 输入6 卡片8 弹窗12 · 焦点环 缃色
+```
+
+## 9. page `gallery` — edits
+
+- at: `2026-09-09T15:34:43.167Z`
+- params: model=`gpt-image-2` size=`1536x1024` quality=`medium` n=1 seed=`771002` thinking=`medium`
+- candidates: 0001
+
+```
+Purpose: redesign of the "画廊 gallery / workspace" screen of the desktop app 「舵 · 墨航」Rudder Ink-Voyage — an AI UI design studio for developers. Desktop app window, 1536x1024, LIGHT mode, flat UI, crisp legible text.
+
+Image 1 is this product's design system board (风格总板). STRICTLY reuse its palette, typography, corner radii, hairline-border component styles and seal logo. No new colors.
+
+Style: Song-dynasty literati tool aesthetic — rice-paper background #F7F5EE, celadon primary #2C6E78, hairline borders #E3E4DC, generous whitespace. NO red-gold festive look, NO dragons, NO gradients.
+
+LAYOUT:
+- Top bar: left = vermilion seal 「舵」+ project name "远洋航运 SaaS" + a small gold tag "锚点"; right = "导出资产包" ghost button, 中文|EN toggle, moon icon, gear icon.
+- Below top bar: horizontal 4-step stepper spanning the content width, steps exactly "项目 → 总板 → 页面 → 组件": step 1 done (celadon check), step 2 current (gold #D9A514 dot + bold), steps 3-4 gray.
+- Left rail 240px: search "搜索页面 / 组件…"; sections "页面" (items "首页", "定价页") and "组件" (item "按钮族"), each row with small thumbnail + count.
+- Center gallery: section heading "总板候选" with 4 board cards in a 2x2 grid; each card = design-board thumbnail + id label "0001…0004" in mono; card 0003 is the chosen anchor and carries a small vermilion seal tag "锚点". One card shown in hover state with three ghost icon buttons top-right (重生成 / 删除 / 放大). Below, a second row heading "页面" with 2 page cards.
+- Right panel 320px card "设计系统总板": fields — label "品牌关键词" input "沉稳 · 专业 · 克制"; label "配色方向" input "苍青 + 宣纸 + 朱砂"; label "简报" textarea; primary button "生成设计系统总板"; below it muted caption "生成中约需 30~120 秒，可取消。"
+- Small vermilion seal stamp watermark bottom-right.
+
+Labels verbatim: 项目|总板|页面|组件|总板候选|锚点|重生成|删除|放大|设计系统总板|品牌关键词|配色方向|简报|生成设计系统总板|生成中约需 30~120 秒，可取消。|远洋航运 SaaS|导出资产包|中文|EN|首页|定价页|按钮族|0001|0002|0003|0004
+```
+
