@@ -23,8 +23,8 @@ export function Lightbox({ open, onClose, imageUrl, filter, alt, caption }: Ligh
           src={imageUrl}
           filter={filter}
           alt={alt}
+          fit="contain"
           className="max-h-[70vh] min-h-64 w-full rounded-md border"
-          imgClassName="object-contain"
         />
         <p className="font-mono text-[11px] text-muted-foreground">{t("lightbox.hint")}</p>
       </div>

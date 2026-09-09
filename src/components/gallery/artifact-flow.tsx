@@ -9,6 +9,7 @@ import {
   PickIcon,
   TrashIcon,
 } from "@/components/card-actions";
+import { ArtImage } from "@/components/art-image";
 import { ArtifactCard } from "@/components/artifact-card";
 import { EmptyState } from "@/components/empty-state";
 import { SkeletonGrid } from "@/components/gallery/skeleton-grid";
@@ -316,14 +317,7 @@ function LightThumb({
         className,
       )}
     >
-      <img
-        src={url}
-        alt={label}
-        draggable={false}
-        loading="lazy"
-        style={filter && filter !== "none" ? { filter } : undefined}
-        className="aspect-video w-full object-cover"
-      />
+      <ArtImage src={url} filter={filter} alt={label} className="aspect-video w-full" />
     </button>
   );
 }
