@@ -308,7 +308,11 @@ mod tests {
     fn resolve_base_url_env_then_config_then_default() {
         let _guard = BaseUrlEnvGuard::clear();
 
-        // Neither env nor config → official endpoint.
+        // Hermetic home: neither env nor config → official endpoint.
+        // (Never read the developer's real ~/Rudder/config.json here.)
+        let empty = std::env::temp_dir().join(format!("rudder-cfg-empty-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&empty).unwrap();
+        BaseUrlEnvGuard::set("RUDDER_HOME", &empty.display().to_string());
         assert_eq!(resolve_base_url(), crate::image::DEFAULT_BASE_URL);
 
         // config.json override applies when env is absent/empty.
