@@ -9,7 +9,7 @@ mod output;
 
 use clap::{error::ErrorKind as ClapErrorKind, Parser, Subcommand};
 use output::{emit_err, emit_ok, format_plan, format_plan_summary, CmdResult};
-use rudder_core::config::Config;
+use rudder_core::config::{credential, resolve_base_url, Config};
 use rudder_core::image::ImageClient;
 use rudder_core::ops::{self, GenerateOptions, Target};
 use rudder_core::store;
@@ -104,7 +104,8 @@ enum Command {
         #[arg(long, default_value = "low")]
         quality: String,
     },
-    /// Generation defaults in ~/Rudder/config.json (never secrets).
+    /// Generation defaults + credentials: non-secret keys live in
+    /// ~/Rudder/config.json; `api-key` lives in the OS keychain only.
     Config {
         #[command(subcommand)]
         command: ConfigCommand,
@@ -245,10 +246,21 @@ enum ComponentCommand {
 
 #[derive(Subcommand, Debug)]
 enum ConfigCommand {
-    /// Print a key's effective value (quality | thinking | n).
+    /// Print a key's effective value (quality | thinking | n | base_url).
     Get { key: String },
-    /// Set a key (quality low|medium|high · thinking low|medium|high · n 1-4).
-    Set { key: String, value: String },
+    /// Set a key: quality low|medium|high · thinking low|medium|high ·
+    /// n 1-4 · base_url http(s). `api-key` reads the secret from STDIN
+    /// (never argv — arguments leak into shell history) into the OS keychain.
+    Set {
+        key: String,
+        /// Value for non-secret keys; must be omitted for `api-key`.
+        value: Option<String>,
+    },
+    /// Remove a stored credential (only `api-key`; idempotent).
+    Clear { key: String },
+    /// Report the resolved base URL and key source (env/keychain/none),
+    /// then probe GET {base}/v1/models (free) for the available model count.
+    Test,
 }
 
 fn main() {
@@ -616,16 +628,104 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
                 ))
             }
             ConfigCommand::Set { key, value } => {
+                if key == "api-key" || key == "api_key" {
+                    return config_set_api_key(value.as_deref());
+                }
+                let Some(value) = value else {
+                    return Err(RudderError::InvalidArg {
+                        detail: format!("config set `{key}` requires a <value>"),
+                    });
+                };
                 let mut config = Config::load();
                 config.set(key, value)?;
                 config.save()?;
+                // Echo the effective (normalized) value, matching `config get`.
+                let effective = config.get(key)?;
                 Ok(CmdResult::new(
-                    format!("{key} = {value}"),
-                    json!({ "key": key, "value": value }),
+                    format!("{key} = {effective}"),
+                    json!({ "key": key, "value": effective }),
                 ))
             }
+            ConfigCommand::Clear { key } => {
+                if key != "api-key" && key != "api_key" {
+                    return Err(RudderError::InvalidArg {
+                        detail: format!("only `api-key` can be cleared (got `{key}`)"),
+                    });
+                }
+                credential::clear_api_key()?;
+                Ok(CmdResult::new(
+                    "api-key removed from OS keychain",
+                    json!({ "key": "api-key", "stored": Value::Null }),
+                ))
+            }
+            ConfigCommand::Test => config_test().await,
         },
     }
+}
+
+/// `config set api-key`: read the secret from stdin (never argv) and store
+/// it in the OS keychain. Output only ever shows the masked tail.
+fn config_set_api_key(argv_value: Option<&str>) -> Result<CmdResult, RudderError> {
+    if argv_value.is_some() {
+        return Err(RudderError::InvalidArg {
+            detail: "api-key must be piped via stdin (`echo <key> | rudder config set api-key`); \
+                     passing it as an argument would leak into shell history"
+                .into(),
+        });
+    }
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line)?;
+    let piped = line.trim();
+    if piped.is_empty() {
+        return Err(RudderError::InvalidArg {
+            detail: "no api key found on stdin; use `echo <key> | rudder config set api-key`"
+                .into(),
+        });
+    }
+    credential::set_api_key(piped)?;
+    let tail = credential::tail4(piped);
+    Ok(CmdResult::new(
+        format!("api-key stored in OS keychain (tail …{tail})"),
+        json!({ "key": "api-key", "stored": "keychain", "tail": tail }),
+    ))
+}
+
+/// `config test`: report base URL + key source; when a key resolves, probe
+/// `{base}/v1/models` (free call) for the visible model count. Without a
+/// key the command still succeeds and reports `keySource: "none"`.
+async fn config_test() -> Result<CmdResult, RudderError> {
+    let base = resolve_base_url();
+    let resolution = credential::resolve_api_key();
+    let source = resolution.source.as_str();
+    let Some(key) = resolution.key else {
+        return Ok(CmdResult::new(
+            format!(
+                "base: {base} · key: none — not configured \
+                 (export OPENAI_API_KEY or `echo <key> | rudder config set api-key`)"
+            ),
+            json!({
+                "baseUrl": base,
+                "keySource": "none",
+                "tested": false,
+                "modelCount": Value::Null,
+            }),
+        ));
+    };
+    let report = credential::test_connection(&base, &key).await?;
+    Ok(CmdResult::new(
+        format!(
+            "base: {base} · key: {source} · models: {} ({} ✓)",
+            report.model_count,
+            rudder_core::image::MODEL
+        ),
+        json!({
+            "baseUrl": base,
+            "keySource": source,
+            "tested": true,
+            "modelCount": report.model_count,
+            "imageModelAvailable": true,
+        }),
+    ))
 }
 
 /// Resolve `<slug|--all>` positional (allows the leading-hyphen form).

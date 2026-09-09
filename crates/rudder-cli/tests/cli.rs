@@ -34,7 +34,9 @@ impl Sandbox {
         cmd.env("HOME", &self.home)
             // Belt & braces: even a stray --yes cannot reach a real endpoint.
             .env("OPENAI_BASE_URL", "http://127.0.0.1:1")
-            .env("OPENAI_API_KEY", "");
+            .env("OPENAI_API_KEY", "")
+            // Hermetic: never consult the developer machine's keychain.
+            .env("RUDDER_KEYCHAIN", "0");
         cmd
     }
 }
@@ -446,10 +448,11 @@ fn config_set_then_get_roundtrips_and_validates() {
     assert_eq!(exit_code(&out), 1);
     assert_eq!(parse_envelope(&out)["error"]["code"], "INVALID_ARG");
 
-    // secrets are rejected as unknown keys — never stored.
+    // secrets are rejected as unknown keys — never stored. The `api_key`
+    // spelling routes to the keychain path, which forbids argv values.
     let out = sb
         .rudder()
-        .args(["config", "set", "api_key", "sk-test", "--json"])
+        .args(["config", "set", "api_key", "secret-value", "--json"])
         .output()
         .expect("config set secret");
     assert_eq!(exit_code(&out), 1);
@@ -459,6 +462,152 @@ fn config_set_then_get_roundtrips_and_validates() {
     assert!(config_path.is_file());
     let config: Value = serde_json::from_slice(&fs::read(config_path).unwrap()).unwrap();
     assert!(config.get("api_key").is_none(), "no secret keys in config");
+}
+
+#[test]
+fn config_base_url_set_get_roundtrips_and_validates() {
+    let sb = Sandbox::new("cfgbase");
+    let out = sb
+        .rudder()
+        .env_remove("OPENAI_BASE_URL")
+        .args(["config", "set", "base_url", "https://proxy.example.com/", "--json"])
+        .output()
+        .expect("config set base_url");
+    assert_eq!(exit_code(&out), 0, "stderr: {}", stderr_text(&out));
+    assert_eq!(parse_envelope(&out)["data"]["value"], "https://proxy.example.com");
+
+    let out = sb
+        .rudder()
+        .env_remove("OPENAI_BASE_URL")
+        .args(["config", "get", "base_url", "--json"])
+        .output()
+        .expect("config get base_url");
+    assert_eq!(parse_envelope(&out)["data"]["value"], "https://proxy.example.com");
+
+    let out = sb
+        .rudder()
+        .args(["config", "set", "base_url", "proxy.example.com", "--json"])
+        .output()
+        .expect("config set base_url bad");
+    assert_eq!(exit_code(&out), 1);
+    assert_eq!(parse_envelope(&out)["error"]["code"], "INVALID_ARG");
+}
+
+#[test]
+fn config_set_api_key_never_accepts_the_secret_via_argv() {
+    let sb = Sandbox::new("cfgargv");
+    let out = sb
+        .rudder()
+        .args(["config", "set", "api-key", "secret-value", "--json"])
+        .output()
+        .expect("config set api-key with argv value");
+    assert_eq!(exit_code(&out), 1, "argv values are a shell-history leak");
+    let envelope = parse_envelope(&out);
+    assert_eq!(envelope["error"]["code"], "INVALID_ARG");
+    assert!(
+        envelope["error"]["message"].as_str().unwrap_or_default().contains("stdin"),
+        "hint must point at stdin: {envelope}"
+    );
+}
+
+#[test]
+fn config_set_api_key_requires_a_piped_value() {
+    let sb = Sandbox::new("cfgstdin");
+    let out = sb
+        .rudder()
+        .args(["config", "set", "api-key", "--json"])
+        .write_stdin("")
+        .output()
+        .expect("config set api-key with empty stdin");
+    assert_eq!(exit_code(&out), 1, "empty stdin must fail before any keychain write");
+    assert_eq!(parse_envelope(&out)["error"]["code"], "INVALID_ARG");
+}
+
+#[test]
+fn config_clear_rejects_non_credential_keys() {
+    let sb = Sandbox::new("cfgclear");
+    let out = sb
+        .rudder()
+        .args(["config", "clear", "quality", "--json"])
+        .output()
+        .expect("config clear quality");
+    assert_eq!(exit_code(&out), 1);
+    assert_eq!(parse_envelope(&out)["error"]["code"], "INVALID_ARG");
+}
+
+#[test]
+fn config_test_reports_none_without_credentials() {
+    let sb = Sandbox::new("cfgtestnone");
+    let out = sb
+        .rudder()
+        .args(["config", "test", "--json"])
+        .output()
+        .expect("config test without credentials");
+    assert_eq!(exit_code(&out), 0, "reporting `none` is not an error");
+    let data = parse_envelope(&out)["data"].clone();
+    assert_eq!(data["keySource"], "none");
+    assert_eq!(data["tested"], false);
+    assert_eq!(data["modelCount"], Value::Null);
+    assert_eq!(data["baseUrl"], "http://127.0.0.1:1");
+}
+
+/// One-shot mock `/v1/models` server for the free connectivity probe.
+fn spawn_models_server(body: &'static str) -> String {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
+    let addr = listener.local_addr().expect("local addr");
+    std::thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf);
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+        }
+    });
+    format!("http://{addr}")
+}
+
+#[test]
+fn config_test_probes_models_and_reports_source_and_count() {
+    let sb = Sandbox::new("cfgtestmock");
+    let base = spawn_models_server(
+        r#"{"data":[{"id":"gpt-image-2"},{"id":"gpt-4o"}]}"#,
+    );
+    let out = sb
+        .rudder()
+        .env("OPENAI_BASE_URL", &base)
+        .env("OPENAI_API_KEY", "sandbox-key")
+        .args(["config", "test", "--json"])
+        .output()
+        .expect("config test against mock server");
+    assert_eq!(exit_code(&out), 0, "stderr: {}", stderr_text(&out));
+    let data = parse_envelope(&out)["data"].clone();
+    assert_eq!(data["keySource"], "env");
+    assert_eq!(data["tested"], true);
+    assert_eq!(data["modelCount"], 2);
+    assert_eq!(data["imageModelAvailable"], true);
+    assert_eq!(data["baseUrl"], base);
+    // The piped key never appears in stdout (json envelope or human summary).
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(!stdout.contains("sandbox-key"), "key leaked to stdout: {stdout}");
+}
+
+#[test]
+fn config_test_maps_unreachable_endpoint_to_exit_2() {
+    let sb = Sandbox::new("cfgtestdown");
+    let out = sb
+        .rudder()
+        .env("OPENAI_API_KEY", "sandbox-key")
+        .args(["config", "test", "--json"])
+        .output()
+        .expect("config test against closed port");
+    assert_eq!(exit_code(&out), 2, "API-class errors exit 2");
+    assert_eq!(parse_envelope(&out)["error"]["code"], "API_UNREACHABLE");
 }
 
 #[test]
