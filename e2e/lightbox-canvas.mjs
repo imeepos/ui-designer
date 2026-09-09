@@ -1,4 +1,5 @@
-// 冒烟：全屏无限画布预览（lightbox 重做）— 全屏铺满 / 滚轮缩放 / 拖拽平移 / 1:1 / Esc 关闭
+// 冒烟：全屏无限画布预览（lightbox）— 全屏铺满 / 滚轮缩放 / 拖拽平移 / 1:1 / Esc 关闭
+// 入口：工作区 → 切换设计稿弹框 → 候选卡「放大」。
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 
@@ -12,17 +13,47 @@ const run = async () => {
   page.setDefaultTimeout(15000);
   const log = (...a) => console.log("[lightbox]", ...a);
 
-  await page.goto(BASE, { waitUntil: "networkidle" });
-  await page.getByTestId("new-project").click();
-  await page.getByTestId("project-name-input").fill("画布预览冒烟");
-  await page.getByTestId("create-project-submit").click();
-  await page.getByTestId("board-section").waitFor();
-  await page.getByTestId("board-brand-input").fill("远洋航运, 深海军蓝, 黄铜");
-  await page.getByTestId("board-generate").click();
-  await page.locator('[data-testid^="board-candidate-"]').first().waitFor();
+  const waitJobDone = async () => {
+    await page.getByTestId("job-panel").waitFor();
+    await page.getByTestId("job-panel").waitFor({ state: "detached" });
+  };
 
-  // 打开放大预览
-  await page.locator('[data-testid^="board-candidate-"] [data-testid="action-enlarge"]').first().click();
+  await page.goto(BASE, { waitUntil: "networkidle" });
+  // 向导建项目并生成总览候选（锚点不设也行，页面候选即可放大预览）
+  await page.getByTestId("new-project").click();
+  await page.getByTestId("create-wizard").waitFor();
+  await page.getByTestId("wizard-name-input").fill("画布预览冒烟");
+  await page.getByTestId("wizard-brief-input").fill("墨青色系，克制专业的工具感");
+  await page.getByTestId("wizard-create").click();
+  await page.getByTestId("wizard-generate").waitFor();
+  await page.getByTestId("wizard-generate").click();
+  await page.getByTestId("wizard-candidates").waitFor();
+  await page.locator('[data-testid^="wizard-candidate-"]').first().waitFor();
+  await page.locator('[data-testid^="wizard-candidate-"]').first().click();
+  await page.getByTestId("wizard-to-save").waitFor();
+  await page.getByTestId("wizard-to-save").click();
+  await page.getByTestId("wizard-save").click();
+  await page.getByTestId("workspace-view").waitFor();
+  log("project created; overview candidates ready");
+
+  // 页面生成一批候选 → 打开切换弹框 → 候选卡「放大」进入 lightbox
+  await page.getByTestId("menu-add-pages").click();
+  await page.getByTestId("add-page-dialog").waitFor();
+  await page.getByTestId("page-slug-input").fill("preview");
+  await page.locator('[data-testid="add-page-form"] textarea').first().fill("画布预览用布局简报");
+  await page.getByTestId("add-page-submit").click();
+  await page.getByTestId("menu-page-preview").waitFor();
+  await page.getByTestId("stage-regenerate").click();
+  await page.getByTestId("regen-drawer").waitFor();
+  await page.getByTestId("drawer-generate").click();
+  await waitJobDone();
+  await page.getByTestId("drawer-close").click();
+  await page.getByTestId("stage-empty-switch").click();
+  await page.getByTestId("switch-dialog").waitFor();
+  const firstCard = page.locator('[data-testid^="switch-candidate-"]').first();
+  await firstCard.waitFor();
+  await firstCard.hover();
+  await page.locator('[data-testid^="switch-preview-"]').first().click();
   await page.getByTestId("lightbox").waitFor();
 
   // 1) 全屏铺满：lightbox 根节点覆盖整个视口

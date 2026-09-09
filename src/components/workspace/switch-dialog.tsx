@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { Candidate } from "@/lib/api/types";
 import { useStudio } from "@/state/studio";
 import { ArtImage } from "@/components/art-image";
+import { Lightbox } from "@/components/lightbox";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
@@ -136,20 +137,14 @@ export function SwitchDialog({ mode, onClose }: { mode: SwitchMode; onClose: () 
       )}
 
       {preview && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-8"
-          role="dialog"
-          aria-label={t("common.enlarge")}
-          onClick={() => setPreview(null)}
-          data-testid="switch-preview"
-        >
-          <ArtImage
-            src={preview.url}
-            filter={preview.filter}
-            alt={t("common.enlarge")}
-            className="max-h-full max-w-full rounded-lg border bg-card object-contain"
-          />
-        </div>
+        <Lightbox
+          open
+          onClose={() => setPreview(null)}
+          imageUrl={preview.url}
+          filter={preview.filter}
+          alt={t("gallery.board.candidateAlt", { id: preview.id })}
+          caption={preview.id}
+        />
       )}
     </Modal>
   );
