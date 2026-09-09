@@ -58,19 +58,30 @@ refs/                 # 用户提供的布局参考图
 2. **页面/组件编辑提示词模板**：以「Image 1 是本产品设计系统总板」开头 + 布局简报 + **不变量清单**（严格沿用 Image 1 的配色、字体、圆角、组件样式，不要调整）。
 3. 每次生成把最终 prompt 与参数写入 `promptLog`。
 
+**模板协议（rudder-core::templates，PRD §0）**：`templates/` 资产包内嵌进二进制
+（include_str），每套模板 = 参数化骨架（skeleton，槽位 `{project.name}`/`{page.brief}` 等）
++ 逐槽填槽指南（fillGuide：要什么/好例子/常见错误），供外部代理读取后**用自己的 LLM 填槽**。
+两条拼装路径：引擎路径（显式 `--template` > `project.templateId` > 内置默认；骨架填充后自动
+追加按产物类型分表的 **constraints 注入表**——15 条防坑清单结构化为 rule×applies，含
+project.negativeHints 扩展与 `Labels: a|b|c` 逐字标签约束）；代理路径（`--prompt-file`，
+文件内容即最终提示词，零改写零注入，锚点仍作 Image 1，promptLog/manifest 记
+`source: "agent-file"` + 可选 `templateId` 血缘）。
+
 ## 6. CLI 命令集（rudder-cli）
 ```
 rudder init <name> [--size web|mobile|desktop|WxH] [--dir <path>] [--brief "..."]
-rudder project update [--name <n>] [--brand-brief <s>] [--style-brief <s>]
-rudder board generate [--n 4] [--quality low] [--seed <int>] [--yes]
+rudder project update [--name <n>] [--brand-brief <s>] [--style-brief <s>] [--template <id>] [--clear-template] [--negative-hint <s>]... [--clear-negative-hints]
+rudder templates list [--json]               # 模板清单 + 槽位词表 + attribution
+rudder templates show <id> [--json]          # 骨架 + fillGuide（代理读后自行填槽）
+rudder board generate [--n 4] [--quality low] [--seed <int>] [--yes] [--template <id>] [--prompt-file <path>]
 rudder board pick <candidate-id>          # 设为锚点
 rudder page add <slug> --brief "..."
 rudder page update <slug> --brief "..."   # 改布局简报（免手编 project.json）
-rudder page generate <slug|--all> [--n 1-4] [--yes]
+rudder page generate <slug|--all> [--n 1-4] [--yes] [--template <id>] [--prompt-file <path>]
 rudder page pick <slug> <candidate-id>    # 候选→主稿（旧主稿入 history/）
 rudder component add <name> --type <t> --brief "..."
 rudder component update <name> [--type <t>] [--brief "..."]
-rudder component generate <name|--all> [--n 1-4] [--yes]
+rudder component generate <name|--all> [--n 1-4] [--yes] [--template <id>] [--prompt-file <path>]
 rudder component pick <name> <candidate-id>
 rudder list [pages|components]            # status 概览
 rudder export [--out <dir>] [--with-candidates]  # 默认只带 anchor/主稿；候选需显式带上

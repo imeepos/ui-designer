@@ -2,6 +2,12 @@
 
 > 抓取自 [freestylefly/awesome-gpt-image-2](https://github.com/freestylefly/awesome-gpt-image-2)（544 个逆向案例、21 套工业级模板、Agent 风格库）。
 > 提炼日期：2026-09-09。源文件：`docs/templates.md`（模板+防坑指南）、`docs/gallery-part-1/2.md`（案例库）、`agents/skills/gpt-image-2-style-library/SKILL.md`（Agent 工作流）。
+>
+> **来源与许可（attribution）**：本文及 `templates/` 资产包的结构模式（分区法、计数显式、
+> 逐字文本、负面清单等）提炼自 awesome-gpt-image-2（**MIT License**，© 原仓库贡献者）。
+> 舵侧仅吸收**结构模式**与防坑规则，全部骨架/指南为原创改写；**任何画廊案例原文均未逐字
+> 内嵌**到 `templates/`、`crates/` 或产品提示词中。转载或复用本资产包时须保留本声明与
+> 上游 MIT 许可归属。落地见 `templates/manifest.json` 的 `attribution` 块与 `templates/README.md`。
 
 ## 一、方法论：Prompt-as-Code
 

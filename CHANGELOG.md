@@ -2,6 +2,18 @@
 
 本文件记录「舵 Rudder」各版本的可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## Unreleased
+
+### 模板协议：代理可消费的提示词资产（PRD §0 产品边界落地）
+
+- `templates/` 资产包：5 套参数化模板（`board-design-system` / `page-ui-standard` / `page-landing-sections` / `component-sheet-grid` / `brand-identity-lite`），每套 = 参数化骨架 + 逐槽填槽指南（fillGuide：要什么/好例子/常见错误）+ 中英文名与来源标注；`manifest.json` 汇总槽位词表、填槽协议与 attribution（awesome-gpt-image-2，MIT，仅吸收结构模式、案例原文零内嵌）。
+- CLI 新命令：`rudder templates list [--json]` / `rudder templates show <id> [--json]`。
+- CLI generate 系列新旗标：`--template <id>`（引擎骨架选择，解析顺序 显式 > `project.templateId` > 内置默认）与 `--prompt-file <path>`（代理填好的最终提示词直灌，引擎零改写零注入，锚点仍作 Image 1；`--template` 仅记血缘）。校验失败（文件缺失/空/非 UTF-8、模板不存在）退出码 1 带 hint。
+- 提示词引擎升级（rudder-core::prompt/templates）：constraints 注入表（15 条防坑清单结构化为 rule×适用产物，RENDER_RULES 并入，按类型自动追加，dry-run 可见）；页面/组件简报支持 `Labels: a|b|c` 逐字标签槽；`project.json` 新增可选 `templateId` / `negativeHints`（serde 默认空，向后兼容），`rudder project update` 增对应旗标。
+- 血缘记录：GenRecord / promptLog / manifest 全部记录 `source`（`engine|agent-file`）与 `templateId`。
+- Skill（skill/rudder-design）：SKILL.md 新增「模板工作流」章节（读骨架→自己填槽→`--prompt-file` 出图，附填好的完整示例）；references/cli.md 同步全部新契约。
+- 桌面端零改动（GUI 定位人类查看器）；`src-tauri` 仅机械适配核心错误枚举新变体（穷尽 match）与测试结构体字面量新字段，无新 command。
+
 ## 0.1.0 — 2026-09-08
 
 首个公开里程碑：AI 成套 UI 设计工作室走通「新建项目 → 设计系统总板 → 功能页面 → 组件设计」四步流程，CLI / 桌面端 / AI 代理 Skill 三入口共享同一 Rust 核心库。

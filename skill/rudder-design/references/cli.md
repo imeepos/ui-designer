@@ -37,52 +37,87 @@ address the same candidate.
 
 ## Commands
 
+### `rudder templates list [--json]`
+List built-in prompt templates: id, target product (`board|page|component`),
+bilingual name/summary, slot names, plus the manifest `attribution` (MIT,
+structure patterns from awesome-gpt-image-2 — no case text embedded) and the
+`slotVocabulary` / `fillProtocol` blocks for agents. Free, no project needed.
+
+### `rudder templates show <id> [--json]`
+Dump one template: the parameterized `skeleton` (slots like `{page.brief}`),
+per-slot `fillGuide` (what / goodExample / commonMistakes — teaching content
+for YOUR LLM), `appliesTo`, and `attribution`. Unknown ids exit 1 with a
+hint pointing here. Workflow: read skeleton+guide → fill slots with your own
+LLM → write the final prompt to a temp file → generate with `--prompt-file`.
+
 ### `rudder init <name> [--size web|mobile|desktop|WxH] [--dir <path>] [--brief "..."]`
 Create a project. Size presets: `web`=1536x1024, `mobile`=1024x1536,
 `desktop`=2560x1440. Custom `WxH` constraints: each side multiple of 16,
 aspect ≤ 3:1, total pixels 0.65M–8.3M. `--brief` seeds `styleBrief`.
 Data: `{projectId, dir, canvasSize}`.
 
-### `rudder board generate [--n 1-4] [--quality low|medium|high] [--seed <int>] [--thinking low|medium|high] [--ref <img>...]`
+### `rudder board generate [--n 1-4] [--quality low|medium|high] [--seed <int>] [--thinking low|medium|high] [--ref <img>...] [--template <id>] [--prompt-file <path>]`
 Generate design-system board candidates (`board/candidates/NNNN.png`).
 Without `--ref` this uses the generations endpoint; any `--ref` images switch
 it to the edits endpoint with those images attached.
 Anchor mechanics: one board defines palette, type scale, corner radius,
 component samples, icon style for the WHOLE set. Data (same envelope for
 every generate command):
-`{dryRun, kind: "board", target: "", plan, candidates: [{id, file, seed, size, quality}]}`.
+`{dryRun, kind: "board", target: "", source, templateId, plan, candidates: [{id, file, seed, size, quality}]}`.
 The full prompt lives ONCE in `plan.params.prompt`; candidate rows reference
 it by `id`/`file`.
+
+Prompt assembly, two paths (PRD §0 — the tool ships no LLM):
+- **engine path** (default): template resolution is explicit `--template` >
+  `project.templateId` > the built-in default; the skeleton is filled from
+  project data and a `Constraints:` block (docs/GPT-IMAGE-2-DESIGN-KNOWLEDGE.md
+  防坑清单, per product kind) is appended automatically. `source: "engine"`.
+- **agent path** (`--prompt-file <path>`): the file content IS the prompt —
+  must exist, be UTF-8 and non-empty (exit 1 with hint otherwise); nothing is
+  rewritten or injected, and `source: "agent-file"`. A `--template <id>` alongside
+  it is recorded-only lineage (reproducibility), never assembled. Page/component
+  targets still pass the anchor as Image 1. `--prompt-file` targets a single
+  slug/name only (not `--all`).
 
 ### `rudder board pick <candidate-id>`
 Copy candidate to `board/anchor.png` and lock it in `project.json`.
 
-### `rudder project update [--name <n>] [--brand-brief <s>] [--style-brief <s>]`
+### `rudder project update [--name <n>] [--brand-brief <s>] [--style-brief <s>] [--template <id>] [--clear-template] [--negative-hint <s>]... [--clear-negative-hints]`
 Amend project metadata between generations (at least one flag). This is the
 supported way to iterate on briefs — no hand-editing of `project.json`.
+`--template` sets the project-default prompt template (validated to exist;
+explicit `--template` on a generate command wins, then the built-in default).
+`--negative-hint` appends a project-level exclusion (repeatable, deduplicated)
+injected into every engine-path prompt's `explicit-negatives` constraint;
+`--clear-negative-hints` / `--clear-template` reset them.
 
 ### `rudder page add <slug> --brief "..."` / `rudder page list`
 Register a page (slug: `a-z0-9-`). Brief = layout structure (regions, counts,
-labels), not adjectives.
+labels), not adjectives. A `Labels: a|b|c` line inside the brief declares
+verbatim labels: the engine strips it from the prose and appends a
+character-for-character render constraint (UI-REVIEW P1: 步条标签失真).
 
 ### `rudder page update <slug> --brief "..."`
 Replace a page's layout brief, then `page generate` to iterate.
 
-### `rudder page generate <slug|--all> [--n 1-4] [--quality ...] [--yes] [--ref <img>...]`
+### `rudder page generate <slug|--all> [--n 1-4] [--quality ...] [--yes] [--ref <img>...] [--template <id>] [--prompt-file <path>]`
 Anchor-backed generation into `pages/<slug>/candidates/`. `--ref` adds extra
 layout reference images (they are passed after the anchor). Promote with
 `rudder page pick <slug> <candidate-id>` → `pages/<slug>/current.png`
-(previous current moves to `history/`).
+(previous current moves to `history/`). See `board generate` for the
+`--template` / `--prompt-file` two-path contract; `--prompt-file` works with
+a single slug only.
 Envelope: a single target answers with the exact board shape (top-level
 `candidates`); only `--all` wraps per-target entries as
 `{dryRun, kind: "page", results: [{kind, target, plan, candidates}]}`.
 
 ### `rudder component add <name> --type <t> --brief "..."`
 ### `rudder component update <name> [--type <t>] [--brief "..."]`
-### `rudder component generate <name|--all> [--n 1-4] ...` / `rudder component pick <name> <candidate-id>`
+### `rudder component generate <name|--all> [--n 1-4] ... [--template <id>] [--prompt-file <path>]` / `rudder component pick <name> <candidate-id>`
 Same lifecycle as pages, under `components/<name>/`. `--type` is an open
 label rendered into the prompt; common values: buttons | forms | cards |
-navigation | icons | tables | modals.
+navigation | icons | tables | modals. A `Labels: a|b|c` line in the brief
+works exactly like on pages (verbatim cell labels).
 
 ### `rudder list [pages|components]`
 Status overview: anchor present? pages/components with candidate counts.

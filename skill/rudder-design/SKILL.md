@@ -85,11 +85,70 @@ Same review loop: view → `rudder component pick <name> <candidate-id>`.
    images; if the images don't define it, ask — never invent.**
    See references/design-md.md for the template walkthrough.
 
+## Template workflow (optional — your LLM fills the slots)
+
+Rudder is a tool and ships no LLM. The default engine path (no flags) already
+assembles solid prompts; when you want stronger layout control, use the
+template protocol: Rudder provides the **skeleton + per-slot fill guide**, and
+the slot-filling intelligence is **your own**. Three steps:
+
+1. **Read the skeleton + guide** (free, no project needed):
+   ```bash
+   rudder templates list --json            # ids, target product, slot vocabulary
+   rudder templates show page-landing-sections --json   # skeleton + fillGuide
+   ```
+   `fillGuide` teaches you per slot: what it wants, what a good value looks
+   like, common mistakes.
+2. **Fill the slots with your own LLM** and write the COMPLETE final prompt
+   into a temp file (e.g. `/tmp/landing.prompt`). It must stand alone — on the
+   `--prompt-file` path Rudder rewrites and injects NOTHING: negative lists,
+   element counts and verbatim labels are your responsibility.
+3. **Generate** with the file; the anchor still rides as Image 1:
+   ```bash
+   rudder page generate landing --prompt-file /tmp/landing.prompt \
+     --template page-landing-sections --dry-run   # drop --dry-run + add --yes for real
+   ```
+   `--template <id>` here is recorded-only lineage (promptLog/manifest,
+   reproducibility); it does not assemble anything.
+
+Template resolution on the engine path: explicit `--template` >
+`project.templateId` (set via `rudder project update --template <id>`) >
+built-in default. Related engine-path conveniences: a `Labels: a|b|c` line in
+a page/component brief auto-appends a verbatim-render constraint, and
+`rudder project update --negative-hint "…"` appends project-level exclusions.
+
+Filled example — `/tmp/landing.prompt` (from `page-landing-sections`, project
+brief 「海军蓝 + 黄铜点缀，圆角 8px，紧凑密度」):
+
+```text
+Image 1 是本产品设计系统总板。严格沿用它的设计语言，只组合新的页面内容。
+Task: design the "landing" landing page as one high-fidelity UI mockup, composed section by section.
+Sections, top to bottom, from the brief: 导航 4 项（产品/定价/客户/博客）+ 右侧登录按钮；hero：标题「让货运像订机票一样简单」+ 副标题一句 + 双按钮（免费开始/预约演示）；3 个特性段，每段 1 图 1 文 3 要点；社证区：客户 logo 墙 6 家 + 2 张见证卡；CTA band：一句话 + 邮箱输入框 + 发光主按钮。
+Section contract:
+- header: logo left; nav items listed one by one exactly as the brief counts them; one primary CTA button on the right.
+- hero: one headline, one subheadline, two buttons (primary + secondary), three feature callouts with icons.
+- every middle section: one visual block plus one text block, with the element count stated in the brief.
+- social proof strip: a client logo wall plus 1-2 short testimonial cards.
+- closing CTA band: one-line pitch, one input field, one glowing primary button.
+Headlines and nav items are real text spelled exactly as briefed; all body copy renders as simulated text blocks.
+Invariants (do NOT change): strictly reuse Image 1's exact
+- color palette (same hex values for primary/background/text/accent),
+- typography family, sizes and weights,
+- corner radii and border treatment,
+- component styling (buttons, inputs, cards), icon style and stroke weight,
+- spacing rhythm and density.
+Overall mood stays: 海军蓝 + 黄铜点缀，圆角 8px，紧凑密度
+Only compose NEW layout/content; never redesign the system.
+```
+
 ## Hard rules
 
 - Real spends need `--yes`. Default to `--dry-run` while exploring flags.
 - Generation defaults to `--quality low`; pass `--quality high` explicitly
   for finals only.
+- On the `--prompt-file` path the file content IS the prompt — Rudder neither
+  rewrites nor injects. You own the text quality (negatives, counts, verbatim
+  labels); review it before spending.
 - Human mode: a one-line summary lands on stdout; logs/warnings/errors go to
   stderr. `--json` for machine reading: stdout is `{ok, data|error}`.
 - Amend briefs with the `update` subcommands — never hand-edit
