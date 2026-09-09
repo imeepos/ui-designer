@@ -13,7 +13,9 @@
 //!   status and a body summary.
 //! - DryRun: `run_*` returns the full request plan (URL, params, multipart
 //!   shape) and performs no network I/O.
-//! - Timeout: 300s per request by default.
+//! - Timeout: 300s per attempt by default, enforced as a hard ceiling
+//!   (`tokio::time::timeout`) covering DNS, connect, response and body —
+//!   hangs surface as `API_UNREACHABLE` instead of stalling the CLI.
 
 use crate::error::{Result, RudderError};
 use base64::Engine as _;
@@ -117,6 +119,9 @@ pub struct ImageClient {
     http: reqwest::Client,
     dry_run: bool,
     backoff: Duration,
+    /// Hard per-attempt ceiling applied via `tokio::time::timeout` on top of
+    /// reqwest's own timeout, so DNS/connect hangs can never exceed budget.
+    timeout: Duration,
 }
 
 impl ImageClient {
@@ -141,6 +146,7 @@ impl ImageClient {
             http,
             dry_run,
             backoff,
+            timeout,
         })
     }
 
@@ -332,15 +338,26 @@ impl ImageClient {
     {
         let mut attempt = 0u32;
         loop {
-            let response = send(self, key)
-                .send()
+            // Hard ceiling over the entire attempt — reqwest's own timeout
+            // does not reliably cover resolver/connect stalls, and tonight's
+            // incident (a proxy accepting the connection then never replying)
+            // left the CLI hanging far past budget. Fail fast instead.
+            let response = tokio::time::timeout(self.timeout, send(self, key).send())
                 .await
+                .map_err(|_| RudderError::ApiUnreachable {
+                    detail: format!(
+                        "no response within {:?} (hard ceiling covers DNS/connect/body)",
+                        self.timeout
+                    ),
+                })?
                 .map_err(|e| RudderError::ApiUnreachable { detail: e.to_string() })?;
             let status = response.status();
             if status.is_success() {
-                let bytes = response
-                    .bytes()
+                let bytes = tokio::time::timeout(self.timeout, response.bytes())
                     .await
+                    .map_err(|_| RudderError::ApiUnreachable {
+                        detail: format!("response body exceeded {:?}", self.timeout),
+                    })?
                     .map_err(|e| RudderError::BadResponse { detail: e.to_string() })?;
                 match decode_b64_images(&bytes) {
                     Ok(images) => return Ok(images),

@@ -176,6 +176,40 @@ async fn mock_generate_success_decodes_b64() {
 }
 
 #[tokio::test]
+async fn hard_timeout_covers_hanging_connection() {
+    // A listener that accepts and never replies (proxy stall). The hard
+    // per-attempt ceiling must convert the hang into API_UNREACHABLE within
+    // the client timeout instead of waiting forever.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let addr = listener.local_addr().unwrap();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let _ = stream; // hold the socket open, never write
+        }
+    });
+    let client = ImageClient::new(
+        format!("http://{addr}"),
+        Some("test-key".into()),
+        false,
+        Duration::from_millis(1),
+        Duration::from_millis(500),
+    )
+    .expect("client builds");
+    let started = std::time::Instant::now();
+    let err = client
+        .run_generations(&params("hang", 1))
+        .await
+        .expect_err("hanging connection must fail fast");
+    assert_eq!(err.code(), "API_UNREACHABLE");
+    assert_eq!(err.exit_code(), 2);
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "hard ceiling applies (took {:?})",
+        started.elapsed()
+    );
+}
+
+#[tokio::test]
 async fn mock_retry_on_429_then_500_then_success() {
     let server = MockServer::start(|_req, i| match i {
         0 => (429, b"{'error':'rate limited'}".to_vec()),
