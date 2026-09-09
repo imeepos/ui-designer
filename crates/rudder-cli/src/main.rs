@@ -321,7 +321,7 @@ fn generate_opts(
 }
 
 fn build_client(cli: &Cli) -> Result<ImageClient, RudderError> {
-    ImageClient::from_env(!spend_allowed(cli))
+    ImageClient::from_config(!spend_allowed(cli))
 }
 
 async fn dispatch(cli: Cli) -> i32 {

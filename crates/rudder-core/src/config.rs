@@ -1,12 +1,20 @@
 //! Global defaults stored at `~/Rudder/config.json` (ARCHITECTURE §6).
 //!
-//! Holds generation defaults (`quality`, `thinking`, `n`) and the last-used
-//! project path. Secrets are NEVER stored here — credentials come from the
-//! environment only (AGENTS.md hard rule).
+//! Holds generation defaults (`quality`, `thinking`, `n`), the non-sensitive
+//! `base_url` override, and the last-used project path. Secrets are NEVER
+//! stored here — the API key lives in the OS keychain only
+//! ([`credential`]); resolution priority is env → keychain (AGENTS.md v2).
 
 use crate::error::{Result, RudderError};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+
+pub mod credential;
+
+pub use credential::{
+    clear_api_key, resolve_api_key, set_api_key, test_connection, ApiKeyResolution,
+    ConnectionTestReport, KeySource,
+};
 
 /// Quality levels accepted by gpt-image-2 (docs/PRD.md §3.2).
 pub const QUALITY_LEVELS: [&str; 3] = ["low", "medium", "high"];
@@ -26,6 +34,10 @@ pub struct Config {
     /// Default `--n` for page/component generate (board defaults to 4).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub n: Option<u8>,
+    /// Non-sensitive API base override. Resolution: `OPENAI_BASE_URL` env →
+    /// this field → official endpoint (`credential::resolve_base_url`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
     /// Last successfully resolved project directory.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_project: Option<PathBuf>,
@@ -122,10 +134,31 @@ impl Config {
                 }
                 self.n = Some(n);
             }
+            "base_url" => {
+                let trimmed = value.trim();
+                if trimmed.is_empty() {
+                    // Reset: fall back to env/default resolution.
+                    self.base_url = None;
+                } else if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+                    self.base_url = Some(trimmed.trim_end_matches('/').to_string());
+                } else {
+                    return Err(arg_err(
+                        "base_url must start with http:// or https:// (or be empty to reset)"
+                            .to_string(),
+                    ));
+                }
+            }
             other => {
+                if other == "api-key" || other == "api_key" {
+                    return Err(arg_err(
+                        "secrets never go into config.json; use `rudder config set api-key` \
+                         (value via stdin) to store in the OS keychain"
+                            .to_string(),
+                    ));
+                }
                 return Err(arg_err(format!(
-                    "unknown config key `{other}`; valid keys: quality, thinking, n"
-                )))
+                    "unknown config key `{other}`; valid keys: quality, thinking, n, base_url"
+                )));
             }
         }
         Ok(())
@@ -140,11 +173,28 @@ impl Config {
                 // Distinguish "unset" from board/page defaults at the CLI layer.
                 "1".to_string()
             })),
+            "base_url" => Ok(resolve_base_url()),
             other => Err(RudderError::NotFound {
                 what: format!("config key `{other}`"),
             }),
         }
     }
+}
+
+/// Effective API base URL: `OPENAI_BASE_URL` env → `config.json` `base_url`
+/// → official endpoint (docs/ARCHITECTURE.md §4). Trailing slashes stripped.
+pub fn resolve_base_url() -> String {
+    if let Some(env_base) = credential::env_trimmed("OPENAI_BASE_URL") {
+        return env_base.trim_end_matches('/').to_string();
+    }
+    if let Some(config_base) = Config::load()
+        .base_url
+        .map(|base| base.trim().trim_end_matches('/').to_string())
+        .filter(|base| !base.is_empty())
+    {
+        return config_base;
+    }
+    crate::image::DEFAULT_BASE_URL.to_string()
 }
 
 fn arg_err(detail: String) -> RudderError {
@@ -194,5 +244,95 @@ mod tests {
         assert_eq!(loaded, cfg);
         assert!(Config::load_from(Some(&dir.join("missing.json"))).quality.is_none());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn base_url_set_validates_scheme_and_resets_on_empty() {
+        let mut cfg = Config::default();
+        cfg.set("base_url", "https://proxy.example.com/").unwrap();
+        assert_eq!(cfg.base_url.as_deref(), Some("https://proxy.example.com"));
+        cfg.set("base_url", "  ").unwrap();
+        assert_eq!(cfg.base_url, None, "empty resets to env/default resolution");
+        assert!(cfg.set("base_url", "ftp://x").is_err());
+        assert_eq!(cfg.set("base_url", "proxy.example.com").unwrap_err().code(), "INVALID_ARG");
+        // Secrets stay out of config.json no matter the spelling.
+        assert!(cfg.set("api-key", "x").is_err());
+        assert!(cfg.set("api_key", "x").is_err());
+        assert!(cfg.get("api-key").is_err());
+    }
+
+    #[test]
+    fn base_url_survives_disk_roundtrip() {
+        let dir = std::env::temp_dir().join(format!("rudder-cfg-test-{}", uuid::Uuid::new_v4()));
+        let path = dir.join("config.json");
+        let mut cfg = Config::default();
+        cfg.set("base_url", "https://proxy.example.com").unwrap();
+        Config::save_to(Some(&path), &cfg).unwrap();
+        assert_eq!(Config::load_from(Some(&path)).base_url.as_deref(), Some("https://proxy.example.com"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Restores OPENAI_BASE_URL / RUDDER_HOME on drop (credential tests own a
+    /// different env lock, and these two keys never overlap with it).
+    struct BaseUrlEnvGuard {
+        saved: Vec<(String, Option<String>)>,
+    }
+
+    impl BaseUrlEnvGuard {
+        fn clear() -> BaseUrlEnvGuard {
+            let mut saved = Vec::new();
+            for name in ["OPENAI_BASE_URL", "RUDDER_HOME"] {
+                saved.push((name.to_string(), std::env::var(name).ok()));
+                std::env::remove_var(name);
+            }
+            BaseUrlEnvGuard { saved }
+        }
+
+        fn set(name: &str, value: &str) {
+            std::env::set_var(name, value);
+        }
+    }
+
+    impl Drop for BaseUrlEnvGuard {
+        fn drop(&mut self) {
+            for (name, value) in self.saved.drain(..) {
+                match value {
+                    Some(v) => std::env::set_var(&name, v),
+                    None => std::env::remove_var(&name),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_base_url_env_then_config_then_default() {
+        let _guard = BaseUrlEnvGuard::clear();
+
+        // Neither env nor config → official endpoint.
+        assert_eq!(resolve_base_url(), crate::image::DEFAULT_BASE_URL);
+
+        // config.json override applies when env is absent/empty.
+        let dir = std::env::temp_dir().join(format!("rudder-cfg-res-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("config.json"), r#"{"base_url":"https://proxy.example.com"}"#)
+            .unwrap();
+        BaseUrlEnvGuard::set("RUDDER_HOME", &dir.display().to_string());
+        assert_eq!(resolve_base_url(), "https://proxy.example.com");
+
+        // Env wins over config; trailing slashes are stripped.
+        BaseUrlEnvGuard::set("OPENAI_BASE_URL", "https://env.example.com///");
+        assert_eq!(resolve_base_url(), "https://env.example.com");
+        BaseUrlEnvGuard::set("OPENAI_BASE_URL", "   ");
+        assert_eq!(resolve_base_url(), "https://proxy.example.com");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn get_base_url_reports_effective_value() {
+        let _guard = BaseUrlEnvGuard::clear();
+        BaseUrlEnvGuard::set("OPENAI_BASE_URL", "https://env.example.com");
+        let cfg = Config::default();
+        assert_eq!(cfg.get("base_url").unwrap(), "https://env.example.com");
     }
 }

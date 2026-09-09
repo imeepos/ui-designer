@@ -22,9 +22,15 @@ pub enum RudderError {
     InvalidArg { detail: String },
 
     // ---- API class (exit 2) -------------------------------------------
-    /// `OPENAI_API_KEY` is not set but a real (non dry-run) call was made.
-    #[error("OPENAI_API_KEY is not set in the environment")]
+    /// No API key could be resolved from the environment or the OS keychain
+    /// but a real (non dry-run) call was made.
+    #[error("no API key configured (env OPENAI_API_KEY or OS keychain)")]
     CredentialMissing,
+
+    /// Reading/writing the OS keychain failed (locked keychain, denied
+    /// access, unsupported platform store).
+    #[error("OS keychain access failed: {detail}")]
+    KeychainAccess { detail: String },
 
     /// Endpoint returned a non-success status after retries.
     #[error("image API returned HTTP {status}")]
@@ -76,6 +82,7 @@ impl RudderError {
             RudderError::SizeInvalid { .. } => "SIZE_INVALID",
             RudderError::InvalidArg { .. } => "INVALID_ARG",
             RudderError::CredentialMissing => "CREDENTIAL_MISSING",
+            RudderError::KeychainAccess { .. } => "KEYCHAIN_ACCESS",
             RudderError::ApiError { .. } => "API_ERROR",
             RudderError::RateLimited { .. } => "RATE_LIMITED",
             RudderError::ApiUnreachable { .. } => "API_UNREACHABLE",
@@ -94,6 +101,7 @@ impl RudderError {
         match self {
             RudderError::SizeInvalid { .. } | RudderError::InvalidArg { .. } => 1,
             RudderError::CredentialMissing
+            | RudderError::KeychainAccess { .. }
             | RudderError::ApiError { .. }
             | RudderError::RateLimited { .. }
             | RudderError::ApiUnreachable { .. }
@@ -117,7 +125,14 @@ impl RudderError {
             }
             RudderError::InvalidArg { .. } => "check the flag value against references/cli.md".to_string(),
             RudderError::CredentialMissing => {
-                "export OPENAI_API_KEY (and optionally OPENAI_BASE_URL) before real calls".to_string()
+                "export OPENAI_API_KEY (env wins) or store a key: `echo <key> | rudder config set \
+                 api-key`, or the desktop Settings dialog"
+                    .to_string()
+            }
+            RudderError::KeychainAccess { .. } => {
+                "unlock / authorize your OS keychain (Keychain Access on macOS), or disable it \
+                 with RUDDER_KEYCHAIN=0 and use OPENAI_API_KEY instead"
+                    .to_string()
             }
             RudderError::ApiError { .. } => "inspect the endpoint status; retry with lower --n or quality".to_string(),
             RudderError::RateLimited { .. } => "wait ~30s and retry once, then reduce --n or quality".to_string(),

@@ -17,6 +17,7 @@ thiserror = { workspace = true }
 dirs = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+keyring = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

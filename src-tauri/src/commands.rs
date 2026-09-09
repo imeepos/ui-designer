@@ -263,7 +263,7 @@ async fn run_generation(
     let tracker = JobTracker::new(app, options.job_id.as_deref(), kind, target_label);
     let root = projects::find_project_root(project_id).map_err(into_command)?;
     tracker.emit("started", None);
-    let client = ImageClient::from_env(false).map_err(into_command);
+    let client = ImageClient::from_config(false).map_err(into_command);
     let result = match client {
         Ok(client) => {
             let generate = ops::generate(

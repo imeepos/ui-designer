@@ -3,7 +3,9 @@
 //! Modules (docs/ARCHITECTURE.md §3-6):
 //! - [`canvas`] — canvas size model + gpt-image-2 constraint validation
 //! - [`store`]  — project storage with atomic writes (tempfile + rename)
-//! - [`config`] — `~/Rudder/config.json` defaults + last-used project
+//! - [`config`] — `~/Rudder/config.json` defaults + last-used project;
+//!   [`config::credential`] — OS-keychain API key (env → keychain → none)
+//!   and the free `/v1/models` connectivity probe
 //! - [`prompt`] — three-part prompt engine for board/page/component
 //! - [`image`]  — gpt-image-2 client with dry-run, retry, b64 decode
 //! - [`export`] — asset bundle export (images + manifest + PROMPTS.md)

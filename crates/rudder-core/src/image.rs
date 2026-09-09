@@ -3,9 +3,10 @@
 //! - Endpoints: `{base}/v1/images/generations` (JSON) and
 //!   `{base}/v1/images/edits` (multipart, `image[]` accepts several
 //!   reference images — anchor first).
-//! - Auth: `Authorization: Bearer $OPENAI_API_KEY`; base from
-//!   `$OPENAI_BASE_URL` (default `https://api.openai.com`). Credentials are
-//!   read from the environment only, never stored or logged.
+//! - Auth: `Authorization: Bearer <api key>`; key resolution is
+//!   `OPENAI_API_KEY` env → OS keychain → none (`config::credential`), base
+//!   resolution is `OPENAI_BASE_URL` env → `config.json` → default. Secrets
+//!   are never stored in files, logged, or printed.
 //! - Response: `b64_json`, decoded to raw bytes.
 //! - Retry: 429/5xx with exponential backoff, at most 3 retries; errors
 //!   carry the HTTP status and a body summary.
@@ -136,13 +137,14 @@ impl ImageClient {
         })
     }
 
-    /// Read credentials/base from the environment (AGENTS.md hard rule).
-    /// Never fails in dry-run: a missing key only makes
-    /// `auth_header_present=false` in the plan.
-    pub fn from_env(dry_run: bool) -> Result<ImageClient> {
-        let base = std::env::var("OPENAI_BASE_URL").ok().unwrap_or_default();
-        let key = std::env::var("OPENAI_API_KEY").ok().filter(|k| !k.trim().is_empty());
-        Self::new(base, key, dry_run, DEFAULT_BACKOFF, DEFAULT_TIMEOUT)
+    /// Resolve credentials/base through the standard chain (env → keychain /
+    /// config → defaults, see [`crate::config::credential`]). Never fails in
+    /// dry-run: a missing key only makes `auth_header_present=false` in the
+    /// plan.
+    pub fn from_config(dry_run: bool) -> Result<ImageClient> {
+        let base = crate::config::resolve_base_url();
+        let resolution = crate::config::credential::resolve_api_key();
+        Self::new(base, resolution.key, dry_run, DEFAULT_BACKOFF, DEFAULT_TIMEOUT)
     }
 
     pub fn is_dry_run(&self) -> bool {
