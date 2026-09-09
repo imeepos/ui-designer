@@ -9,6 +9,7 @@
 //!   `started` / `finished` / `failed` phases so the UI can drive skeleton
 //!   copy; `jobId` correlates events with the invoking call.
 
+use rudder_core::config::{credential, resolve_base_url, Config};
 use rudder_core::image::ImageClient;
 use rudder_core::ops::{self, GenerateOptions, Target};
 use rudder_core::store::{self, Project};
@@ -624,6 +625,147 @@ pub async fn delete_artifact(
     view::build_detail(&root, &project).map_err(|e| CommandError::from_core(&RudderError::Io(e)))
 }
 
+// ---------------------------------------------------------------------------
+// Credential / settings commands (keychain is the only secret store)
+// ---------------------------------------------------------------------------
+
+/// Shell-level credential status. Never carries the key itself — only the
+/// effective base URL, the source label and the masked tail (≤4 chars).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CredentialStatusDto {
+    /// Effective base URL after the env → config.json → default chain.
+    pub base_url: String,
+    /// `env` | `keychain` | `none`.
+    pub key_source: String,
+    /// Last 4 characters of the resolved key, when one is configured.
+    pub key_tail: Option<String>,
+}
+
+fn credential_status() -> CredentialStatusDto {
+    credential_status_from(resolve_base_url(), &credential::resolve_api_key())
+}
+
+/// Pure shaping of the status DTO (unit-testable without a keychain).
+fn credential_status_from(base_url: String, resolution: &credential::ApiKeyResolution) -> CredentialStatusDto {
+    CredentialStatusDto {
+        base_url,
+        key_source: resolution.source.as_str().to_string(),
+        key_tail: resolution.key.as_deref().map(credential::tail4),
+    }
+}
+
+/// Helper mirroring `delete_artifact`: run blocking keychain/config work on
+/// the blocking pool and flatten join errors into `UNKNOWN`.
+async fn blocking<T>(
+    what: &str,
+    hint: &str,
+    task: impl FnOnce() -> Result<T, CommandError> + Send + 'static,
+) -> Result<T, CommandError>
+where
+    T: Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|e| CommandError::new(codes::UNKNOWN, format!("{what} task failed: {e}"), hint))?
+}
+
+#[tauri::command]
+pub async fn get_credential_status() -> Result<CredentialStatusDto, CommandError> {
+    blocking("status", "retry", || Ok(credential_status())).await
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveApiKeyInput {
+    pub api_key: String,
+}
+
+/// Store the API key in the OS keychain (the only persistent secret store).
+#[tauri::command]
+pub async fn save_api_key(input: SaveApiKeyInput) -> Result<CredentialStatusDto, CommandError> {
+    blocking("keychain", "retry the save", move || {
+        credential::set_api_key(&input.api_key).map_err(into_command)?;
+        Ok(credential_status())
+    })
+    .await
+}
+
+/// Remove the stored API key (idempotent; env keys are unaffected).
+#[tauri::command]
+pub async fn clear_api_key() -> Result<CredentialStatusDto, CommandError> {
+    blocking("keychain", "retry the clear", || {
+        credential::clear_api_key().map_err(into_command)?;
+        Ok(credential_status())
+    })
+    .await
+}
+
+/// Persist the non-sensitive base URL override into `~/Rudder/config.json`
+/// (empty string resets to the env/default chain).
+#[tauri::command]
+pub async fn save_base_url(base_url: String) -> Result<CredentialStatusDto, CommandError> {
+    blocking("config", "retry the save", move || {
+        let mut config = Config::load();
+        config.set("base_url", &base_url).map_err(into_command)?;
+        config.save().map_err(into_command)?;
+        Ok(credential_status())
+    })
+    .await
+}
+
+/// Draft values from the Settings dialog; `None`/empty falls back to the
+/// stored/resolved chain so the user can test before saving.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestConnectionInput {
+    #[serde(default)]
+    pub base_url: Option<String>,
+    #[serde(default)]
+    pub api_key: Option<String>,
+}
+
+/// Reply of the `test_connection` command (free `/v1/models` probe).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionTestDto {
+    pub base_url: String,
+    pub http_status: u16,
+    pub model_count: usize,
+}
+
+/// Probe `GET {base}/v1/models`: free, no image spend. Fails with
+/// `NO_CREDENTIALS` when no key is available to test with.
+#[tauri::command]
+pub async fn test_connection(
+    input: Option<TestConnectionInput>,
+) -> Result<ConnectionTestDto, CommandError> {
+    let input = input.unwrap_or_default();
+    let base = input
+        .base_url
+        .map(|base| base.trim().trim_end_matches('/').to_string())
+        .filter(|base| !base.is_empty())
+        .unwrap_or_else(resolve_base_url);
+    let key = match input.api_key.map(|key| key.trim().to_string()).filter(|key| !key.is_empty()) {
+        Some(key) => key,
+        None => credential::resolve_api_key().key.ok_or_else(|| {
+            CommandError::new(
+                codes::NO_CREDENTIALS,
+                "no API key configured",
+                "save a key in Settings first",
+            )
+        })?,
+    };
+    let report = credential::test_connection(&base, &key)
+        .await
+        .map_err(into_command)?;
+    Ok(ConnectionTestDto {
+        base_url: report.base_url,
+        http_status: report.http_status,
+        model_count: report.model_count,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -777,5 +919,41 @@ mod tests {
         }
         let unknown = r#"{"kind":"project"}"#;
         assert!(serde_json::from_str::<DeleteTargetInput>(unknown).is_err());
+    }
+
+    #[test]
+    fn credential_status_exposes_only_source_and_masked_tail() {
+        let resolution = credential::ApiKeyResolution {
+            key: Some("abcd1234".into()),
+            source: credential::KeySource::Keychain,
+        };
+        let status = credential_status_from("https://proxy.example.com".into(), &resolution);
+        assert_eq!(status.key_source, "keychain");
+        assert_eq!(status.key_tail.as_deref(), Some("1234"));
+        assert_eq!(status.base_url, "https://proxy.example.com");
+        let json = serde_json::to_value(&status).unwrap();
+        assert_eq!(json["keySource"], "keychain");
+        assert_eq!(json["keyTail"], "1234");
+        assert_eq!(json["baseUrl"], "https://proxy.example.com");
+        // The full key must never appear anywhere in the DTO.
+        let rendered = json.to_string();
+        assert!(!rendered.contains("abcd1234"), "DTO leaked the key: {rendered}");
+
+        let none = credential::ApiKeyResolution { key: None, source: credential::KeySource::None };
+        let status = credential_status_from("https://api.openai.com".into(), &none);
+        assert_eq!(status.key_source, "none");
+        assert_eq!(status.key_tail, None);
+    }
+
+    #[test]
+    fn test_connection_input_deserializes_camel_case_drafts() {
+        let parsed: TestConnectionInput = serde_json::from_str(
+            r#"{"baseUrl":"https://proxy.example.com/","apiKey":" draft-key-9 "}"#,
+        )
+        .unwrap();
+        assert_eq!(parsed.base_url.as_deref(), Some("https://proxy.example.com/"));
+        assert_eq!(parsed.api_key.as_deref(), Some(" draft-key-9 "));
+        let empty: TestConnectionInput = serde_json::from_str("{}").unwrap();
+        assert!(empty.base_url.is_none() && empty.api_key.is_none());
     }
 }

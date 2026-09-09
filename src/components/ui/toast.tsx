@@ -69,6 +69,19 @@ function ToastCard({
         {item.hint && (
           <p className="text-xs leading-snug break-words text-muted-foreground">{item.hint}</p>
         )}
+        {item.action && (
+          <button
+            type="button"
+            data-testid="toast-action"
+            onClick={() => {
+              item.action?.run();
+              onDismiss(item.id);
+            }}
+            className="mt-0.5 self-start rounded-sm text-xs font-medium text-primary underline-offset-2 transition-colors duration-150 ease-out hover:underline"
+          >
+            {item.action.label}
+          </button>
+        )}
       </div>
       <button
         type="button"

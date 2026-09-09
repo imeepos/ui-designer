@@ -159,6 +159,8 @@ const KNOWN_CODES = new Set([
   "NOT_FOUND",
   "DUPLICATE_SLUG",
   "DUPLICATE_NAME",
+  "NO_CREDENTIALS",
+  "KEYCHAIN_ACCESS",
   "CANCELLED",
   "EXPORT_FAILED",
   "API_ERROR",
@@ -166,7 +168,8 @@ const KNOWN_CODES = new Set([
   "UNKNOWN",
 ]);
 
-function toApiError(error: unknown): ApiError {
+/** Map a raw Rust command rejection into the typed `ApiError`. */
+export function toApiError(error: unknown): ApiError {
   if (error instanceof ApiError) return error;
   if (error && typeof error === "object" && "code" in error) {
     const raw = error as { code?: unknown; message?: unknown; hint?: unknown };

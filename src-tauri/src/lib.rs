@@ -27,6 +27,11 @@ pub fn run() {
             commands::pick_component,
             commands::export_project,
             commands::delete_artifact,
+            commands::get_credential_status,
+            commands::save_api_key,
+            commands::clear_api_key,
+            commands::save_base_url,
+            commands::test_connection,
         ])
         .run(tauri::generate_context!())
         .expect("error while running rudder desktop shell");

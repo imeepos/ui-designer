@@ -10,9 +10,15 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { isApiError } from "@/lib/api/types";
+import { requestOpenSettings } from "@/lib/events";
 import { ToastViewport } from "@/components/ui/toast";
 
 export type ToastVariant = "success" | "error" | "info";
+
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
 
 export interface ToastItem {
   id: number;
@@ -21,6 +27,8 @@ export interface ToastItem {
   hint?: string;
   /** Error code badge (ApiError.code), rendered in mono. */
   code?: string;
+  /** Optional inline action (e.g. NO_CREDENTIALS → open Settings). */
+  action?: ToastAction;
 }
 
 export interface ToastApi {
@@ -83,7 +91,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 defaultValue: error.hint,
               })
             : undefined;
-          push({ variant: "error", message, hint, code: error.code }, ERROR_TIMEOUT_MS);
+          // NO_CREDENTIALS guides the user straight into the Settings dialog
+          // (the keychain can only be filled there or via the CLI).
+          const action =
+            error.code === "NO_CREDENTIALS"
+              ? { label: t("toast.openSettings"), run: requestOpenSettings }
+              : undefined;
+          push(
+            { variant: "error", message, hint, code: error.code, action },
+            ERROR_TIMEOUT_MS,
+          );
           return;
         }
         push(

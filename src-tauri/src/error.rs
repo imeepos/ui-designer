@@ -15,6 +15,8 @@ pub mod codes {
     pub const NOT_FOUND: &str = "NOT_FOUND";
     pub const DUPLICATE_SLUG: &str = "DUPLICATE_SLUG";
     pub const DUPLICATE_NAME: &str = "DUPLICATE_NAME";
+    pub const NO_CREDENTIALS: &str = "NO_CREDENTIALS";
+    pub const KEYCHAIN_ACCESS: &str = "KEYCHAIN_ACCESS";
     pub const EXPORT_FAILED: &str = "EXPORT_FAILED";
     pub const API_ERROR: &str = "API_ERROR";
     pub const UNKNOWN: &str = "UNKNOWN";
@@ -66,8 +68,9 @@ impl CommandError {
             RudderError::SizeInvalid { .. } | RudderError::InvalidArg { .. } => {
                 codes::VALIDATION_ERROR
             }
-            RudderError::CredentialMissing
-            | RudderError::ApiError { .. }
+            RudderError::CredentialMissing => codes::NO_CREDENTIALS,
+            RudderError::KeychainAccess { .. } => codes::KEYCHAIN_ACCESS,
+            RudderError::ApiError { .. }
             | RudderError::RateLimited { .. }
             | RudderError::ApiUnreachable { .. }
             | RudderError::BadResponse { .. } => codes::API_ERROR,
@@ -92,13 +95,15 @@ mod tests {
 
     #[test]
     fn core_errors_map_to_frontend_codes() {
-        let cases: [(RudderError, &str); 6] = [
+        let cases: [(RudderError, &str); 8] = [
             (RudderError::SizeInvalid { detail: "x".into() }, "VALIDATION_ERROR"),
             (RudderError::NoAnchor, "ANCHOR_REQUIRED"),
             (RudderError::NotFound { what: "page".into() }, "NOT_FOUND"),
             (RudderError::RateLimited { body_summary: "x".into() }, "API_ERROR"),
-            (RudderError::CredentialMissing, "API_ERROR"),
+            (RudderError::CredentialMissing, "NO_CREDENTIALS"),
+            (RudderError::KeychainAccess { detail: "x".into() }, "KEYCHAIN_ACCESS"),
             (RudderError::NotAProject { path: "/x".into() }, "NOT_FOUND"),
+            (RudderError::BadResponse { detail: "x".into() }, "API_ERROR"),
         ];
         for (err, code) in cases {
             assert_eq!(CommandError::from_core(&err).code, code);

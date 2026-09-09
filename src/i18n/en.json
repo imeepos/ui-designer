@@ -12,6 +12,31 @@
     "toggleToLight": "Switch to light mode",
     "toggleToDark": "Switch to dark mode"
   },
+  "settings": {
+    "open": "Settings",
+    "title": "Settings",
+    "baseUrl": "Base URL",
+    "baseUrlPlaceholder": "https://api.openai.com",
+    "baseUrlHint": "Leave empty for the official endpoint; the OPENAI_BASE_URL env var wins over this value.",
+    "apiKey": "API Key",
+    "apiKeyPlaceholder": "Paste a new API key (saved to the OS keychain)",
+    "apiKeyStored": "Stored in keychain (tail {{tail}})",
+    "apiKeyEnv": "Using the env key (tail {{tail}})",
+    "keySourceValue": "Current source: {{source}}",
+    "sourceEnv": "Environment",
+    "sourceKeychain": "OS keychain",
+    "sourceNone": "Not configured",
+    "priorityHint": "Keys are kept only in the OS keychain, never in plain files; env OPENAI_API_KEY takes priority over the keychain.",
+    "save": "Save to keychain",
+    "saving": "Saving…",
+    "clear": "Clear",
+    "test": "Test connection",
+    "testing": "Testing…",
+    "testOk": "Connected: {{count}} models available",
+    "testFailed": "Connection failed",
+    "saveOk": "API key saved to the OS keychain.",
+    "cleared": "API key removed from the keychain."
+  },
   "steps": {
     "label": "Design flow",
     "locked": "Finish the previous steps first",
@@ -276,7 +301,8 @@
       "export": "Asset bundle exported, {{count}} files.",
       "deleted": "Deleted."
     },
-    "cancelled": "Operation cancelled."
+    "cancelled": "Operation cancelled.",
+    "openSettings": "Open Settings"
   },
   "confirm": {
     "deleteCandidate": {
@@ -316,6 +342,14 @@
     "DUPLICATE_NAME": {
       "message": "This component name already exists.",
       "hint": "Choose another name."
+    },
+    "NO_CREDENTIALS": {
+      "message": "No API credentials configured yet.",
+      "hint": "Open Settings and save an API key first."
+    },
+    "KEYCHAIN_ACCESS": {
+      "message": "OS keychain access failed.",
+      "hint": "Unlock / authorize your keychain, or use OPENAI_API_KEY instead."
     },
     "EXPORT_FAILED": {
       "message": "Export failed.",

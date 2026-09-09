@@ -151,6 +151,8 @@ export type ApiErrorCode =
   | "NOT_FOUND"
   | "DUPLICATE_SLUG"
   | "DUPLICATE_NAME"
+  | "NO_CREDENTIALS"
+  | "KEYCHAIN_ACCESS"
   | "CANCELLED"
   | "EXPORT_FAILED"
   | "API_ERROR"

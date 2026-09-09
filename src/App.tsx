@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderOutput } from "lucide-react";
+import { FolderOutput, Settings } from "lucide-react";
 import pkg from "../package.json";
 
 import { HelmMark } from "@/components/icons";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
 import { ExportDialog } from "@/components/export-dialog";
+import { SettingsDialog } from "@/components/settings-dialog";
 import { DetailPanel } from "@/components/panels/detail-panel";
 import { GalleryPanel } from "@/components/panels/gallery-panel";
 import { ProjectsPanel } from "@/components/panels/projects-panel";
@@ -18,6 +19,7 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useCoreStatus } from "@/hooks/use-core-status";
+import { OPEN_SETTINGS_EVENT } from "@/lib/events";
 import { StudioProvider, useStudio } from "@/state/studio";
 import { ToastProvider } from "@/state/toast";
 
@@ -37,6 +39,14 @@ function AppShell() {
   const { state, apiMode, setView } = useStudio();
   const [createOpen, setCreateOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Global toast actions (NO_CREDENTIALS) ask for Settings via CustomEvent.
+  useEffect(() => {
+    const openSettings = () => setSettingsOpen(true);
+    window.addEventListener(OPEN_SETTINGS_EVENT, openSettings);
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, openSettings);
+  }, []);
 
   const stepStates = computeStepStates(state.project, state.view);
   const unlocked = stepUnlockedMap(state.project);
@@ -68,6 +78,16 @@ function AppShell() {
           >
             <FolderOutput className="size-3.5" />
             {t("common.export")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            data-testid="settings-open"
+            aria-label={t("settings.open")}
+            title={t("settings.open")}
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="size-4" />
           </Button>
           <LanguageSwitcher />
           <ThemeToggle />
@@ -104,6 +124,7 @@ function AppShell() {
 
       <CreateProjectDialog open={createOpen} onClose={() => setCreateOpen(false)} />
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }
