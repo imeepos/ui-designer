@@ -1,6 +1,5 @@
-// 视觉走查：无头浏览器驱动 mock 模式，沿左栏目录树走完整流程并逐屏截图。
-// 路径：空态 → 建项目(自动选中总览) → 总板生成+设锚 → 页面组添加/生成/转正
-//       → 组件组同 → 暗色/英文 → 无锚项目门控 toast（置灰引导）。
+// 视觉走查（增量规格）：首页项目列表 → 新建向导（信息/生成总览/保存）→ 工作区
+// （左菜单+中央大图）→ 抽屉重生成 → 弹框切换设计稿 → 暗色/英文 → 无锚门控 toast。
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 
@@ -15,108 +14,125 @@ const run = async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.setDefaultTimeout(15000);
   const log = (...a) => console.log("[walk]", ...a);
-  const expectTreeState = async (testId, state) => {
-    const actual = await page.getByTestId(testId).getAttribute("data-state");
-    if (actual !== state) throw new Error(`tree ${testId}: expect data-state=${state}, got ${actual}`);
+
+  const waitJobDone = async () => {
+    await page.getByTestId("job-panel").waitFor();
+    await page.getByTestId("job-panel").waitFor({ state: "detached" });
   };
 
   await page.goto(BASE, { waitUntil: "networkidle" });
-  await page.getByTestId("tree-empty-create").waitFor();
-  await shot(page, "01-empty-zh-light");
-  log("01 empty ok, api-mode:", await page.getByTestId("api-mode").textContent().catch(() => "n/a"));
+  await page.getByTestId("home-view").waitFor();
+  await shot(page, "01-home-empty");
+  log("01 home empty ok, api-mode:", await page.getByTestId("api-mode").textContent().catch(() => "n/a"));
 
-  // 步骤1：新建项目 → 自动选中「总览」
+  // 向导 ①：项目信息 → 创建
   await page.getByTestId("new-project").click();
-  await page.getByTestId("project-name-input").fill("远洋航运 SaaS");
-  await page.getByTestId("project-brief-input").fill("深海航行工作室气质，海军蓝主色+琥珀金点缀，克制专业");
-  await page.getByTestId("create-project-submit").click();
-  await page.getByTestId("board-section").waitFor();
-  await page.getByTestId("tree-root").waitFor();
-  await expectTreeState("tree-group-overview", "current");
-  await expectTreeState("tree-group-pages", "locked");
-  await expectTreeState("tree-group-components", "locked");
-  await shot(page, "02-overview-auto-selected");
-  log("02 project created, tree auto-selects overview; pages/components locked");
+  await page.getByTestId("create-wizard").waitFor();
+  await page.getByTestId("wizard-name-input").fill("远洋航运 SaaS");
+  await page.getByTestId("wizard-brief-input").fill("深海航行工作室气质，海军蓝主色+琥珀金点缀，克制专业");
+  await shot(page, "02-wizard-info");
+  await page.getByTestId("wizard-create").click();
+  await page.getByTestId("wizard-generate").waitFor();
+  log("02 wizard step1 created, step2 unlocked");
 
-  // 步骤2：总览 = 总板视图（锚点条 + 候选网格 + 右栏生成入口）
-  await page.getByTestId("board-generate").click();
-  await page.locator('[data-testid^="board-candidate-"]').first().waitFor();
-  await shot(page, "03-board-candidates");
-  await page.locator('[data-testid^="board-candidate-"] [data-testid="action-set-anchor"]').first().click();
-  await page.getByTestId("anchor-badge").first().waitFor();
-  await shot(page, "04-anchor-picked");
-  await expectTreeState("tree-group-pages", "default");
-  log("03-04 board generated + anchor picked; pages group unlocked (no forced jump)");
+  // 向导 ②：生成总览 + 选锚
+  await page.getByTestId("wizard-generate").click();
+  await page.getByTestId("wizard-candidates").waitFor();
+  await page.locator('[data-testid^="wizard-candidate-"]').first().waitFor();
+  await shot(page, "03-wizard-overview-candidates");
+  await page.locator('[data-testid^="wizard-candidate-"]').first().click();
+  await page.locator('[data-testid^="wizard-candidate-"] >> nth=0').locator("svg").first().waitFor();
+  await shot(page, "04-wizard-anchor-picked");
+  log("03-04 overview generated + anchor picked inside wizard");
 
-  // 步骤3：点「页面」组 → 组视图；行尾「+」打开添加表单
-  await page.getByTestId("tree-group-open-pages").click();
-  await page.getByTestId("page-section").waitFor();
-  await expectTreeState("tree-group-pages", "current");
-  await shot(page, "05-pages-group-empty");
-  await page.getByTestId("tree-add-pages").click();
-  await page.getByTestId("add-page-form").waitFor();
+  // 向导 ③：保存进入项目 → 工作区总览大图
+  await page.getByTestId("wizard-to-save").click();
+  await page.getByTestId("wizard-save").click();
+  await page.getByTestId("workspace-view").waitFor();
+  await page.getByTestId("stage-image").waitFor();
+  await shot(page, "05-workspace-overview");
+  log("05 entered workspace; anchor on stage");
+
+  // 左菜单添加页面 → 舞台空态
+  await page.getByTestId("menu-add-pages").click();
+  await page.getByTestId("add-page-dialog").waitFor();
   await page.getByTestId("page-slug-input").fill("dashboard");
   await page.locator('[data-testid="add-page-form"] textarea').first().fill("顶部4张指标卡，中部折线图，右侧任务列表");
   await page.getByTestId("add-page-submit").click();
-  await page.getByTestId("tree-page-dashboard").waitFor();
-  await expectTreeState("tree-page-dashboard", "current");
-  await shot(page, "06-page-added-tree-selected");
-  log("05-06 page group + tree-add flow; tree auto-selects page:dashboard");
+  await page.getByTestId("menu-page-dashboard").waitFor();
+  await page.getByTestId("stage-empty-regenerate").waitFor();
+  await shot(page, "06-page-added-empty-stage");
+  log("06 page added via menu; stage shows empty state");
 
-  // 页面生成 + 转正
-  await page.getByTestId("page-generate").first().click();
-  await page.locator('[data-testid^="page-candidate-"]').first().waitFor();
-  await shot(page, "07-page-candidates");
-  await page.locator('[data-testid^="page-candidate-"] [data-testid="action-pick"]').first().click();
-  await page.locator('[data-testid$="picked-badge"]').first().waitFor();
-  await page.waitForTimeout(300);
-  await shot(page, "08-page-picked");
-  await expectTreeState("tree-group-components", "default");
-  log("07-08 page generated + picked; components group unlocked");
+  // 抽屉重生成：编辑简报 → 生成（先 update 落库）→ 抽屉内进度
+  await page.getByTestId("stage-regenerate").click();
+  await page.getByTestId("regen-drawer").waitFor();
+  await page.getByTestId("drawer-brief").fill("顶部4张指标卡，中部折线图，右侧任务列表；底部加时间线");
+  await page.getByTestId("drawer-generate").click();
+  await page.getByTestId("job-panel").waitFor();
+  await shot(page, "07-drawer-regenerating");
+  await waitJobDone();
+  await page.getByTestId("drawer-close").click();
+  await page.getByTestId("stage-empty-switch").waitFor();
+  log("07 drawer regenerated (brief persisted via update); candidates ready");
 
-  // 步骤4：组件组同路径
-  await page.getByTestId("tree-group-open-components").click();
-  await page.getByTestId("component-section").waitFor();
-  await page.getByTestId("tree-add-components").click();
-  await page.getByTestId("add-component-form").waitFor();
+  // 弹框切换设计稿：预览+单选+确认 → 中央即时换图
+  await page.getByTestId("stage-empty-switch").click();
+  await page.getByTestId("switch-dialog").waitFor();
+  await page.locator('[data-testid^="switch-candidate-"]').first().waitFor();
+  await shot(page, "08-switch-dialog");
+  await page.locator('[data-testid^="switch-candidate-"]').first().click();
+  await page.getByTestId("switch-confirm").click();
+  await page.getByTestId("stage-image").waitFor();
+  await shot(page, "09-draft-switched");
+  log("08-09 switch dialog picked; stage shows new current");
+
+  // 组件同路径（压缩：添加→抽屉生成→切换）
+  await page.getByTestId("menu-add-components").click();
+  await page.getByTestId("add-component-dialog").waitFor();
   await page.getByTestId("component-name-input").fill("button-set");
   await page.getByTestId("component-brief-input").fill("主/次/幽灵按钮，含悬停与禁用态");
   await page.getByTestId("add-component-submit").click();
-  await page.getByTestId("tree-component-button-set").waitFor();
-  await expectTreeState("tree-component-button-set", "current");
-  await page.getByTestId("component-generate").first().click();
-  await page.locator('[data-testid^="component-candidate-"]').first().waitFor();
-  await page.locator('[data-testid^="component-candidate-"] [data-testid="action-pick"]').first().click();
-  await page.locator('[data-testid$="picked-badge"]').first().waitFor();
+  await page.getByTestId("menu-component-button-set").waitFor();
+  await page.getByTestId("stage-regenerate").click();
+  await page.getByTestId("drawer-generate").click();
+  await waitJobDone();
+  await page.getByTestId("drawer-close").click();
+  await page.getByTestId("stage-empty-switch").click();
+  await page.locator('[data-testid^="switch-candidate-"]').first().click();
+  await page.getByTestId("switch-confirm").click();
+  await page.getByTestId("stage-image").waitFor();
   await page.waitForTimeout(300);
-  await shot(page, "09-component-picked");
-  log("09 component generated + picked via tree entry");
+  await shot(page, "10-component-picked");
+  log("10 component flow done via drawer + dialog");
 
   // 暗色 + 英文
   await page.getByTestId("theme-toggle").click();
   await page.waitForTimeout(200);
-  await shot(page, "10-dark");
+  await shot(page, "11-dark");
   await page.getByTestId("language-switcher").getByRole("button", { name: "EN" }).click();
   await page.waitForTimeout(200);
-  await shot(page, "11-dark-en");
-  log("10-11 dark + en done");
+  await shot(page, "12-dark-en");
+  log("11-12 dark + en done");
 
-  // 门控负例：新建一个未设锚项目，点置灰「页面」组 → toast 引导（不跳转）
+  // 门控负例：向导跳过总览 → 工作区添加页面 → ANCHOR_REQUIRED 引导
+  await page.getByTestId("back-home").click();
+  await page.getByTestId("home-view").waitFor();
   await page.getByTestId("new-project").click();
-  await page.getByTestId("project-name-input").fill("尚未设锚的试验项目");
-  await page.getByTestId("create-project-submit").click();
-  await page.getByTestId("board-section").waitFor();
-  await expectTreeState("tree-group-pages", "locked");
-  // aria-disabled 节点仍可接收点击（用于弹出引导 toast），Playwright 需 force。
-  await page.getByTestId("tree-group-open-pages").click({ force: true });
+  await page.getByTestId("wizard-name-input").fill("尚未设锚的试验项目");
+  await page.getByTestId("wizard-create").click();
+  await page.getByTestId("wizard-skip").click();
+  await page.getByTestId("wizard-save").click();
+  await page.getByTestId("workspace-view").waitFor();
+  await page.getByTestId("menu-add-pages").click();
   await page.getByTestId("toast-error").waitFor();
-  await shot(page, "12-tree-locked-toast");
   const toastText = await page.getByTestId("toast-error").textContent();
   if (!toastText.includes("ANCHOR_REQUIRED")) throw new Error(`locked toast missing code: ${toastText}`);
-  log("12 locked pages group guides with ANCHOR_REQUIRED toast");
+  await shot(page, "13-gating-toast");
+  log("13 gating: no-anchor add guides with ANCHOR_REQUIRED toast");
 
   await browser.close();
-  console.log("[walk] PASS: 12 screenshots in", OUT);
+  console.log("[walk] PASS: 13 screenshots in", OUT);
 };
 
 run().catch((e) => { console.error("[walk] FAIL:", e.message); process.exit(1); });

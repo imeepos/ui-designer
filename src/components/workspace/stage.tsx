@@ -83,17 +83,15 @@ export function Stage({
         <h2 className="min-w-0 flex-1 truncate font-mono text-sm font-semibold text-foreground">
           {title}
         </h2>
-        {current && (
-          <Button
-            variant="outline"
-            size="sm"
-            data-testid="stage-regenerate"
-            onClick={onRegenerate}
-          >
-            <RefreshCw className="size-3.5" />
-            {t("workspace.regenerate")}
-          </Button>
-        )}
+        <Button
+          variant="outline"
+          size="sm"
+          data-testid="stage-regenerate"
+          onClick={onRegenerate}
+        >
+          <RefreshCw className="size-3.5" />
+          {t("workspace.regenerate")}
+        </Button>
         <Button
           variant="outline"
           size="sm"
@@ -127,13 +125,14 @@ export function Stage({
               data-testid="stage-image"
               title={t("common.enlarge")}
               onClick={() => setLightboxUrl(current.url)}
-              className="max-h-full max-w-full overflow-hidden rounded-lg border bg-card transition-colors duration-150 ease-out hover:border-primary"
+              className="block w-full max-w-3xl overflow-hidden rounded-lg border bg-card transition-colors duration-150 ease-out hover:border-primary"
             >
               <ArtImage
                 src={current.url}
                 filter={current.filter}
                 alt={title}
-                className="max-h-[70vh] w-auto max-w-full object-contain"
+                fit="contain"
+                className="aspect-video w-full"
               />
             </button>
             <div className="flex w-full max-w-xl flex-col items-center gap-1 text-center">
