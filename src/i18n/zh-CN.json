@@ -22,6 +22,8 @@
     "apiKeyPlaceholder": "输入新的 API Key（保存到系统钥匙串）",
     "apiKeyStored": "已存钥匙串（尾 4 位 {{tail}}）",
     "apiKeyEnv": "当前使用环境变量密钥（尾 4 位 {{tail}}）",
+    "model": "模型名",
+    "modelHint": "留空使用默认 gpt-image-2；环境变量 OPENAI_MODEL 优先。点「测试连接」后会填入可用模型供选择。",
     "keySourceValue": "当前来源：{{source}}",
     "sourceEnv": "环境变量",
     "sourceKeychain": "系统钥匙串",
@@ -66,10 +68,15 @@
     "pageCount": "{{count}} 页",
     "componentCount": "{{count}} 组件",
     "created": "创建于 {{date}}",
+    "anchorThumbAlt": "项目「{{name}}」的锚点图",
+    "noAnchorThumb": "暂无锚点图",
     "empty": {
       "title": "还没有项目",
       "desc": "新建项目，从设计系统总览开始一套 UI 设计。"
     }
+  },
+  "stage": {
+    "fit": "适配窗口"
   },
   "wizard": {
     "title": "新建项目",

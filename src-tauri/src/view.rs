@@ -87,6 +87,10 @@ pub struct ProjectSummaryDto {
     pub size: CanvasDto,
     pub created_at: i64,
     pub has_anchor: bool,
+    /// Absolute path of `board/anchor.png` (None → frontend renders the
+    /// compass placeholder); the client maps it to an asset URL.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anchor_path: Option<String>,
     pub page_count: usize,
     pub component_count: usize,
 }
@@ -358,14 +362,23 @@ fn component_view(
     })
 }
 
-/// `ProjectSummary` (left column list).
-pub fn build_summary(project: &Project) -> ProjectSummaryDto {
+/// `ProjectSummary` (home project cards): `project.json` fields plus the
+/// on-disk anchor thumbnail path (card preview; `None` → compass empty
+/// state).
+pub fn build_summary(root: &Path, project: &Project) -> ProjectSummaryDto {
+    let anchor_png = root.join("board").join("anchor.png");
+    let anchor_path = if project.anchor.is_some() && anchor_png.is_file() {
+        Some(anchor_png.display().to_string())
+    } else {
+        None
+    };
     ProjectSummaryDto {
         id: project.id.clone(),
         name: project.name.clone(),
         size: canvas_view(&project.canvas_size),
         created_at: rfc3339_to_ms(&project.created_at),
         has_anchor: project.anchor.is_some(),
+        anchor_path,
         page_count: project.pages.len(),
         component_count: project.components.len(),
     }
@@ -550,12 +563,25 @@ mod tests {
         });
         store::save_project(&root, &project).unwrap();
         store::atomic_write(&root.join("pages/dashboard/current.png"), b"current").unwrap();
+        store::atomic_write(&root.join("board/anchor.png"), b"anchor").unwrap();
 
         let detail = build_detail(&root, &project).unwrap();
         assert_eq!(detail.size.preset, "web");
-        let summary = build_summary(&project);
+        let summary = build_summary(&root, &project);
         assert!(summary.has_anchor);
         assert_eq!(summary.page_count, 1);
+        // Anchor thumbnail path for the home card (file exists on disk).
+        assert_eq!(
+            summary.anchor_path.as_deref(),
+            Some(root.join("board/anchor.png").display().to_string()).as_deref()
+        );
+        // Serialized shape mirrors the frontend DTO mapping.
+        let summary_json = serde_json::to_value(&summary).unwrap();
+        assert_eq!(summary_json["hasAnchor"], true);
+        assert!(summary_json["anchorPath"]
+            .as_str()
+            .expect("anchorPath present")
+            .ends_with("board/anchor.png"));
         let anchor = detail.anchor.as_ref().expect("anchor present");
         assert_eq!(anchor.candidate_id, "0001");
         assert!(anchor.path.ends_with("board/anchor.png"));

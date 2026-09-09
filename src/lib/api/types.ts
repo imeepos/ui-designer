@@ -77,6 +77,8 @@ export interface ProjectSummary {
   size: CanvasSize;
   createdAt: number;
   hasAnchor: boolean;
+  /** Anchor board image for the home card preview; null → compass empty state. */
+  anchorUrl: string | null;
   pageCount: number;
   componentCount: number;
 }

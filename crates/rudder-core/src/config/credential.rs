@@ -11,8 +11,8 @@
 //! - Set `RUDDER_KEYCHAIN=0|off|false|no` to ignore the keychain entirely
 //!   (hermetic tests, CI, shared machines).
 //! - [`test_connection`] probes `GET {base}/v1/models` (free call, no image
-//!   spend): HTTP 200 required and the model list must contain
-//!   `gpt-image-2`.
+//!   spend): HTTP 200 required and the model list must contain the effective
+//!   image model (`config::resolve_model`).
 
 use crate::error::{Result, RudderError};
 use serde::Serialize;
@@ -269,13 +269,20 @@ pub struct ConnectionTestReport {
     pub http_status: u16,
     /// Number of models visible to this key.
     pub model_count: usize,
-    /// Whether `gpt-image-2` is among the visible models.
+    /// Whether the requested model is among the visible models.
     pub has_image_model: bool,
+    /// All visible model ids (settings dialog datalist; never a secret).
+    pub models: Vec<String>,
 }
 
 /// Probe `GET {base}/v1/models` with `key`: free, validates reachability,
-/// auth, and that the endpoint actually serves `gpt-image-2`.
-pub async fn test_connection(base_url: &str, api_key: &str) -> Result<ConnectionTestReport> {
+/// auth, and that the endpoint actually serves `model` (the effective
+/// image model from [`crate::config::resolve_model`]).
+pub async fn test_connection(
+    base_url: &str,
+    api_key: &str,
+    model: &str,
+) -> Result<ConnectionTestReport> {
     let base = base_url.trim().trim_end_matches('/');
     if base.is_empty() {
         return Err(RudderError::InvalidArg { detail: "base url is empty".into() });
@@ -283,6 +290,10 @@ pub async fn test_connection(base_url: &str, api_key: &str) -> Result<Connection
     let key = api_key.trim();
     if key.is_empty() {
         return Err(RudderError::InvalidArg { detail: "api key is empty".into() });
+    }
+    let model = model.trim();
+    if model.is_empty() {
+        return Err(RudderError::InvalidArg { detail: "model is empty".into() });
     }
     let url = format!("{base}/v1/models");
     let http = reqwest::Client::builder()
@@ -321,12 +332,11 @@ pub async fn test_connection(base_url: &str, api_key: &str) -> Result<Connection
             detail: "`/v1/models` returned no `data[].id` entries".into(),
         });
     }
-    let has_image_model = models.iter().any(|model| model == crate::image::MODEL);
+    let has_image_model = models.iter().any(|served| served == model);
     if !has_image_model {
         return Err(RudderError::BadResponse {
             detail: format!(
-                "model `{}` is not served at this endpoint ({} model(s) visible)",
-                crate::image::MODEL,
+                "model `{model}` is not served at this endpoint ({} model(s) visible)",
                 models.len()
             ),
         });
@@ -336,6 +346,7 @@ pub async fn test_connection(base_url: &str, api_key: &str) -> Result<Connection
         http_status: status.as_u16(),
         model_count: models.len(),
         has_image_model: true,
+        models,
     })
 }
 
@@ -528,24 +539,41 @@ mod tests {
     #[tokio::test]
     async fn probe_reports_model_count_on_200() {
         let base = spawn_models_server(200, MODELS_BODY);
-        let report = test_connection(&base, "probe-key-1").await.unwrap();
+        let report = test_connection(&base, "probe-key-1", crate::image::MODEL).await.unwrap();
         assert_eq!(report.http_status, 200);
         assert_eq!(report.model_count, 2);
         assert!(report.has_image_model);
         assert_eq!(report.base_url, base);
+        assert_eq!(report.models, ["gpt-image-2", "gpt-4o"]);
+    }
+
+    #[tokio::test]
+    async fn probe_checks_the_requested_model_not_a_hardcoded_one() {
+        // Each probe gets its own server: the mock accepts one connection.
+        let base = spawn_models_server(200, MODELS_BODY);
+        // A custom configured model must be accepted when it is served…
+        let report = test_connection(&base, "probe-key-1", "gpt-4o").await.unwrap();
+        assert!(report.has_image_model);
+        let base = spawn_models_server(200, MODELS_BODY);
+        // …and rejected when it is not, whatever the default says.
+        let err = test_connection(&base, "probe-key-1", "not-served-model").await.unwrap_err();
+        assert_eq!(err.code(), "BAD_RESPONSE");
+        assert!(err.to_string().contains("not-served-model"));
     }
 
     #[tokio::test]
     async fn probe_normalizes_trailing_slashes() {
         let base = spawn_models_server(200, MODELS_BODY);
-        let report = test_connection(&format!("{base}///"), "probe-key-1").await.unwrap();
+        let report = test_connection(&format!("{base}///"), "probe-key-1", crate::image::MODEL)
+            .await
+            .unwrap();
         assert_eq!(report.base_url, base);
     }
 
     #[tokio::test]
     async fn probe_maps_http_errors_with_body_summary() {
         let base = spawn_models_server(401, r#"{"error":"bad key"}"#);
-        let err = test_connection(&base, "probe-key-1").await.unwrap_err();
+        let err = test_connection(&base, "probe-key-1", crate::image::MODEL).await.unwrap_err();
         match &err {
             RudderError::ApiError { status, body_summary } => {
                 assert_eq!(*status, 401);
@@ -560,7 +588,7 @@ mod tests {
     #[tokio::test]
     async fn probe_requires_gpt_image_model() {
         let base = spawn_models_server(200, r#"{"data":[{"id":"gpt-4o"}]}"#);
-        let err = test_connection(&base, "probe-key-1").await.unwrap_err();
+        let err = test_connection(&base, "probe-key-1", crate::image::MODEL).await.unwrap_err();
         assert_eq!(err.code(), "BAD_RESPONSE");
         assert!(err.to_string().contains(crate::image::MODEL));
     }
@@ -568,21 +596,27 @@ mod tests {
     #[tokio::test]
     async fn probe_flags_missing_model_list() {
         let base = spawn_models_server(200, r#"{"data":[]}"#);
-        let err = test_connection(&base, "probe-key-1").await.unwrap_err();
+        let err = test_connection(&base, "probe-key-1", crate::image::MODEL).await.unwrap_err();
         assert_eq!(err.code(), "BAD_RESPONSE");
     }
 
     #[tokio::test]
     async fn probe_reports_unreachable_endpoints() {
-        let err = test_connection("http://127.0.0.1:1", "probe-key-1").await.unwrap_err();
+        let err = test_connection("http://127.0.0.1:1", "probe-key-1", crate::image::MODEL)
+            .await
+            .unwrap_err();
         assert_eq!(err.code(), "API_UNREACHABLE");
     }
 
     #[tokio::test]
     async fn probe_rejects_blank_inputs_before_network() {
-        let err = test_connection("", "probe-key-1").await.unwrap_err();
+        let err = test_connection("", "probe-key-1", crate::image::MODEL).await.unwrap_err();
         assert_eq!(err.code(), "INVALID_ARG");
-        let err = test_connection("http://127.0.0.1:1", "  ").await.unwrap_err();
+        let err = test_connection("http://127.0.0.1:1", "  ", crate::image::MODEL)
+            .await
+            .unwrap_err();
+        assert_eq!(err.code(), "INVALID_ARG");
+        let err = test_connection("http://127.0.0.1:1", "probe-key-1", "  ").await.unwrap_err();
         assert_eq!(err.code(), "INVALID_ARG");
     }
 }

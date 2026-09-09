@@ -9,7 +9,7 @@
 //!   `started` / `finished` / `failed` phases so the UI can drive skeleton
 //!   copy; `jobId` correlates events with the invoking call.
 
-use rudder_core::config::{credential, resolve_base_url, Config};
+use rudder_core::config::{credential, resolve_base_url, resolve_model, Config};
 use rudder_core::image::ImageClient;
 use rudder_core::ops::{self, GenerateOptions, Target};
 use rudder_core::store::{self, Project};
@@ -369,7 +369,7 @@ pub async fn list_projects() -> Result<Vec<ProjectSummaryDto>, CommandError> {
     let found = projects::list_projects().map_err(into_command)?;
     Ok(found
         .into_iter()
-        .map(|(_, project)| view::build_summary(&project))
+        .map(|(root, project)| view::build_summary(&root, &project))
         .collect())
 }
 
@@ -722,12 +722,16 @@ pub async fn delete_artifact(
 // ---------------------------------------------------------------------------
 
 /// Shell-level credential status. Never carries the key itself — only the
-/// effective base URL, the source label and the masked tail (≤4 chars).
+/// effective base URL, the effective model name, the source label and the
+/// masked tail (≤4 chars).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CredentialStatusDto {
     /// Effective base URL after the env → config.json → default chain.
     pub base_url: String,
+    /// Effective model name after the `OPENAI_MODEL` → config.json → default
+    /// chain (`config::resolve_model`).
+    pub model: String,
     /// `env` | `keychain` | `none`.
     pub key_source: String,
     /// Last 4 characters of the resolved key, when one is configured.
@@ -735,13 +739,18 @@ pub struct CredentialStatusDto {
 }
 
 fn credential_status() -> CredentialStatusDto {
-    credential_status_from(resolve_base_url(), &credential::resolve_api_key())
+    credential_status_from(resolve_base_url(), resolve_model(), &credential::resolve_api_key())
 }
 
 /// Pure shaping of the status DTO (unit-testable without a keychain).
-fn credential_status_from(base_url: String, resolution: &credential::ApiKeyResolution) -> CredentialStatusDto {
+fn credential_status_from(
+    base_url: String,
+    model: String,
+    resolution: &credential::ApiKeyResolution,
+) -> CredentialStatusDto {
     CredentialStatusDto {
         base_url,
+        model,
         key_source: resolution.source.as_str().to_string(),
         key_tail: resolution.key.as_deref().map(credential::tail4),
     }
@@ -793,13 +802,20 @@ pub async fn clear_api_key() -> Result<CredentialStatusDto, CommandError> {
     .await
 }
 
-/// Persist the non-sensitive base URL override into `~/Rudder/config.json`
-/// (empty string resets to the env/default chain).
+/// Persist the non-sensitive overrides into `~/Rudder/config.json` (empty
+/// strings reset to the env/default chains). `model` is `None` when the
+/// dialog did not touch the field — only `Some` values are written.
 #[tauri::command]
-pub async fn save_base_url(base_url: String) -> Result<CredentialStatusDto, CommandError> {
+pub async fn save_base_url(
+    base_url: String,
+    model: Option<String>,
+) -> Result<CredentialStatusDto, CommandError> {
     blocking("config", "retry the save", move || {
         let mut config = Config::load();
         config.set("base_url", &base_url).map_err(into_command)?;
+        if let Some(model) = model {
+            config.set("model", &model).map_err(into_command)?;
+        }
         config.save().map_err(into_command)?;
         Ok(credential_status())
     })
@@ -824,6 +840,11 @@ pub struct ConnectionTestDto {
     pub base_url: String,
     pub http_status: u16,
     pub model_count: usize,
+    /// The effective model probed (`env` → config → default).
+    pub model: String,
+    /// All visible model ids; the settings dialog filters image-family
+    /// names into the model input's datalist. Never contains secrets.
+    pub models: Vec<String>,
 }
 
 /// Probe `GET {base}/v1/models`: free, no image spend. Fails with
@@ -838,6 +859,7 @@ pub async fn test_connection(
         .map(|base| base.trim().trim_end_matches('/').to_string())
         .filter(|base| !base.is_empty())
         .unwrap_or_else(resolve_base_url);
+    let model = resolve_model();
     let key = match input.api_key.map(|key| key.trim().to_string()).filter(|key| !key.is_empty()) {
         Some(key) => key,
         None => credential::resolve_api_key().key.ok_or_else(|| {
@@ -848,13 +870,15 @@ pub async fn test_connection(
             )
         })?,
     };
-    let report = credential::test_connection(&base, &key)
+    let report = credential::test_connection(&base, &key, &model)
         .await
         .map_err(into_command)?;
     Ok(ConnectionTestDto {
         base_url: report.base_url,
         http_status: report.http_status,
         model_count: report.model_count,
+        model,
+        models: report.models,
     })
 }
 
@@ -1099,20 +1123,26 @@ mod tests {
             key: Some("abcd1234".into()),
             source: credential::KeySource::Keychain,
         };
-        let status = credential_status_from("https://proxy.example.com".into(), &resolution);
+        let status = credential_status_from(
+            "https://proxy.example.com".into(),
+            "gpt-image-2".into(),
+            &resolution,
+        );
         assert_eq!(status.key_source, "keychain");
         assert_eq!(status.key_tail.as_deref(), Some("1234"));
         assert_eq!(status.base_url, "https://proxy.example.com");
+        assert_eq!(status.model, "gpt-image-2");
         let json = serde_json::to_value(&status).unwrap();
         assert_eq!(json["keySource"], "keychain");
         assert_eq!(json["keyTail"], "1234");
         assert_eq!(json["baseUrl"], "https://proxy.example.com");
+        assert_eq!(json["model"], "gpt-image-2");
         // The full key must never appear anywhere in the DTO.
         let rendered = json.to_string();
         assert!(!rendered.contains("abcd1234"), "DTO leaked the key: {rendered}");
 
         let none = credential::ApiKeyResolution { key: None, source: credential::KeySource::None };
-        let status = credential_status_from("https://api.openai.com".into(), &none);
+        let status = credential_status_from("https://api.openai.com".into(), "gpt-image-2".into(), &none);
         assert_eq!(status.key_source, "none");
         assert_eq!(status.key_tail, None);
     }

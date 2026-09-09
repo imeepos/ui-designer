@@ -296,11 +296,13 @@ enum ComponentCommand {
 
 #[derive(Subcommand, Debug)]
 enum ConfigCommand {
-    /// Print a key's effective value (quality | thinking | n | base_url).
+    /// Print a key's effective value (quality | thinking | n | base_url |
+    /// model).
     Get { key: String },
     /// Set a key: quality low|medium|high · thinking low|medium|high ·
-    /// n 1-4 · base_url http(s). `api-key` reads the secret from STDIN
-    /// (never argv — arguments leak into shell history) into the OS keychain.
+    /// n 1-4 · base_url http(s) · model <name>. `api-key` reads the secret
+    /// from STDIN (never argv — arguments leak into shell history) into
+    /// the OS keychain.
     Set {
         key: String,
         /// Value for non-secret keys; must be omitted for `api-key`.
@@ -824,36 +826,39 @@ fn config_set_api_key(argv_value: Option<&str>) -> Result<CmdResult, RudderError
     ))
 }
 
-/// `config test`: report base URL + key source; when a key resolves, probe
-/// `{base}/v1/models` (free call) for the visible model count. Without a
-/// key the command still succeeds and reports `keySource: "none"`.
+/// `config test`: report base URL + current model + key source; when a key
+/// resolves, probe `{base}/v1/models` (free call) for the visible model
+/// count and check the effective model is served. Without a key the
+/// command still succeeds and reports `keySource: "none"`.
 async fn config_test() -> Result<CmdResult, RudderError> {
     let base = resolve_base_url();
+    let model = rudder_core::config::resolve_model();
     let resolution = credential::resolve_api_key();
     let source = resolution.source.as_str();
     let Some(key) = resolution.key else {
         return Ok(CmdResult::new(
             format!(
-                "base: {base} · key: none — not configured \
+                "base: {base} · model: {model} · key: none — not configured \
                  (export OPENAI_API_KEY or `echo <key> | rudder config set api-key`)"
             ),
             json!({
                 "baseUrl": base,
+                "model": model,
                 "keySource": "none",
                 "tested": false,
                 "modelCount": Value::Null,
             }),
         ));
     };
-    let report = credential::test_connection(&base, &key).await?;
+    let report = credential::test_connection(&base, &key, &model).await?;
     Ok(CmdResult::new(
         format!(
-            "base: {base} · key: {source} · models: {} ({} ✓)",
-            report.model_count,
-            rudder_core::image::MODEL
+            "base: {base} · model: {model} · key: {source} · models: {} (✓)",
+            report.model_count
         ),
         json!({
             "baseUrl": base,
+            "model": model,
             "keySource": source,
             "tested": true,
             "modelCount": report.model_count,

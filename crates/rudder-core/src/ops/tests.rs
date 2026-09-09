@@ -3,7 +3,7 @@
 //! in-process mock server (see [`crate::image::tests`] for the server).
 
 use super::*;
-use crate::image::ImageClient;
+use crate::image::{ImageClient, MODEL};
 use std::sync::Once;
 use std::time::Duration;
 

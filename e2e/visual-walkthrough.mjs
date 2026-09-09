@@ -1,5 +1,6 @@
 // 视觉走查（增量规格）：首页项目列表 → 新建向导（信息/生成总览/保存）→ 工作区
-// （左菜单+中央大图）→ 抽屉重生成 → 弹框切换设计稿 → 血缘面板 → 暗色/英文 → 无锚门控 toast。
+// （左菜单+中央无限画布：滚轮缩放/拖拽平移/适配重置）→ 抽屉重生成 → 弹框切换设计稿
+// → 血缘面板 → 暗色/英文 → 无锚门控 toast → 首页卡片（锚点缩略图/罗盘占位/尺寸）。
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 
@@ -45,13 +46,58 @@ const run = async () => {
   await shot(page, "04-wizard-anchor-picked");
   log("03-04 overview generated + anchor picked inside wizard");
 
-  // 向导 ③：保存进入项目 → 工作区总览大图
+  // 向导 ③：保存进入项目 → 工作区总览无限画布
   await page.getByTestId("wizard-to-save").click();
   await page.getByTestId("wizard-save").click();
   await page.getByTestId("workspace-view").waitFor();
   await page.getByTestId("stage-image").waitFor();
   await shot(page, "05-workspace-overview");
-  log("05 entered workspace; anchor on stage");
+  log("05 entered workspace; anchor on stage canvas");
+
+  // 无限画布：滚轮以光标为锚点缩放（百分比 + transform 随动）
+  const readZoom = () => page.getByTestId("stage-zoom-level").textContent();
+  const stageLayerTx = () =>
+    page.evaluate(() => {
+      const layer = document.querySelector('[data-testid="stage-image"]')?.parentElement;
+      return layer ? new DOMMatrixReadOnly(getComputedStyle(layer).transform).m41 : NaN;
+    });
+  const canvasBox = await page.getByTestId("stage-canvas").boundingBox();
+  if (!canvasBox) throw new Error("stage canvas has no box");
+  await page.getByTestId("stage-canvas").hover({
+    position: { x: canvasBox.width / 2, y: canvasBox.height / 2 },
+  });
+  const initialZoom = await readZoom();
+  await page.mouse.wheel(0, -480);
+  await page.waitForTimeout(200);
+  const zoomed = await readZoom();
+  if (zoomed === initialZoom) throw new Error(`stage wheel zoom no-op: ${initialZoom} -> ${zoomed}`);
+  await shot(page, "05b-stage-canvas-zoom");
+  log("05b stage wheel zoom:", initialZoom, "->", zoomed);
+
+  // 无限画布：按住拖拽平移（transform 位移变化）
+  const txBefore = await stageLayerTx();
+  await page.mouse.move(canvasBox.x + canvasBox.width / 2, canvasBox.y + canvasBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    canvasBox.x + canvasBox.width / 2 + 120,
+    canvasBox.y + canvasBox.height / 2 + 60,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+  const txAfter = await stageLayerTx();
+  if (Number.isNaN(txBefore) || Number.isNaN(txAfter) || Math.abs(txAfter - txBefore) < 10) {
+    throw new Error(`stage pan no-op: ${txBefore} -> ${txAfter}`);
+  }
+  await shot(page, "05c-stage-canvas-pan");
+  log(`05c stage pan: x ${txBefore.toFixed(0)}px -> ${txAfter.toFixed(0)}px`);
+
+  // 「适配」按钮重置回初始适配窗口
+  await page.getByTestId("stage-fit").click();
+  await page.waitForTimeout(150);
+  const resetZoom = await readZoom();
+  if (resetZoom !== initialZoom) throw new Error(`stage fit reset mismatch: ${resetZoom} != ${initialZoom}`);
+  log("05d stage fit reset ok");
 
   // 左菜单添加页面 → 舞台空态
   await page.getByTestId("menu-add-pages").click();
@@ -76,7 +122,7 @@ const run = async () => {
   await page.getByTestId("stage-empty-switch").waitFor();
   log("07 drawer regenerated (brief persisted via update); candidates ready");
 
-  // 弹框切换设计稿：预览+单选+确认 → 中央即时换图
+  // 弹框切换设计稿：预览+单选+确认 → 中央画布即时换图
   await page.getByTestId("stage-empty-switch").click();
   await page.getByTestId("switch-dialog").waitFor();
   await page.locator('[data-testid^="switch-candidate-"]').first().waitFor();
@@ -144,8 +190,28 @@ const run = async () => {
   await shot(page, "14-gating-toast");
   log("14 gating: no-anchor add guides with ANCHOR_REQUIRED toast");
 
+  // 首页项目卡：锚点缩略图 + 罗盘空态占位 + 等宽尺寸文本
+  await page.getByTestId("back-home").click();
+  await page.getByTestId("home-view").waitFor();
+  const cards = page.locator('[data-testid^="project-card-"]');
+  await cards.first().waitFor();
+  if ((await cards.count()) < 2) throw new Error("expected two project cards on home");
+  // 列表按创建时间倒序：第一张 = 无锚项目 → 罗盘空态占位（无位图）；
+  const thumb0 = page.locator('[data-testid^="project-thumb-"]').first();
+  await thumb0.locator("svg").first().waitFor();
+  if ((await thumb0.locator('[role="img"]').count()) !== 0) {
+    throw new Error("anchor-less card must show the compass placeholder, not a bitmap");
+  }
+  // 第二张 = 有锚项目 → 位图缩略图 + 1536x1024 等宽尺寸。
+  const thumb1 = page.locator('[data-testid^="project-thumb-"]').nth(1);
+  await thumb1.locator('[role="img"]').first().waitFor();
+  const sizes = await page.locator('[data-testid^="project-size-"]').allTextContents();
+  if (!sizes.every((s) => /^\d+x\d+$/.test(s))) throw new Error(`bad size labels: ${sizes}`);
+  await shot(page, "15-home-cards");
+  log("15 home cards: compass placeholder + anchor thumbnail + mono size labels");
+
   await browser.close();
-  console.log("[walk] PASS: 14 screenshots in", OUT);
+  console.log("[walk] PASS: 16 screenshots in", OUT);
 };
 
 run().catch((e) => { console.error("[walk] FAIL:", e.message); process.exit(1); });

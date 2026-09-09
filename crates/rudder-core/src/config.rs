@@ -16,6 +16,10 @@ pub use credential::{
     ConnectionTestReport, KeySource,
 };
 
+/// Every non-secret key accepted by [`Config::set`] / [`Config::get`]
+/// ( surfaced in error messages; `api-key` is keychain-only).
+pub const CONFIG_KEYS: [&str; 5] = ["quality", "thinking", "n", "base_url", "model"];
+
 /// Quality levels accepted by gpt-image-2 (docs/PRD.md §3.2).
 pub const QUALITY_LEVELS: [&str; 3] = ["low", "medium", "high"];
 /// Thinking effort levels (optional passthrough field; default `medium`).
@@ -38,6 +42,11 @@ pub struct Config {
     /// this field → official endpoint (`credential::resolve_base_url`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
+    /// Image model name override. Resolution: `OPENAI_MODEL` env → this
+    /// field → `image::MODEL` default (`resolve_model`). Old config.json
+    /// files without this field keep working via the serde default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     /// Last successfully resolved project directory.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_project: Option<PathBuf>,
@@ -148,6 +157,15 @@ impl Config {
                     ));
                 }
             }
+            "model" => {
+                let trimmed = value.trim();
+                if trimmed.is_empty() {
+                    // Reset: fall back to env/default resolution.
+                    self.model = None;
+                } else {
+                    self.model = Some(trimmed.to_string());
+                }
+            }
             other => {
                 if other == "api-key" || other == "api_key" {
                     return Err(arg_err(
@@ -157,7 +175,8 @@ impl Config {
                     ));
                 }
                 return Err(arg_err(format!(
-                    "unknown config key `{other}`; valid keys: quality, thinking, n, base_url"
+                    "unknown config key `{other}`; valid keys: {}",
+                    CONFIG_KEYS.join(", ")
                 )));
             }
         }
@@ -174,6 +193,7 @@ impl Config {
                 "1".to_string()
             })),
             "base_url" => Ok(resolve_base_url()),
+            "model" => Ok(resolve_model()),
             other => Err(RudderError::NotFound {
                 what: format!("config key `{other}`"),
             }),
@@ -195,6 +215,23 @@ pub fn resolve_base_url() -> String {
         return config_base;
     }
     crate::image::DEFAULT_BASE_URL.to_string()
+}
+
+/// Effective image model name: `OPENAI_MODEL` env → `config.json` `model`
+/// → `image::MODEL` default (`gpt-image-2`). Mirrors [`resolve_base_url`]
+/// so the client, the lineage records and `config test` all agree.
+pub fn resolve_model() -> String {
+    if let Some(env_model) = credential::env_trimmed("OPENAI_MODEL") {
+        return env_model;
+    }
+    if let Some(config_model) = Config::load()
+        .model
+        .map(|model| model.trim().to_string())
+        .filter(|model| !model.is_empty())
+    {
+        return config_model;
+    }
+    crate::image::MODEL.to_string()
 }
 
 fn arg_err(detail: String) -> RudderError {
@@ -272,20 +309,25 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// Restores OPENAI_BASE_URL / RUDDER_HOME on drop (credential tests own a
-    /// different env lock, and these two keys never overlap with it).
+    /// Restores OPENAI_BASE_URL / OPENAI_MODEL / RUDDER_HOME on drop. All
+    /// config env tests share one lock: they mutate the same `RUDDER_HOME`
+    /// key and must not run in parallel.
     struct BaseUrlEnvGuard {
         saved: Vec<(String, Option<String>)>,
+        _lock: std::sync::MutexGuard<'static, ()>,
     }
+
+    static CONFIG_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     impl BaseUrlEnvGuard {
         fn clear() -> BaseUrlEnvGuard {
+            let lock = CONFIG_ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             let mut saved = Vec::new();
-            for name in ["OPENAI_BASE_URL", "RUDDER_HOME"] {
+            for name in ["OPENAI_BASE_URL", "OPENAI_MODEL", "RUDDER_HOME"] {
                 saved.push((name.to_string(), std::env::var(name).ok()));
                 std::env::remove_var(name);
             }
-            BaseUrlEnvGuard { saved }
+            BaseUrlEnvGuard { saved, _lock: lock }
         }
 
         fn set(name: &str, value: &str) {
@@ -338,5 +380,76 @@ mod tests {
         BaseUrlEnvGuard::set("OPENAI_BASE_URL", "https://env.example.com");
         let cfg = Config::default();
         assert_eq!(cfg.get("base_url").unwrap(), "https://env.example.com");
+    }
+
+    #[test]
+    fn model_roundtrips_and_resets_on_empty() {
+        let mut cfg = Config::default();
+        assert_eq!(cfg.model, None, "old configs without `model` stay valid");
+        cfg.set("model", "  gpt-image-2  ").unwrap();
+        assert_eq!(cfg.model.as_deref(), Some("gpt-image-2"), "value is trimmed");
+        cfg.set("model", "   ").unwrap();
+        assert_eq!(cfg.model, None, "empty resets to env/default resolution");
+    }
+
+    #[test]
+    fn model_survives_disk_roundtrip() {
+        let dir = std::env::temp_dir().join(format!("rudder-cfg-model-{}", uuid::Uuid::new_v4()));
+        let path = dir.join("config.json");
+        let mut cfg = Config::default();
+        cfg.set("model", "my-image-model").unwrap();
+        Config::save_to(Some(&path), &cfg).unwrap();
+        assert_eq!(Config::load_from(Some(&path)).model.as_deref(), Some("my-image-model"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn legacy_config_without_model_field_loads_with_default() {
+        let dir = std::env::temp_dir().join(format!("rudder-cfg-legacy-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        std::fs::write(
+            &path,
+            r#"{"quality":"low","thinking":"medium","base_url":"https://proxy.example.com"}"#,
+        )
+        .unwrap();
+        let loaded = Config::load_from(Some(&path));
+        assert_eq!(loaded.model, None, "missing `model` field must not fail parsing");
+        assert_eq!(loaded.base_url.as_deref(), Some("https://proxy.example.com"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn resolve_model_env_then_config_then_default() {
+        let _guard = BaseUrlEnvGuard::clear();
+
+        // Hermetic home: neither env nor config → the documented default.
+        let empty = std::env::temp_dir().join(format!("rudder-cfg-mempty-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&empty).unwrap();
+        BaseUrlEnvGuard::set("RUDDER_HOME", &empty.display().to_string());
+        assert_eq!(resolve_model(), crate::image::MODEL);
+
+        // config.json override applies when env is absent/empty.
+        let dir = std::env::temp_dir().join(format!("rudder-cfg-mres-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("config.json"), r#"{"model":"config-model-1"}"#).unwrap();
+        BaseUrlEnvGuard::set("RUDDER_HOME", &dir.display().to_string());
+        assert_eq!(resolve_model(), "config-model-1");
+
+        // Env wins over config; a blank env falls back to config.
+        BaseUrlEnvGuard::set("OPENAI_MODEL", "  env-model-9  ");
+        assert_eq!(resolve_model(), "env-model-9", "env value is trimmed");
+        BaseUrlEnvGuard::set("OPENAI_MODEL", "   ");
+        assert_eq!(resolve_model(), "config-model-1");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn get_model_reports_effective_value() {
+        let _guard = BaseUrlEnvGuard::clear();
+        BaseUrlEnvGuard::set("OPENAI_MODEL", "env-model-9");
+        let cfg = Config::default();
+        assert_eq!(cfg.get("model").unwrap(), "env-model-9");
     }
 }

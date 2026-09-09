@@ -11,7 +11,8 @@ stderr); pass `--json` to get the machine-readable envelope on stdout.
   or via `cargo install --path crates/rudder-cli` from the repo root. Verify:
   `rudder --version`.
 - Credentials: env `OPENAI_API_KEY` (wins) or the OS keychain — see
-  `rudder config` below. `OPENAI_BASE_URL` env is optional.
+  `rudder config` below. `OPENAI_BASE_URL` / `OPENAI_MODEL` env are optional
+  overrides.
 
 ## Global flags (all commands)
 
@@ -133,9 +134,11 @@ bundle; each one produces a `warning:` line on stderr and an entry in the
 `component pick`) before exporting a final set.
 
 ### `rudder config get <key>` / `rudder config set <key> <value>`
-Defaults: `quality`, `thinking`, `n`, `base_url`. Stored in
+Defaults: `quality`, `thinking`, `n`, `base_url`, `model`. Stored in
 `~/Rudder/config.json` (directory overridable with `RUDDER_HOME`).
-Secrets are NEVER stored in config files.
+Secrets are NEVER stored in config files. The image model resolves as
+`OPENAI_MODEL` env → config.json `model` → default `gpt-image-2`
+(`rudder config set model <name>` / `rudder config get model`).
 
 ### `rudder config set api-key` (stdin) · `rudder config clear api-key` · `rudder config test`
 - `echo <key> | rudder config set api-key` stores the key in the OS keychain
@@ -143,11 +146,11 @@ Secrets are NEVER stored in config files.
   ONLY — never pass it as an argument (shell history). Output shows at most
   the tail 4 characters.
 - `rudder config clear api-key` removes the stored key (idempotent).
-- `rudder config test` prints the resolved base URL and key source
-  (`env` | `keychain` | `none`); when a key resolves it also probes
-  `GET {base}/v1/models` (free) and prints the available model count.
-  Exit 2 with an error envelope when unreachable / unauthorized /
-  `gpt-image-2` not served. Env keys win over the keychain; set
+- `rudder config test` prints the resolved base URL, the effective model
+  and key source (`env` | `keychain` | `none`); when a key resolves it also
+  probes `GET {base}/v1/models` (free) and prints the available model count.
+  Exit 2 with an error envelope when unreachable / unauthorized / the
+  effective model not served. Env keys win over the keychain; set
   `RUDDER_KEYCHAIN=0` to ignore the keychain entirely (CI/hermetic runs).
 
 ### `rudder e2e [--quality low] [--yes]`

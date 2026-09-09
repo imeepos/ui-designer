@@ -17,6 +17,8 @@ export type CredentialKeySource = "env" | "keychain" | "none";
 export interface CredentialStatus {
   /** Effective base URL after the env → config → default chain. */
   baseUrl: string;
+  /** Effective model name after the OPENAI_MODEL → config → default chain. */
+  model: string;
   keySource: CredentialKeySource;
   /** Last 4 characters of the resolved key, when one is configured. */
   keyTail: string | null;
@@ -26,6 +28,10 @@ export interface ConnectionTestResult {
   baseUrl: string;
   httpStatus: number;
   modelCount: number;
+  /** The effective model probed (env → config → default). */
+  model: string;
+  /** All visible model ids (settings dialog datalist). */
+  models: string[];
 }
 
 export interface TestConnectionDraft {
@@ -35,7 +41,18 @@ export interface TestConnectionDraft {
   apiKey?: string;
 }
 
-const MOCK_STATUS: CredentialStatus = { baseUrl: "", keySource: "none", keyTail: null };
+export interface SaveConfigDraft {
+  baseUrl: string;
+  /** Model name to store; undefined leaves the stored value untouched. */
+  model?: string;
+}
+
+const MOCK_STATUS: CredentialStatus = {
+  baseUrl: "",
+  model: "gpt-image-2",
+  keySource: "none",
+  keyTail: null,
+};
 
 function requireDesktop(): void {
   if (!hasTauriRuntime()) {
@@ -74,10 +91,18 @@ export async function clearApiKey(): Promise<CredentialStatus> {
   }
 }
 
-export async function saveBaseUrl(baseUrl: string): Promise<CredentialStatus> {
+/**
+ * Persist the non-sensitive fields (base URL + model name) into
+ * ~/Rudder/config.json. The API key NEVER goes through here — it lives in
+ * the OS keychain only. An empty baseUrl / model resets to the default chain.
+ */
+export async function saveConfig(draft: SaveConfigDraft): Promise<CredentialStatus> {
   requireDesktop();
   try {
-    return await invoke<CredentialStatus>("save_base_url", { baseUrl });
+    return await invoke<CredentialStatus>("save_base_url", {
+      baseUrl: draft.baseUrl,
+      model: draft.model,
+    });
   } catch (error) {
     throw toApiError(error);
   }

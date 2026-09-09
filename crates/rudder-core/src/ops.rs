@@ -5,9 +5,7 @@
 
 use crate::config::{Config, QUALITY_LEVELS};
 use crate::error::{Result, RudderError};
-use crate::image::{
-    ImageClient, ImageRef, GenerateParams, RequestPlan, MODEL,
-};
+use crate::image::{ImageClient, ImageRef, GenerateParams, RequestPlan};
 use crate::prompt;
 use crate::templates;
 use crate::store::{
@@ -790,7 +788,7 @@ pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, clien
         endpoint: plan.endpoint.clone(),
         prompt: prompt.clone(),
         params: GenParams {
-            model: MODEL.to_string(),
+            model: client.model().to_string(),
             size: params.size.clone(),
             quality: params.quality.clone(),
             n: params.n,

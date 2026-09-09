@@ -89,6 +89,8 @@ export interface ProjectSummaryDto {
   size: CanvasDto;
   createdAt: number;
   hasAnchor: boolean;
+  /** Absolute path of board/anchor.png; absent → compass placeholder. */
+  anchorPath?: string | null;
   pageCount: number;
   componentCount: number;
 }
@@ -400,6 +402,7 @@ export class TauriApi implements ApiAdapter {
       size: { ...row.size } as ProjectSummary["size"],
       createdAt: row.createdAt,
       hasAnchor: row.hasAnchor,
+      anchorUrl: row.anchorPath ? this.toUrl(row.anchorPath) : null,
       pageCount: row.pageCount,
       componentCount: row.componentCount,
     }));

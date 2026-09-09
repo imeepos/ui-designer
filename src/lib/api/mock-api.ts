@@ -709,6 +709,7 @@ function toSummary(project: StoreProject): ProjectSummary {
     size: { ...project.size },
     createdAt: project.createdAt,
     hasAnchor: project.anchor !== null,
+    anchorUrl: project.anchor?.url ?? null,
     pageCount: project.pages.length,
     componentCount: project.components.length,
   };

@@ -21,7 +21,9 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// Image model served by the configured endpoint.
+/// Default image model served by the configured endpoint. The effective
+/// model is resolved at client-build time via `config::resolve_model`
+/// (`OPENAI_MODEL` env → `config.json` `model` → this constant).
 pub const MODEL: &str = "gpt-image-2";
 /// Per-request timeout (docs/ARCHITECTURE.md §4).
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(300);
@@ -108,6 +110,8 @@ pub struct RunOutput {
 /// gpt-image-2 HTTP client with dry-run support and bounded retries.
 pub struct ImageClient {
     base_url: String,
+    /// Effective image model (see [`crate::config::resolve_model`]).
+    model: String,
     api_key: Option<String>,
     http: reqwest::Client,
     dry_run: bool,
@@ -116,7 +120,8 @@ pub struct ImageClient {
 
 impl ImageClient {
     /// Build a client pointed at `base_url` with explicit settings
-    /// (used by tests against a mock server).
+    /// (used by tests against a mock server). Uses the default [`MODEL`];
+    /// [`ImageClient::from_config`] swaps in the resolved model name.
     pub fn new(
         base_url: impl Into<String>,
         api_key: Option<String>,
@@ -130,6 +135,7 @@ impl ImageClient {
             .map_err(|e| RudderError::ApiUnreachable { detail: e.to_string() })?;
         Ok(ImageClient {
             base_url: normalize_base(base_url.into()),
+            model: MODEL.to_string(),
             api_key,
             http,
             dry_run,
@@ -137,14 +143,21 @@ impl ImageClient {
         })
     }
 
-    /// Resolve credentials/base through the standard chain (env → keychain /
-    /// config → defaults, see [`crate::config::credential`]). Never fails in
-    /// dry-run: a missing key only makes `auth_header_present=false` in the
-    /// plan.
+    /// Resolve credentials/base/model through the standard chain
+    /// (env → keychain / config → defaults, see [`crate::config`]). Never
+    /// fails in dry-run: a missing key only makes `auth_header_present=false`
+    /// in the plan.
     pub fn from_config(dry_run: bool) -> Result<ImageClient> {
         let base = crate::config::resolve_base_url();
         let resolution = crate::config::credential::resolve_api_key();
-        Self::new(base, resolution.key, dry_run, DEFAULT_BACKOFF, DEFAULT_TIMEOUT)
+        let mut client = Self::new(base, resolution.key, dry_run, DEFAULT_BACKOFF, DEFAULT_TIMEOUT)?;
+        client.model = crate::config::resolve_model();
+        Ok(client)
+    }
+
+    /// The effective image model name (for lineage records and probes).
+    pub fn model(&self) -> &str {
+        &self.model
     }
 
     pub fn is_dry_run(&self) -> bool {
@@ -163,9 +176,9 @@ impl ImageClient {
         format!("{}/v1/images/edits", self.base_url)
     }
 
-    fn params_json(params: &GenerateParams) -> Value {
+    fn params_json(&self, params: &GenerateParams) -> Value {
         let mut v = json!({
-            "model": MODEL,
+            "model": self.model,
             "prompt": params.prompt,
             "size": params.size,
             "quality": params.quality,
@@ -187,7 +200,7 @@ impl ImageClient {
             method: "POST".into(),
             url: self.generations_url(),
             auth_header_present: self.api_key.is_some(),
-            params: Self::params_json(params),
+            params: self.params_json(params),
             images: Vec::new(),
         }
     }
@@ -195,7 +208,7 @@ impl ImageClient {
     /// Build (without sending) the edits request plan. Reference images are
     /// stat'ed (never read into the plan) so dry-run stays cheap and honest.
     pub fn plan_edits(&self, params: &GenerateParams, images: &[ImageRef]) -> RequestPlan {
-        let mut params_json = Self::params_json(params);
+        let mut params_json = self.params_json(params);
         params_json["image[]"] = json!(images.iter().map(|img| img.path.display().to_string()).collect::<Vec<_>>());
         let plan_images = images
             .iter()
@@ -229,7 +242,7 @@ impl ImageClient {
             return Ok(RunOutput { plan, images: None });
         }
         let key = self.require_key()?;
-        let body = Self::params_json(params);
+        let body = self.params_json(params);
         let url = self.generations_url();
         let send = |client: &ImageClient, key: &str| {
             client
@@ -273,7 +286,7 @@ impl ImageClient {
         }
 
         let url = self.edits_url();
-        let text_fields = Self::params_json(params);
+        let text_fields = self.params_json(params);
         let send = |client: &ImageClient, key: &str| {
             let mut form = reqwest::multipart::Form::new();
             for (field, value) in text_fields.as_object().expect("params_json is an object") {

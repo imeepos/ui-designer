@@ -1,19 +1,25 @@
-import { useState } from "react";
-import { ImagePlus, RefreshCw, Repeat, Trash2, Waypoints } from "lucide-react";
+import { ImagePlus, RefreshCw, Repeat, Scan, Trash2, Waypoints } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { useStudio } from "@/state/studio";
-import { ArtImage } from "@/components/art-image";
+import { InfiniteCanvas } from "@/components/infinite-canvas";
 import { AnchorBadge } from "@/components/card-actions";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/use-confirm";
-import { Lightbox } from "@/components/lightbox";
 import type { LineageTarget } from "@/lib/api/types";
+
+/** Zoom bounds for the embedded stage canvas: 1%–6400%. */
+const MIN_SCALE = 0.01;
+const MAX_SCALE = 64;
 
 /**
  * Center stage: the picked artwork of the selected menu entry (anchor for
- * overview, current for pages/components) with its two top-right actions.
+ * overview, current for pages/components) on an infinite canvas — wheel
+ * zooms at the cursor (1%–6400%), drag pans, double-click or the corner
+ * "fit" button resets the view. Blood-lineage and top-right actions float
+ * above the canvas as overlays. Geometry lives in the shared
+ * InfiniteCanvas (same component as the fullscreen lightbox).
  */
 export function Stage({
   onRegenerate,
@@ -27,7 +33,6 @@ export function Stage({
   const { t } = useTranslation();
   const { state, deleteArtifact } = useStudio();
   const { ask, element: confirmElement } = useConfirm();
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const project = state.project;
   if (!project) return null;
 
@@ -80,95 +85,115 @@ export function Stage({
     }
   };
 
-  return (
-    <section className="flex min-w-0 flex-1 flex-col" data-testid="stage">
-      {confirmElement}
-      <Lightbox
-        open={lightboxUrl !== null}
-        onClose={() => setLightboxUrl(null)}
-        imageUrl={lightboxUrl ?? ""}
-        alt={title}
-        caption={title}
-      />
-
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
-        <h2 className="min-w-0 flex-1 truncate font-mono text-sm font-semibold text-foreground">
-          {title}
-        </h2>
-        <Button
-          variant="outline"
-          size="sm"
-          data-testid="stage-regenerate"
-          onClick={onRegenerate}
-        >
-          <RefreshCw className="size-3.5" />
-          {t("workspace.regenerate")}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          data-testid="stage-switch"
-          disabled={candidateCount === 0}
-          onClick={onSwitch}
-        >
-          <Repeat className="size-3.5" />
-          {isOverview ? t("workspace.switchAnchor") : t("workspace.switchDraft")}
-        </Button>
+  const actionButtons = (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        data-testid="stage-regenerate"
+        onClick={onRegenerate}
+      >
+        <RefreshCw className="size-3.5" />
+        {t("workspace.regenerate")}
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        data-testid="stage-switch"
+        disabled={candidateCount === 0}
+        onClick={onSwitch}
+      >
+        <Repeat className="size-3.5" />
+        {isOverview ? t("workspace.switchAnchor") : t("workspace.switchDraft")}
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        data-testid="stage-lineage"
+        aria-label={t("lineage.open")}
+        title={t("lineage.open")}
+        disabled={!lineageTarget}
+        onClick={() => {
+          if (lineageTarget) onLineage(lineageTarget);
+        }}
+      >
+        <Waypoints className="size-4" />
+      </Button>
+      {!isOverview && (
         <Button
           variant="ghost"
           size="icon"
-          data-testid="stage-lineage"
-          aria-label={t("lineage.open")}
-          title={t("lineage.open")}
-          disabled={!lineageTarget}
-          onClick={() => {
-            if (lineageTarget) onLineage(lineageTarget);
-          }}
+          data-testid="stage-delete"
+          aria-label={t("common.delete")}
+          title={t("common.delete")}
+          className="text-destructive hover:text-destructive"
+          onClick={removeEntry}
         >
-          <Waypoints className="size-4" />
+          <Trash2 className="size-4" />
         </Button>
-        {!isOverview && (
-          <Button
-            variant="ghost"
-            size="icon"
-            data-testid="stage-delete"
-            aria-label={t("common.delete")}
-            title={t("common.delete")}
-            className="text-destructive hover:text-destructive"
-            onClick={removeEntry}
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        )}
-      </div>
+      )}
+    </>
+  );
 
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-6">
-        {current ? (
-          <>
-            <button
-              type="button"
-              data-testid="stage-image"
-              title={t("common.enlarge")}
-              onClick={() => setLightboxUrl(current.url)}
-              className="block w-full max-w-3xl overflow-hidden rounded-lg border bg-card transition-colors duration-150 ease-out hover:border-primary"
-            >
-              <ArtImage
-                src={current.url}
-                filter={current.filter}
-                alt={title}
-                fit="contain"
-                className="aspect-video w-full"
-              />
-            </button>
-            <div className="flex w-full max-w-xl flex-col items-center gap-1 text-center">
-              {isOverview && <AnchorBadge />}
-              {brief && (
-                <p className="line-clamp-2 text-xs text-muted-foreground">{brief}</p>
-              )}
-              <p className="font-mono text-[11px] text-muted-foreground">{current.candidateId}</p>
-            </div>
-          </>
-        ) : (
+  return (
+    <section className="relative flex min-w-0 flex-1 flex-col" data-testid="stage">
+      {confirmElement}
+
+      {current ? (
+        <InfiniteCanvas
+          imageUrl={current.url}
+          filter={current.filter}
+          alt={title}
+          minScale={MIN_SCALE}
+          maxScale={MAX_SCALE}
+          doubleClick="fit"
+          className="absolute inset-0"
+          canvasTestId="stage-canvas"
+          imageTestId="stage-image"
+          loadFailedText={t("lightbox.loadFailed")}
+        >
+          {({ percent, actions }) => (
+            <>
+              {/* Info card, top-left */}
+              <div className="pointer-events-none absolute left-3 top-3 max-w-[min(420px,55%)]">
+                <div className="pointer-events-auto flex flex-col gap-1 rounded-lg border bg-card px-3 py-2 shadow-[0_8px_24px_rgba(2,8,23,0.08)]">
+                  <p className="truncate font-mono text-sm font-semibold text-foreground">{title}</p>
+                  <span className="flex items-center gap-2">
+                    {isOverview && <AnchorBadge />}
+                    {brief && (
+                      <span className="line-clamp-2 text-xs text-muted-foreground">{brief}</span>
+                    )}
+                  </span>
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    {current.candidateId}
+                  </span>
+                </div>
+              </div>
+
+              {/* Zoom badge + reset, bottom-right */}
+              <div className="absolute bottom-3 right-3 flex items-center gap-0.5 rounded-lg border bg-card p-1 shadow-[0_8px_24px_rgba(2,8,23,0.08)]">
+                <span
+                  data-testid="stage-zoom-level"
+                  className="min-w-14 px-1 text-center font-mono text-xs text-muted-foreground"
+                >
+                  {percent}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t("stage.fit")}
+                  title={t("stage.fit")}
+                  data-testid="stage-fit"
+                  onClick={actions.fit}
+                >
+                  <Scan className="size-4" />
+                </Button>
+              </div>
+            </>
+          )}
+        </InfiniteCanvas>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <EmptyState
             title={
               isOverview
@@ -195,7 +220,13 @@ export function Stage({
               )
             }
           />
-        )}
+        </div>
+      )}
+
+      {/* Actions, top-right — floating above the canvas AND available in the
+          empty state (regenerate/switch must stay reachable before a pick). */}
+      <div className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-lg border bg-card p-1 shadow-[0_8px_24px_rgba(2,8,23,0.08)]">
+        {actionButtons}
       </div>
     </section>
   );

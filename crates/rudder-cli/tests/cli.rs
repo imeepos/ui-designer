@@ -611,6 +611,72 @@ fn config_test_maps_unreachable_endpoint_to_exit_2() {
 }
 
 #[test]
+fn config_model_defaults_then_set_then_get_roundtrip() {
+    let sb = Sandbox::new("cfgmodel");
+    let default_out = sb
+        .rudder()
+        .env("OPENAI_MODEL", "")
+        .args(["config", "get", "model", "--json"])
+        .output()
+        .expect("config get model on a fresh config");
+    assert_eq!(exit_code(&default_out), 0, "stderr: {}", stderr_text(&default_out));
+    assert_eq!(
+        parse_envelope(&default_out)["data"]["value"],
+        "gpt-image-2",
+        "old configs without a model field resolve to the documented default"
+    );
+
+    let set_out = sb
+        .rudder()
+        .env("OPENAI_MODEL", "")
+        .args(["config", "set", "model", "my-image-model", "--json"])
+        .output()
+        .expect("config set model");
+    assert_eq!(exit_code(&set_out), 0, "stderr: {}", stderr_text(&set_out));
+    assert_eq!(parse_envelope(&set_out)["data"]["value"], "my-image-model");
+
+    let get_out = sb
+        .rudder()
+        .env("OPENAI_MODEL", "")
+        .args(["config", "get", "model", "--json"])
+        .output()
+        .expect("config get model after set");
+    assert_eq!(parse_envelope(&get_out)["data"]["value"], "my-image-model");
+
+    // env overrides the stored config value (same chain as base_url).
+    let env_out = sb
+        .rudder()
+        .env("OPENAI_MODEL", "env-model-7")
+        .args(["config", "get", "model", "--json"])
+        .output()
+        .expect("config get model with env override");
+    assert_eq!(parse_envelope(&env_out)["data"]["value"], "env-model-7");
+}
+
+#[test]
+fn config_test_reports_the_effective_model() {
+    let sb = Sandbox::new("cfgtestmodel");
+    let base = spawn_models_server(
+        r#"{"data":[{"id":"custom-image"},{"id":"gpt-4o"}]}"#,
+    );
+    let out = sb
+        .rudder()
+        .env("OPENAI_BASE_URL", &base)
+        .env("OPENAI_API_KEY", "sandbox-key")
+        .env("OPENAI_MODEL", "custom-image")
+        .args(["config", "test", "--json"])
+        .output()
+        .expect("config test with a custom model");
+    assert_eq!(exit_code(&out), 0, "stderr: {}", stderr_text(&out));
+    let data = parse_envelope(&out)["data"].clone();
+    assert_eq!(data["model"], "custom-image");
+    assert_eq!(data["imageModelAvailable"], true);
+    // The human summary names the model too.
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(stdout.contains("custom-image"), "summary must show the model: {stdout}");
+}
+
+#[test]
 fn dry_run_flag_overrides_yes_for_planning() {
     let sb = Sandbox::new("dryover");
     let dir = sb.project_dir("proj");
