@@ -1,5 +1,5 @@
 // 视觉走查（增量规格）：首页项目列表 → 新建向导（信息/生成总览/保存）→ 工作区
-// （左菜单+中央大图）→ 抽屉重生成 → 弹框切换设计稿 → 暗色/英文 → 无锚门控 toast。
+// （左菜单+中央大图）→ 抽屉重生成 → 弹框切换设计稿 → 血缘面板 → 暗色/英文 → 无锚门控 toast。
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 
@@ -87,6 +87,19 @@ const run = async () => {
   await shot(page, "09-draft-switched");
   log("08-09 switch dialog picked; stage shows new current");
 
+  // 血缘面板：打开 → 提示词/参数/徽标断言 → 截图 → 关闭
+  await page.getByTestId("stage-lineage").click();
+  await page.getByTestId("lineage-panel").waitFor();
+  await page.getByTestId("lineage-prompt").waitFor();
+  const promptText = await page.getByTestId("lineage-prompt").textContent();
+  if (!promptText.includes("Image 1")) throw new Error(`lineage prompt missing board anchor line: ${promptText}`);
+  await page.getByTestId("lineage-params").waitFor();
+  await page.getByTestId("lineage-source-engine").waitFor();
+  await shot(page, "10-lineage-panel");
+  await page.getByTestId("lineage-close").click();
+  await page.getByTestId("lineage-panel").waitFor({ state: "detached" });
+  log("10 lineage panel: prompt + params + engine badge visible");
+
   // 组件同路径（压缩：添加→抽屉生成→切换）
   await page.getByTestId("menu-add-components").click();
   await page.getByTestId("add-component-dialog").waitFor();
@@ -103,17 +116,17 @@ const run = async () => {
   await page.getByTestId("switch-confirm").click();
   await page.getByTestId("stage-image").waitFor();
   await page.waitForTimeout(300);
-  await shot(page, "10-component-picked");
-  log("10 component flow done via drawer + dialog");
+  await shot(page, "11-component-picked");
+  log("11 component flow done via drawer + dialog");
 
   // 暗色 + 英文
   await page.getByTestId("theme-toggle").click();
   await page.waitForTimeout(200);
-  await shot(page, "11-dark");
+  await shot(page, "12-dark");
   await page.getByTestId("language-switcher").getByRole("button", { name: "EN" }).click();
   await page.waitForTimeout(200);
-  await shot(page, "12-dark-en");
-  log("11-12 dark + en done");
+  await shot(page, "13-dark-en");
+  log("12-13 dark + en done");
 
   // 门控负例：向导跳过总览 → 工作区添加页面 → ANCHOR_REQUIRED 引导
   await page.getByTestId("back-home").click();
@@ -128,11 +141,11 @@ const run = async () => {
   await page.getByTestId("toast-error").waitFor();
   const toastText = await page.getByTestId("toast-error").textContent();
   if (!toastText.includes("ANCHOR_REQUIRED")) throw new Error(`locked toast missing code: ${toastText}`);
-  await shot(page, "13-gating-toast");
-  log("13 gating: no-anchor add guides with ANCHOR_REQUIRED toast");
+  await shot(page, "14-gating-toast");
+  log("14 gating: no-anchor add guides with ANCHOR_REQUIRED toast");
 
   await browser.close();
-  console.log("[walk] PASS: 13 screenshots in", OUT);
+  console.log("[walk] PASS: 14 screenshots in", OUT);
 };
 
 run().catch((e) => { console.error("[walk] FAIL:", e.message); process.exit(1); });
