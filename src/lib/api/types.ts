@@ -143,6 +143,40 @@ export type DeleteTarget =
   | { kind: "componentCurrent"; name: string }
   | { kind: "componentHistory"; name: string; ts: number };
 
+/** Generation params as recorded per batch (project.json GenRecord). */
+export interface GenParams {
+  model: string;
+  /** `"1536x1024"` form. */
+  size: string;
+  quality: string;
+  n: number;
+  seed?: number;
+  thinking?: string;
+}
+
+/** One real generation batch — the lineage behind a produced image. */
+export interface GenRecord {
+  /** RFC 3339 timestamp of the batch. */
+  at: string;
+  /** `generations` | `edits`. */
+  endpoint: string;
+  prompt: string;
+  params: GenParams;
+  candidateIds: string[];
+  /** `engine` (assembled) | `agent-file` (proxy prompt file); absent on pre-v0.2 records. */
+  source?: "engine" | "agent-file";
+  templateId?: string;
+}
+
+/**
+ * The stage object a lineage lookup targets: the anchor (overview), a page
+ * current or a component current, identified by its candidate id.
+ */
+export type LineageTarget =
+  | { kind: "board"; candidateId: string }
+  | { kind: "page"; slug: string; candidateId: string }
+  | { kind: "component"; name: string; candidateId: string };
+
 /** Unified error contract: {code, message, hint}. */
 export type ApiErrorCode =
   | "VALIDATION_ERROR"
@@ -259,4 +293,14 @@ export interface ApiAdapter {
     target: DeleteTarget,
     options?: CallOptions,
   ): Promise<ProjectDetail>;
+  /**
+   * Lineage of one stage image: the GenRecord batch that produced
+   * `target`'s candidate. `null` when the image has no recorded lineage
+   * (e.g. hand-placed) — an empty state, never an error.
+   */
+  getLineage(
+    projectId: string,
+    target: LineageTarget,
+    options?: CallOptions,
+  ): Promise<GenRecord | null>;
 }

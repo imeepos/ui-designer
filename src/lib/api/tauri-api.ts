@@ -11,6 +11,8 @@ import {
   type ExportResult,
   type GenerateOptions,
   type GenerateResult,
+  type GenRecord,
+  type LineageTarget,
   type ProjectDetail,
   type ProjectSummary,
 } from "@/lib/api/types";
@@ -126,6 +128,29 @@ export interface BoardBriefDto {
   fontMood: string;
   radiusDensity: string;
   reference: string;
+}
+
+/** Lineage lookup target (view.rs / commands.rs `LineageTargetInput`). */
+export type LineageTargetDto = LineageTarget;
+
+export interface GenParamsDto {
+  model: string;
+  size: string;
+  quality: string;
+  n: number;
+  seed?: number;
+  thinking?: string;
+}
+
+/** `project.json` GenRecord shaped for the lineage panel (view.rs). */
+export interface GenRecordDto {
+  at: string;
+  endpoint: string;
+  prompt: string;
+  params: GenParamsDto;
+  candidateIds: string[];
+  source?: string;
+  templateId?: string;
 }
 
 /** Payload of the `rudder://job` progress events. */
@@ -523,5 +548,23 @@ export class TauriApi implements ApiAdapter {
   ): Promise<ProjectDetail> {
     const dto = await this.call<ProjectDetailDto>("delete_artifact", { projectId, target });
     return mapProject(this.toUrl, dto);
+  }
+
+  async getLineage(
+    projectId: string,
+    target: LineageTarget,
+    _options?: CallOptions,
+  ): Promise<GenRecord | null> {
+    const dto = await this.call<GenRecordDto | null>("get_lineage", { projectId, target });
+    if (!dto) return null;
+    return {
+      at: dto.at,
+      endpoint: dto.endpoint,
+      prompt: dto.prompt,
+      params: { ...dto.params },
+      candidateIds: [...dto.candidateIds],
+      source: dto.source as GenRecord["source"],
+      templateId: dto.templateId,
+    };
   }
 }

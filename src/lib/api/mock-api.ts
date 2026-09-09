@@ -11,6 +11,8 @@ import {
   type ExportResult,
   type GenerateOptions,
   type GenerateResult,
+  type GenRecord,
+  type LineageTarget,
   type PageItem,
   type ProjectDetail,
   type ProjectSummary,
@@ -28,6 +30,56 @@ const PROGRESS_TICK_MS = 120;
 type StorePage = PageItem;
 type StoreComponent = ComponentItem;
 type StoreProject = ProjectDetail;
+
+/**
+ * Per-project lineage chains, mirroring project.json (`board_generations` +
+ * `pages[].generations` + `components[].generations`): one GenRecord per real
+ * generation batch, looked up by produced candidate id.
+ */
+interface ProjectLineage {
+  board: GenRecord[];
+  pages: Map<string, GenRecord[]>;
+  components: Map<string, GenRecord[]>;
+}
+
+/** The chain a batch belongs to (a lookup refines it with a candidate id). */
+type LineageChain =
+  | { kind: "board" }
+  | { kind: "page"; slug: string }
+  | { kind: "component"; name: string };
+
+/** Assembled board prompt the way the engine's skeleton would read (mock). */
+function boardPrompt(brief: BoardBrief): string {
+  return [
+    "UI design system board for the project.",
+    `Brand: ${brief.brandKeywords.trim()}.`,
+    `Palette: ${brief.colorDirection.trim() || "brand primary with neutral surfaces"}.`,
+    `Typography: ${brief.fontMood.trim() || "modern sans"}.`,
+    `Radius and density: ${brief.radiusDensity.trim() || "8px radius, medium density"}.`,
+    brief.reference.trim() ? `Reference: ${brief.reference.trim()}.` : "",
+    "Include color swatches with hex labels, a type scale, core component samples, icon style and an 8px spacing rule.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** Page edit prompt: board anchor as Image 1 + layout brief + invariants. */
+function pagePrompt(brief: string): string {
+  return [
+    "Image 1 is this product's design system board.",
+    `Page layout brief: ${brief.trim()}.`,
+    "Strictly reuse Image 1's palette, type scale, radius and component styles; do not adjust them.",
+  ].join(" ");
+}
+
+/** Component edit prompt: board anchor as Image 1 + component brief. */
+function componentPrompt(brief: string): string {
+  return [
+    "Image 1 is this product's design system board.",
+    `Component sheet brief: ${brief.trim()}.`,
+    "Lay the components out on a clean grid with all states; strictly reuse Image 1's palette, type scale and radius.",
+  ].join(" ");
+}
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -114,6 +166,7 @@ let idCounter = 0;
 export class MockApi implements ApiAdapter {
   readonly mode = "mock" as const;
   private store = new Map<string, StoreProject>();
+  private lineage = new Map<string, ProjectLineage>();
   private readonly delayRange: { min: number; max: number };
 
   constructor(delayRange: { min: number; max: number } = { min: MIN_DELAY_MS, max: MAX_DELAY_MS }) {
@@ -128,6 +181,26 @@ export class MockApi implements ApiAdapter {
   private assertNotAborted(signal?: AbortSignal): void {
     if (signal?.aborted) {
       throw new ApiError("CANCELLED", "Operation cancelled");
+    }
+  }
+
+  /** Register one batch record on the target's lineage chain. */
+  private recordBatch(projectId: string, target: LineageChain, record: GenRecord): void {
+    let entry = this.lineage.get(projectId);
+    if (!entry) {
+      entry = { board: [], pages: new Map(), components: new Map() };
+      this.lineage.set(projectId, entry);
+    }
+    if (target.kind === "board") {
+      entry.board.push(record);
+    } else if (target.kind === "page") {
+      const list = entry.pages.get(target.slug) ?? [];
+      list.push(record);
+      entry.pages.set(target.slug, list);
+    } else {
+      const list = entry.components.get(target.name) ?? [];
+      list.push(record);
+      entry.components.set(target.name, list);
     }
   }
 
@@ -200,8 +273,25 @@ export class MockApi implements ApiAdapter {
     }
     const count = clampCount(options?.count);
     await simulateWork(randomDelay(this.delayRange), options);
-    const candidates = makeCandidates(count, BOARD_FIXTURE, nextSeed());
+    const batchSeed = nextSeed();
+    const candidates = makeCandidates(count, BOARD_FIXTURE, batchSeed);
     project.boardCandidates.push(...candidates);
+    this.recordBatch(project.id, { kind: "board" }, {
+      at: new Date().toISOString(),
+      endpoint: "generations",
+      prompt: boardPrompt(brief),
+      params: {
+        model: "gpt-image-2",
+        size: `${project.size.w}x${project.size.h}`,
+        quality: options?.quality ?? "low",
+        n: count,
+        seed: batchSeed,
+        thinking: "medium",
+      },
+      candidateIds: candidates.map((candidate) => candidate.id),
+      source: "engine",
+      templateId: "board-design-system",
+    });
     return { candidates, project: clone(project) };
   }
 
@@ -289,9 +379,26 @@ export class MockApi implements ApiAdapter {
     }
     const count = clampCount(options?.count);
     await simulateWork(randomDelay(this.delayRange), options);
-    const candidates = makeCandidates(count, PAGE_FIXTURE, nextSeed());
+    const batchSeed = nextSeed();
+    const candidates = makeCandidates(count, PAGE_FIXTURE, batchSeed);
     page.candidates.push(...candidates);
     page.updatedAt = Date.now();
+    this.recordBatch(project.id, { kind: "page", slug }, {
+      at: new Date().toISOString(),
+      endpoint: "edits",
+      prompt: pagePrompt(page.brief),
+      params: {
+        model: "gpt-image-2",
+        size: `${project.size.w}x${project.size.h}`,
+        quality: options?.quality ?? "low",
+        n: count,
+        seed: batchSeed,
+        thinking: "medium",
+      },
+      candidateIds: candidates.map((candidate) => candidate.id),
+      source: "engine",
+      templateId: "page-ui-standard",
+    });
     return { candidates, project: clone(project) };
   }
 
@@ -382,9 +489,26 @@ export class MockApi implements ApiAdapter {
     }
     const count = clampCount(options?.count);
     await simulateWork(randomDelay(this.delayRange), options);
-    const candidates = makeCandidates(count, PAGE_FIXTURE, nextSeed());
+    const batchSeed = nextSeed();
+    const candidates = makeCandidates(count, PAGE_FIXTURE, batchSeed);
     component.candidates.push(...candidates);
     component.updatedAt = Date.now();
+    this.recordBatch(project.id, { kind: "component", name }, {
+      at: new Date().toISOString(),
+      endpoint: "edits",
+      prompt: componentPrompt(component.brief),
+      params: {
+        model: "gpt-image-2",
+        size: `${project.size.w}x${project.size.h}`,
+        quality: options?.quality ?? "low",
+        n: count,
+        seed: batchSeed,
+        thinking: "medium",
+      },
+      candidateIds: candidates.map((candidate) => candidate.id),
+      source: "engine",
+      templateId: "component-sheet-grid",
+    });
     return { candidates, project: clone(project) };
   }
 
@@ -490,6 +614,7 @@ export class MockApi implements ApiAdapter {
       }
       case "page": {
         project.pages = project.pages.filter((page) => page.slug !== target.slug);
+        this.lineage.get(project.id)?.pages.delete(target.slug);
         break;
       }
       case "pageCurrent": {
@@ -509,6 +634,7 @@ export class MockApi implements ApiAdapter {
         project.components = project.components.filter(
           (component) => component.name !== target.name,
         );
+        this.lineage.get(project.id)?.components.delete(target.name);
         break;
       }
       case "componentCurrent": {
@@ -526,6 +652,28 @@ export class MockApi implements ApiAdapter {
       }
     }
     return clone(project);
+  }
+
+  async getLineage(
+    projectId: string,
+    target: LineageTarget,
+    options?: CallOptions,
+  ): Promise<GenRecord | null> {
+    this.assertNotAborted(options?.signal);
+    requireProject(this.store, projectId);
+    const entry = this.lineage.get(projectId);
+    const records = !entry
+      ? []
+      : target.kind === "board"
+        ? entry.board
+        : target.kind === "page"
+          ? (entry.pages.get(target.slug) ?? [])
+          : (entry.components.get(target.name) ?? []);
+    // Latest batch wins, matching the core lookup semantics.
+    const found = [...records]
+      .reverse()
+      .find((record) => record.candidateIds.includes(target.candidateId));
+    return found ? clone(found) : null;
   }
 }
 

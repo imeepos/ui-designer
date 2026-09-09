@@ -19,6 +19,8 @@ import type {
   CreateProjectInput,
   DeleteTarget,
   ExportResult,
+  GenRecord,
+  LineageTarget,
   ProjectSummary,
 } from "@/lib/api/types";
 import { DEFAULT_QUALITY, type QualityLevel } from "@/lib/form-schema";
@@ -384,6 +386,24 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     [api, project, refreshProjects, t, toast, view],
   );
 
+  /**
+   * Lineage lookup for the stage's current image. `null` (no recorded
+   * lineage, e.g. a hand-placed image) is a result, not an error — the panel
+   * renders an empty state; only adapter failures toast.
+   */
+  const getLineage = useCallback(
+    async (target: LineageTarget): Promise<GenRecord | null> => {
+      if (!project) return null;
+      try {
+        return await api.getLineage(project.id, target);
+      } catch (error) {
+        toast.error(error);
+        return null;
+      }
+    },
+    [api, project, toast],
+  );
+
   const state = useMemo<StudioState>(
     () => ({
       projects,
@@ -419,6 +439,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       pickComponent,
       exportProject,
       deleteArtifact,
+      getLineage,
     }),
     [
       state,
@@ -440,6 +461,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       pickComponent,
       exportProject,
       deleteArtifact,
+      getLineage,
     ],
   );
 
@@ -470,6 +492,8 @@ export interface StudioApi {
   pickComponent: (name: string, candidateId: string) => Promise<void>;
   exportProject: (outDir: string) => Promise<void>;
   deleteArtifact: (target: DeleteTarget) => Promise<void>;
+  /** Lineage of a stage image; `null` when no record exists (empty state). */
+  getLineage: (target: LineageTarget) => Promise<GenRecord | null>;
 }
 
 export function useStudio(): StudioApi {

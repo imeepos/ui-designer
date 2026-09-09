@@ -196,6 +196,34 @@ describe("TauriApi", () => {
     });
   });
 
+  it("maps get_lineage records and passes null through", async () => {
+    const record = {
+      at: "2026-09-09T00:00:00Z",
+      endpoint: "edits",
+      prompt: "Image 1 is the board",
+      params: { model: "gpt-image-2", size: "1536x1024", quality: "low", n: 2, seed: 7 },
+      candidateIds: ["0002"],
+      source: "agent-file",
+      templateId: "page-ui-standard",
+    };
+    const { calls, invokeFn } = makeInvoke({ get_lineage: record });
+    const api = new TauriApi(invokeFn, toUrl);
+
+    const found = await api.getLineage("p1", {
+      kind: "page",
+      slug: "dashboard",
+      candidateId: "0002",
+    });
+    expect(calls[0]).toMatchObject({
+      command: "get_lineage",
+      args: { projectId: "p1", target: { kind: "page", slug: "dashboard", candidateId: "0002" } },
+    });
+    expect(found).toEqual(record);
+
+    const missing = new TauriApi(makeInvoke({ get_lineage: null }).invokeFn, toUrl);
+    expect(await missing.getLineage("p1", { kind: "board", candidateId: "9999" })).toBeNull();
+  });
+
   it("maps export_project results and passes the jobId", async () => {
     const { calls, invokeFn } = makeInvoke({
       export_project: {

@@ -84,6 +84,65 @@ describe("MockApi four-step flow", () => {
     expect(paths).toContain("PROMPTS.md");
   });
 
+  test("getLineage resolves the batch behind a picked candidate", async () => {
+    const api = new MockApi({ min: 5, max: 15 });
+    const project = await api.createProject({
+      name: "Lineage",
+      size: { w: 1536, h: 1024, preset: "web" },
+      brandBrief: "",
+    });
+    const board = await api.generateBoard(
+      project.id,
+      {
+        brandKeywords: "navy",
+        colorDirection: "deep navy",
+        fontMood: "Inter",
+        radiusDensity: "8px",
+        reference: "",
+      },
+      { count: 2, quality: "low" },
+    );
+    await api.pickAnchor(project.id, board.candidates[0].id);
+    await api.addPage(project.id, { slug: "gallery", brief: "grid" });
+    const page = await api.generatePage(project.id, "gallery", { count: 1 });
+    await api.pickPage(project.id, "gallery", page.candidates[0].id);
+
+    // Board candidate -> board batch.
+    const boardLineage = await api.getLineage(project.id, {
+      kind: "board",
+      candidateId: board.candidates[1].id,
+    });
+    expect(boardLineage).toMatchObject({
+      endpoint: "generations",
+      source: "engine",
+      templateId: "board-design-system",
+    });
+    expect(boardLineage?.candidateIds).toContain(board.candidates[1].id);
+    expect(boardLineage?.prompt).toContain("navy");
+    expect(boardLineage?.params.n).toBe(2);
+    expect(boardLineage?.params.seed).toBeDefined();
+
+    // Page current -> page batch, still resolvable after the pick.
+    const pageLineage = await api.getLineage(project.id, {
+      kind: "page",
+      slug: "gallery",
+      candidateId: page.candidates[0].id,
+    });
+    expect(pageLineage).toMatchObject({ endpoint: "edits", templateId: "page-ui-standard" });
+    expect(pageLineage?.prompt).toContain("Image 1");
+
+    // Unknown candidate or deleted page -> null (empty state, not an error).
+    expect(await api.getLineage(project.id, { kind: "board", candidateId: "nope" })).toBeNull();
+    await api.deleteArtifact(project.id, { kind: "page", slug: "gallery" });
+    expect(
+      await api.getLineage(project.id, {
+        kind: "page",
+        slug: "gallery",
+        candidateId: page.candidates[0].id,
+      }),
+    ).toBeNull();
+  });
+
   test("update ops persist amended briefs and validate input", async () => {
     const api = new MockApi({ min: 5, max: 15 });
     const project = await api.createProject({

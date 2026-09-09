@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ImagePlus, RefreshCw, Repeat, Trash2 } from "lucide-react";
+import { ImagePlus, RefreshCw, Repeat, Trash2, Waypoints } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { useStudio } from "@/state/studio";
@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/use-confirm";
 import { Lightbox } from "@/components/lightbox";
+import type { LineageTarget } from "@/lib/api/types";
 
 /**
  * Center stage: the picked artwork of the selected menu entry (anchor for
@@ -17,9 +18,11 @@ import { Lightbox } from "@/components/lightbox";
 export function Stage({
   onRegenerate,
   onSwitch,
+  onLineage,
 }: {
   onRegenerate: () => void;
   onSwitch: () => void;
+  onLineage: (target: LineageTarget) => void;
 }) {
   const { t } = useTranslation();
   const { state, deleteArtifact } = useStudio();
@@ -51,6 +54,15 @@ export function Stage({
     ? t("workspace.overview")
     : (page?.slug ?? component?.name ?? "");
   const brief = isOverview ? project.brandBrief : (page?.brief ?? component?.brief ?? "");
+  const lineageTarget: LineageTarget | null = !current
+    ? null
+    : isOverview
+      ? { kind: "board", candidateId: current.candidateId }
+      : page
+        ? { kind: "page", slug: page.slug, candidateId: current.candidateId }
+        : component
+          ? { kind: "component", name: component.name, candidateId: current.candidateId }
+          : null;
 
   const removeEntry = () => {
     if (page) {
@@ -101,6 +113,19 @@ export function Stage({
         >
           <Repeat className="size-3.5" />
           {isOverview ? t("workspace.switchAnchor") : t("workspace.switchDraft")}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          data-testid="stage-lineage"
+          aria-label={t("lineage.open")}
+          title={t("lineage.open")}
+          disabled={!lineageTarget}
+          onClick={() => {
+            if (lineageTarget) onLineage(lineageTarget);
+          }}
+        >
+          <Waypoints className="size-4" />
         </Button>
         {!isOverview && (
           <Button

@@ -125,6 +125,36 @@
     "empty": "No candidates yet: regenerate first.",
     "historyHint": "Confirming moves the current draft into history."
   },
+  "lineage": {
+    "open": "View lineage",
+    "title": "Lineage",
+    "loading": "Reading lineage…",
+    "empty": {
+      "title": "No lineage record",
+      "desc": "This image was not produced by a generation batch in this project (or its record is gone), so there is no lineage to show."
+    },
+    "source": {
+      "engine": "Engine assembled",
+      "agentFile": "Agent prompt file"
+    },
+    "prompt": "Full prompt",
+    "copyPrompt": "Copy prompt",
+    "copyJson": "Copy JSON",
+    "copied": "Copied",
+    "paramsTitle": "Params",
+    "params": {
+      "endpoint": "Endpoint",
+      "template": "Template",
+      "model": "Model",
+      "size": "Size",
+      "quality": "Quality",
+      "n": "Count",
+      "seed": "Seed",
+      "thinking": "Thinking",
+      "candidates": "Candidates",
+      "generatedAt": "Generated at"
+    }
+  },
   "project": {
     "form": {
       "title": "New project",

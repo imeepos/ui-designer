@@ -125,6 +125,36 @@
     "empty": "暂无候选：请先「重新生成」。",
     "historyHint": "确认后，当前主稿将进入历史版本。"
   },
+  "lineage": {
+    "open": "查看血缘",
+    "title": "血缘",
+    "loading": "正在读取血缘…",
+    "empty": {
+      "title": "没有血缘记录",
+      "desc": "这张图不是由本项目内的生成批次产出（或记录已不存在），因此没有可查看的血缘。"
+    },
+    "source": {
+      "engine": "引擎拼装",
+      "agentFile": "代理提示词文件"
+    },
+    "prompt": "提示词全文",
+    "copyPrompt": "复制提示词",
+    "copyJson": "复制 JSON",
+    "copied": "已复制",
+    "paramsTitle": "参数",
+    "params": {
+      "endpoint": "端点",
+      "template": "模板",
+      "model": "模型",
+      "size": "尺寸",
+      "quality": "质量",
+      "n": "张数",
+      "seed": "种子",
+      "thinking": "思考档",
+      "candidates": "候选",
+      "generatedAt": "生成时间"
+    }
+  },
   "project": {
     "form": {
       "title": "新建项目",
