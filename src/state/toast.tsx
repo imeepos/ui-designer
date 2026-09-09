@@ -80,7 +80,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             );
             return;
           }
-          const params = error.params ?? {};
+          // VALIDATION_ERROR carries the core's specific reason in
+          // `error.message` (e.g. "invalid component name ..."); surface it
+          // via the {{detail}} placeholder (UI-REVIEW P2), overriding any
+          // adapter-provided params of the same name.
+          const params = { ...error.params, detail: error.message };
           const message = t([`errors.${error.code}.message`, "errors.UNKNOWN.message"], {
             ...params,
             defaultValue: error.message,

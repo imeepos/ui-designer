@@ -5,7 +5,7 @@ import { useStudio } from "@/state/studio";
 import type { ComponentType } from "@/lib/api/types";
 import { COMPONENT_TYPES } from "@/lib/api/types";
 import { BRIEF_MAX, DEFAULT_QUALITY, QUALITY_LEVELS, type QualityLevel } from "@/lib/form-schema";
-import { isValidSlug, slugifyHint } from "@/lib/validate";
+import { identifierErrorKey, slugifyHint } from "@/lib/validate";
 import { useConfirm } from "@/hooks/use-confirm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -148,12 +148,17 @@ export function BriefField({
   );
 }
 
-function slugErrorKey(slug: string, taken: boolean): string | null {
-  if (!slug.trim()) return "form.error.slugRequired";
-  if (taken) return "form.error.slugTaken";
-  if (!isValidSlug(slug)) return "form.error.slugFormat";
-  return null;
-}
+const SLUG_ERROR_KEYS = {
+  required: "form.error.slugRequired",
+  taken: "form.error.slugTaken",
+  format: "form.error.slugFormat",
+} as const;
+
+const NAME_ERROR_KEYS = {
+  required: "form.error.nameRequired",
+  taken: "form.error.nameTaken",
+  format: "form.error.nameFormat",
+} as const;
 
 /** Add page form (step 3 entry). */
 export function AddPageForm({ onAdded }: { onAdded?: () => void }) {
@@ -167,7 +172,7 @@ export function AddPageForm({ onAdded }: { onAdded?: () => void }) {
   const submit = () => {
     if (!project) return;
     const taken = project.pages.some((page) => page.slug === slug.trim());
-    const key = slugErrorKey(slug, taken);
+    const key = identifierErrorKey(slug, taken, SLUG_ERROR_KEYS);
     if (key) {
       setError(t(key));
       return;
@@ -299,20 +304,24 @@ export function AddComponentForm({ onAdded }: { onAdded?: () => void }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<ComponentType>("buttons");
   const [brief, setBrief] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [briefError, setBriefError] = useState<string | null>(null);
 
   const submit = () => {
     if (!project) return;
     const trimmed = name.trim();
-    if (!trimmed) {
-      setError(t("form.error.nameRequired"));
+    const taken = project.components.some((component) => component.name === trimmed);
+    const nameKey = identifierErrorKey(trimmed, taken, NAME_ERROR_KEYS);
+    if (nameKey) {
+      setNameError(t(nameKey));
       return;
     }
-    if (project.components.some((component) => component.name === trimmed)) {
-      setError(t("form.error.nameTaken"));
+    if (!brief.trim()) {
+      setBriefError(t("form.error.briefRequired"));
       return;
     }
-    setError(null);
+    setNameError(null);
+    setBriefError(null);
     void addComponent(trimmed, type, brief);
     setName("");
     setBrief("");
@@ -336,15 +345,17 @@ export function AddComponentForm({ onAdded }: { onAdded?: () => void }) {
           value={name}
           onChange={(event) => {
             setName(event.target.value);
-            setError(null);
+            setNameError(null);
           }}
+          onBlur={() => setName((prev) => slugifyHint(prev))}
           placeholder={t("form.component.namePlaceholder")}
           className="font-mono text-xs"
           autoFocus
         />
-        {error && (
+        <p className="text-[11px] text-muted-foreground">{t("form.component.nameHint")}</p>
+        {nameError && (
           <p data-testid="name-error" className="text-xs text-destructive">
-            {error}
+            {nameError}
           </p>
         )}
       </div>
@@ -363,14 +374,24 @@ export function AddComponentForm({ onAdded }: { onAdded?: () => void }) {
           ))}
         </Select>
       </div>
-      <BriefField
-        id="component-brief"
-        testId="component-brief-input"
-        label={t("form.component.brief")}
-        placeholder={t("form.component.briefPlaceholder")}
-        value={brief}
-        onChange={setBrief}
-      />
+      <div className="flex flex-col gap-1.5">
+        <BriefField
+          id="component-brief"
+          testId="component-brief-input"
+          label={t("form.component.brief")}
+          placeholder={t("form.component.briefPlaceholder")}
+          value={brief}
+          onChange={(next) => {
+            setBrief(next);
+            setBriefError(null);
+          }}
+        />
+        {briefError && (
+          <p data-testid="brief-error" className="text-xs text-destructive">
+            {briefError}
+          </p>
+        )}
+      </div>
       <Button type="submit" size="sm" data-testid="add-component-submit">
         {t("form.component.add")}
       </Button>
