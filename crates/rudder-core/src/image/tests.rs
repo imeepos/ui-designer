@@ -179,12 +179,12 @@ fn temp_image(tag: &str, bytes: &[u8], ext: &str) -> PathBuf {
 }
 
 fn dry_client(url: String) -> ImageClient {
-    ImageClient::new(url, Some("sk-test".into()), true, Duration::from_millis(1), Duration::from_secs(5))
+    ImageClient::new(url, Some("test-key".into()), true, Duration::from_millis(1), Duration::from_secs(5))
         .expect("client builds")
 }
 
 fn live_client(url: String) -> ImageClient {
-    ImageClient::new(url, Some("sk-test".into()), false, Duration::from_millis(1), Duration::from_secs(5))
+    ImageClient::new(url, Some("test-key".into()), false, Duration::from_millis(1), Duration::from_secs(5))
         .expect("client builds")
 }
 
@@ -312,7 +312,7 @@ async fn mock_generate_success_decodes_b64() {
     let req = &reqs[0];
     assert_eq!(req.method, "POST");
     assert_eq!(req.path, "/v1/images/generations");
-    assert_eq!(req.header("authorization"), Some("Bearer sk-test"));
+    assert_eq!(req.header("authorization"), Some("Bearer test-key"));
     assert!(req.header("content-type").unwrap_or_default().starts_with("application/json"));
     let sent: Value = serde_json::from_slice(&req.body).expect("JSON body");
     assert_eq!(sent["model"], MODEL);

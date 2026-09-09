@@ -18,7 +18,7 @@ ui-designer/
 
 ## 2. 技术栈（锁定）
 - Rust 1.98+ / Tauri 2：桌面壳 + 文件对话框 + 打包
-- rudder-core 依赖：`reqwest`(rustls)、`tokio`、`serde/serde_json`、`base64`、`clap`（cli）、`anyhow/thiserror`、`dirs`、`uuid`、`chrono`
+- rudder-core 依赖：`reqwest`(rustls)、`tokio`、`serde/serde_json`、`base64`、`clap`（cli）、`anyhow/thiserror`、`dirs`、`uuid`、`chrono`、`keyring`（OS 钥匙串）
 - 前端：React 18 + TypeScript + Vite + TailwindCSS + shadcn/ui + react-i18next（zh-CN/en）
 - 前后端桥：Tauri command 调 rudder-core；CLI 直接调 rudder-core
 
@@ -45,7 +45,8 @@ refs/                 # 用户提供的布局参考图
 
 ## 4. gpt-image-2 客户端（rudder-core::image）
 - 端点：`{base}/v1/images/generations` 与 `{base}/v1/images/edits`（multipart：image[] 多参考图）。
-- 鉴权：`Authorization: Bearer $OPENAI_API_KEY`；base 取 `$OPENAI_BASE_URL`（默认 `https://api.openai.com`）。**凭证只从环境读，不存储。**
+- 鉴权：`Authorization: Bearer <api key>`。**凭证解析优先级：环境变量 `OPENAI_API_KEY` → OS 钥匙串（`rudder-core::config::credential`，service `rudder` / account `openai-api-key`）→ 未配置**；env 覆盖钥匙串，保证 CI/代理行为不变（`RUDDER_KEYCHAIN=0` 可整体关闭钥匙串，用于 CI 与隔离测试）。base 取 `$OPENAI_BASE_URL` → `config.json` 的 `base_url` → 默认 `https://api.openai.com`。**密钥唯一持久化位置是钥匙串；禁止明文落盘/日志/stdout；界面只显示尾 4 位。**
+- 连通性自检：`GET {base}/v1/models`（免费，不生图），校验 200 且模型列表含 `gpt-image-2`（`config::credential::test_connection`，CLI `rudder config test` / 桌面端「测试连接」共用）。
 - 响应：`b64_json` 优先；失败重试（429/5xx 指数退避，最多 3 次）；错误要带 HTTP 状态与响应体摘要。
 - 生成参数映射：`model=gpt-image-2`、`size`、`quality`（默认 low，探索档；high 需显式）、`n`、`thinking`（默认 medium，字段以服务端实际接受为准，做可选透传）、`seed`（省略时自动生成并随 plan/lineage/候选/manifest 记录，保证可复现）。
 - **DryRun 模式**：`ImageClient::dry_run` 只返回将要发送的 URL、参数 JSON、multipart 结构，不发请求。CLI 默认 dry-run，`--yes` 才真实调用；桌面端真实调用。
@@ -74,7 +75,10 @@ rudder component pick <name> <candidate-id>
 rudder list [pages|components]            # status 概览
 rudder export [--out <dir>] [--with-candidates]  # 默认只带 anchor/主稿；候选需显式带上
 rudder e2e [--yes]                        # 冒烟：建样例项目→总板→1页→1组件→导出
-rudder config get|set <key> <value>       # quality/thinking/n 等默认值，存 ~/Rudder/config.json（不含密钥）
+rudder config get|set <key> <value>       # quality/thinking/n/base_url（非敏感）存 ~/Rudder/config.json（不含密钥）
+rudder config set api-key                 # 密钥从 stdin 读入（绝不进 argv/history），写入 OS 钥匙串
+rudder config clear api-key               # 清除钥匙串中的密钥（幂等）
+rudder config test                        # 输出 base、key 来源 env/keychain/none、可用模型数（免费 GET /v1/models，--json 同构）
 ```
 🆕 调研吸收（docs/RESEARCH.md）：页面/组件生成同样支持 `--n` 多候选（同 batch 共享风格，superdesign 多稿哲学）；候选命名 `candidates/NNNN.png`，选中即主稿。export 额外产出 `DESIGN.template.md`（项目元数据+全部图片相对路径+待填 token 表骨架），作为 AI 代理撰写 DESIGN.md 的契约底稿。已生成未 pick 的目标在 export 时以 stderr `warning:` 与 `--json data.warnings` 提示（不阻断）。
 全局：`--project <path>`（默认 cwd 或最近项目）、`--dry-run`、`--json`（机器可读输出，Skill 用）。
@@ -83,13 +87,13 @@ rudder config get|set <key> <value>       # quality/thinking/n 等默认值，�
 ## 7. 桌面应用（React）
 - 三栏极简布局：左「项目列表+新建」/ 中「画廊（board 候选、页面、组件的分区网格）」/ 右「详情与操作（简报表单、生成按钮、历史版本）」。
 - 四步流程即导航：顶部步骤条 `项目 → 总板 → 页面 → 组件`，未完成前置步骤时后续置灰。
-- Tauri commands：`create_project` / `list_projects` / `get_project` / `generate_board` / `pick_anchor` / `add_page` / `generate_page` / `add_component` / `generate_component` / `export_project` / `delete_artifact`（全部薄封装 core，错误统一 `{code,message}`）。
+- Tauri commands：`create_project` / `list_projects` / `get_project` / `generate_board` / `pick_anchor` / `add_page` / `generate_page` / `add_component` / `generate_component` / `export_project` / `delete_artifact`（全部薄封装 core，错误统一 `{code,message}`）；凭证设置：`get_credential_status` / `save_api_key` / `clear_api_key` / `save_base_url` / `test_connection`（钥匙串读写；状态只回来源标签与尾 4 位，绝不全量回传密钥；无凭证错误码 `NO_CREDENTIALS`，前端 toast 引导打开设置）。
 - 图片展示：asset protocol 指向项目目录；生成中显示骨架屏（生成约 30-120s）。
 - 多语言：`src/i18n/{zh-CN,en}.json`，t() 全覆盖；语言切换即时生效。
 - **舵主题（Rudder theme）**：见 docs/THEME.md，CSS 变量实现，含 light/dark。
 
 ## 8. Skill 包（skill/rudder-design/SKILL.md）
-教 AI 代理：① 前置检查（rudder 在 PATH、env 密钥）② 用 `--json`/`--dry-run` 安全探索 ③ 四步流程的命令序列 ④ 生成后如何读图并撰写 `DESIGN.md`（token 表）⑤ 常见错误与恢复（未设锚点、rate limit、尺寸不合法）。附 `examples.md`：从零到导出的完整命令脚本示例。
+教 AI 代理：① 前置检查（rudder 在 PATH、`rudder config test` 确认凭证来源 env/keychain）② 用 `--json`/`--dry-run` 安全探索 ③ 四步流程的命令序列 ④ 生成后如何读图并撰写 `DESIGN.md`（token 表）⑤ 常见错误与恢复（未设锚点、rate limit、尺寸不合法）。附 `examples.md`：从零到导出的完整命令脚本示例。
 
 ## 9. 测试与验收
 - rudder-core 单测：尺寸校验、prompt 模板渲染、存储原子写、dry-run 计划、mock HTTP（wiremock 或手写 axum mock）。

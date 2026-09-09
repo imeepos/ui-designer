@@ -16,11 +16,19 @@ cargo install --path crates/rudder-cli
 # （随 Release 提供 Rudder_0.1.0_aarch64.dmg）
 ```
 
-环境变量（凭证只从环境读取，永不落盘）：
+凭证（解析优先级：环境变量 → OS 钥匙串，绝不写入普通文件/日志）：
 
 ```bash
-export OPENAI_API_KEY="sk-…"        # gpt-image-2 服务凭证
-export OPENAI_BASE_URL="https://"   # 可选，默认 https://api.openai.com
+export OPENAI_API_KEY="<你的服务凭证>"   # gpt-image-2 服务凭证（环境变量优先）
+export OPENAI_BASE_URL="https://"       # 可选，默认 https://api.openai.com
+```
+
+没有 shell 环境（如 Dock 启动的桌面端）时，可在应用「设置」中把密钥保存到
+系统钥匙串，或用 CLI 管道写入：
+
+```bash
+echo "<你的服务凭证>" | rudder config set api-key   # 写入 macOS 钥匙串
+rudder config test                                  # 校验 base / 密钥来源 / 可用模型数
 ```
 
 ## CLI 快速上手

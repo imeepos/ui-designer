@@ -19,8 +19,10 @@ image-edit references, so palette/typography/corner-radius never drift.
 ## Prerequisites
 
 1. CLI available: `rudder --version` (if missing, see references/cli.md §Install).
-2. Credentials in env — never print or store them: `OPENAI_API_KEY`,
-   `OPENAI_BASE_URL` (any OpenAI-compatible gpt-image-2 endpoint).
+2. Credentials — never print or store them. Resolution order: env
+   `OPENAI_API_KEY` / `OPENAI_BASE_URL` first (any OpenAI-compatible
+   gpt-image-2 endpoint), then the OS keychain (`echo <key> | rudder config
+   set api-key` to store; `rudder config test` to verify).
 3. Real image calls cost money. Explore with `--dry-run` (free, prints the
    request plan) and `quality low`; use `quality high` only for finals.
 
@@ -92,7 +94,9 @@ Same review loop: view → `rudder component pick <name> <candidate-id>`.
   stderr. `--json` for machine reading: stdout is `{ok, data|error}`.
 - Amend briefs with the `update` subcommands — never hand-edit
   `project.json`.
-- Never put secrets in commands, logs, or committed files.
+- Never put secrets in commands, logs, or committed files. Keys live in env
+  or the OS keychain only; if `config test` reports `keySource: none`, ask
+  the user to configure one (or store it via stdin piped `config set api-key`).
 - One project = one style universe. Never mix candidates from different
   boards in one export.
 - Cost discipline: `low` for exploration, at most 2-3 `high` calls per set.

@@ -10,7 +10,8 @@ stderr); pass `--json` to get the machine-readable envelope on stdout.
   Tauri app CLI, NOT rudder. The rudder CLI ships with the Rudder desktop app
   or via `cargo install --path crates/rudder-cli` from the repo root. Verify:
   `rudder --version`.
-- Requires `OPENAI_API_KEY` and optionally `OPENAI_BASE_URL` in env.
+- Credentials: env `OPENAI_API_KEY` (wins) or the OS keychain — see
+  `rudder config` below. `OPENAI_BASE_URL` env is optional.
 
 ## Global flags (all commands)
 
@@ -97,9 +98,22 @@ bundle; each one produces a `warning:` line on stderr and an entry in the
 `component pick`) before exporting a final set.
 
 ### `rudder config get <key>` / `rudder config set <key> <value>`
-Defaults: `quality`, `thinking`, `n`. Stored in `~/Rudder/config.json`
-(directory overridable with `RUDDER_HOME`).
-Secrets are NEVER stored — env only.
+Defaults: `quality`, `thinking`, `n`, `base_url`. Stored in
+`~/Rudder/config.json` (directory overridable with `RUDDER_HOME`).
+Secrets are NEVER stored in config files.
+
+### `rudder config set api-key` (stdin) · `rudder config clear api-key` · `rudder config test`
+- `echo <key> | rudder config set api-key` stores the key in the OS keychain
+  (service `rudder`, account `openai-api-key`). The value is read from stdin
+  ONLY — never pass it as an argument (shell history). Output shows at most
+  the tail 4 characters.
+- `rudder config clear api-key` removes the stored key (idempotent).
+- `rudder config test` prints the resolved base URL and key source
+  (`env` | `keychain` | `none`); when a key resolves it also probes
+  `GET {base}/v1/models` (free) and prints the available model count.
+  Exit 2 with an error envelope when unreachable / unauthorized /
+  `gpt-image-2` not served. Env keys win over the keychain; set
+  `RUDDER_KEYCHAIN=0` to ignore the keychain entirely (CI/hermetic runs).
 
 ### `rudder e2e [--quality low] [--yes]`
 Self-test: sample project → board → 1 page → 1 component → export. Use to

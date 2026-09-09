@@ -10,7 +10,7 @@ AI 成套 UI 设计工作室「舵 Rudder」。桌面端 Tauri 2 + React + TS + 
 4. `docs/PLAN.md` — 当前 Phase 与验收规则
 
 ## 硬性纪律
-- API 凭证只从环境变量 `OPENAI_API_KEY` / `OPENAI_BASE_URL` 读；**任何情况下不把密钥写入文件、日志、提交记录**。
+- API 凭证解析优先级：环境变量 `OPENAI_API_KEY` / `OPENAI_BASE_URL` 优先，其次 OS 钥匙串（service `rudder` · account `openai-api-key`，经 `echo <key> | rudder config set api-key` 或桌面端设置写入）；Base URL 等非敏感配置存 `~/Rudder/config.json`。**任何情况下不把密钥写入普通文件、日志、stdout、提交记录——密钥唯一持久化位置是 OS 钥匙串；UI/CLI 只允许显示尾 4 位。**
 - 真实生图调用必须显式 `--yes`（CLI）或桌面端按钮触发；代码与测试默认 dry-run。
 - 生图探索用 `quality: low`；`high` 仅用于终版。
 - 文案一律 i18n（`src/i18n/*.json`），JSX 中不得出现硬编码中英文案字符串。
