@@ -130,6 +130,72 @@ pub struct ExportResultDto {
     pub files: Vec<ExportFileDto>,
 }
 
+// ---------------------------------------------------------------------------
+// Lineage view (project.json `GenRecord` → stage lineage panel)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenParamsDto {
+    pub model: String,
+    /// `"1536x1024"` form.
+    pub size: String,
+    pub quality: String,
+    pub n: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seed: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<String>,
+}
+
+/// One real generation batch, shaped for the desktop lineage panel
+/// (mirrors `rudder_core::store::GenRecord`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenRecordDto {
+    /// RFC 3339 timestamp of the batch (`at` in project.json).
+    pub at: String,
+    /// `generations` | `edits`.
+    pub endpoint: String,
+    pub prompt: String,
+    pub params: GenParamsDto,
+    pub candidate_ids: Vec<String>,
+    /// `engine` | `agent-file` (PRD §0); absent on pre-v0.2 records.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
+}
+
+/// The batch that produced `candidate_id`: latest record wins, matching the
+/// seed lineage in [`lineage_seed`] and `ops::board_pick` / export lookups.
+pub fn find_lineage<'a>(records: &'a [GenRecord], candidate_id: &str) -> Option<&'a GenRecord> {
+    records
+        .iter()
+        .rev()
+        .find(|r| r.candidate_ids.iter().any(|id| id == candidate_id))
+}
+
+/// Shape a core `GenRecord` for the frontend.
+pub fn record_view(record: &GenRecord) -> GenRecordDto {
+    GenRecordDto {
+        at: record.at.clone(),
+        endpoint: record.endpoint.clone(),
+        prompt: record.prompt.clone(),
+        params: GenParamsDto {
+            model: record.params.model.clone(),
+            size: record.params.size.clone(),
+            quality: record.params.quality.clone(),
+            n: record.params.n,
+            seed: record.params.seed,
+            thinking: record.params.thinking.clone(),
+        },
+        candidate_ids: record.candidate_ids.clone(),
+        source: record.source.clone(),
+        template_id: record.template_id.clone(),
+    }
+}
+
 /// `web` / `mobile` / `desktop`, or `custom` for arbitrary WxH.
 pub fn preset_name(preset: Option<Preset>) -> String {
     preset
@@ -172,11 +238,7 @@ pub fn history_ts_from_name(file_name: &str) -> Option<i64> {
 
 /// Seed of the batch that produced `candidate_id` (latest match wins).
 fn lineage_seed(records: &[GenRecord], candidate_id: &str) -> Option<u64> {
-    records
-        .iter()
-        .rev()
-        .find(|r| r.candidate_ids.iter().any(|id| id == candidate_id))
-        .and_then(|r| r.params.seed)
+    find_lineage(records, candidate_id).and_then(|r| r.params.seed)
 }
 
 /// List `<dir>/candidates/*.png` sorted by id, with mtime timestamps and
@@ -369,6 +431,47 @@ mod tests {
             source: None,
             template_id: None,
         }
+    }
+
+    #[test]
+    fn lineage_finds_latest_batch_by_candidate_and_shapes_dto() {
+        let mut first = record("0001", Some(1));
+        first.source = None;
+        first.template_id = None;
+        let mut second = record("0001", Some(2));
+        second.endpoint = "edits".into();
+        second.prompt = "full prompt text".into();
+        second.source = Some("agent-file".into());
+        second.template_id = Some("ui-board".into());
+
+        // Latest batch wins.
+        let records = vec![first.clone(), second.clone()];
+        let found = find_lineage(&records, "0001").expect("lineage found");
+        assert_eq!(found, &second);
+
+        // Unknown candidate → no record (UI empty state, not an error).
+        assert!(find_lineage(&records, "0099").is_none());
+        assert!(find_lineage(&[], "0001").is_none());
+
+        // DTO carries camelCase keys and omits absent source/template.
+        let dto = record_view(&second);
+        let json = serde_json::to_value(&dto).unwrap();
+        assert_eq!(json["at"], dto.at);
+        assert_eq!(json["endpoint"], "edits");
+        assert_eq!(json["prompt"], "full prompt text");
+        assert_eq!(json["candidateIds"], serde_json::json!(["0001"]));
+        assert_eq!(json["source"], "agent-file");
+        assert_eq!(json["templateId"], "ui-board");
+        assert_eq!(json["params"]["model"], "gpt-image-2");
+        assert_eq!(json["params"]["size"], "1536x1024");
+        assert_eq!(json["params"]["quality"], "high");
+        assert_eq!(json["params"]["n"], 1);
+        assert_eq!(json["params"]["seed"], 2);
+
+        let bare = record_view(&first);
+        let bare_json = serde_json::to_value(&bare).unwrap();
+        assert!(bare_json.get("source").is_none());
+        assert!(bare_json.get("templateId").is_none());
     }
 
     #[test]

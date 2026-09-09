@@ -191,6 +191,52 @@ pub enum DeleteTargetInput {
     ComponentHistory { name: String, ts: i64 },
 }
 
+/// Lineage lookup target: the stage object being inspected (board anchor /
+/// page current / component current), identified by its candidate id.
+/// Mirrors `LineageTarget` from `src/lib/api/types.ts`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum LineageTargetInput {
+    Board { candidate_id: String },
+    Page { slug: String, candidate_id: String },
+    Component { name: String, candidate_id: String },
+}
+
+/// The lineage records a target consults: board batches for the anchor,
+/// per-target `generations` for pages/components (ARCHITECTURE §3).
+fn lineage_records<'a>(
+    project: &'a Project,
+    target: &LineageTargetInput,
+) -> Option<&'a [store::GenRecord]> {
+    match target {
+        LineageTargetInput::Board { .. } => Some(&project.board_generations),
+        LineageTargetInput::Page { slug, .. } => project
+            .page(slug)
+            .map(|page| page.generations.as_slice()),
+        LineageTargetInput::Component { name, .. } => project
+            .component(name)
+            .map(|component| component.generations.as_slice()),
+    }
+}
+
+/// The batch that produced the target candidate (`None` → no recorded
+/// lineage, e.g. a hand-placed image; the UI shows an empty state).
+fn lineage_for_target<'a>(
+    project: &'a Project,
+    target: &LineageTargetInput,
+) -> Option<&'a store::GenRecord> {
+    let candidate_id = match target {
+        LineageTargetInput::Board { candidate_id }
+        | LineageTargetInput::Page { candidate_id, .. }
+        | LineageTargetInput::Component { candidate_id, .. } => candidate_id,
+    };
+    view::find_lineage(lineage_records(project, target)?, candidate_id)
+}
+
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
@@ -331,6 +377,23 @@ pub async fn list_projects() -> Result<Vec<ProjectSummaryDto>, CommandError> {
 pub async fn get_project(project_id: String) -> Result<ProjectDetailDto, CommandError> {
     let (root, _) = resolve_project(&project_id)?;
     detail_view(&root)
+}
+
+/// Read-only lineage query: the `GenRecord` batch behind the stage's current
+/// image (endpoint/prompt/params/source/templateId). Thin wrapper over
+/// `project.json`; unknown page/slug or a hand-placed image resolves to
+/// `None` — the frontend renders an empty state, not an error.
+#[tauri::command]
+pub async fn get_lineage(
+    project_id: String,
+    target: LineageTargetInput,
+) -> Result<Option<view::GenRecordDto>, CommandError> {
+    let (root, _) = resolve_project(&project_id)?;
+    blocking("lineage", "retry the lookup", move || {
+        let project = store::load_project(&root).map_err(into_command)?;
+        Ok(lineage_for_target(&project, &target).map(view::record_view))
+    })
+    .await
 }
 
 // ---------------------------------------------------------------------------
@@ -948,6 +1011,86 @@ mod tests {
         }
         let unknown = r#"{"kind":"project"}"#;
         assert!(serde_json::from_str::<DeleteTargetInput>(unknown).is_err());
+    }
+
+    #[test]
+    fn lineage_target_deserializes_frontend_tags() {
+        let cases = [
+            r#"{"kind":"board","candidateId":"0001"}"#,
+            r#"{"kind":"page","slug":"dash","candidateId":"0002"}"#,
+            r#"{"kind":"component","name":"btn","candidateId":"0003"}"#,
+        ];
+        for json in cases {
+            let parsed: LineageTargetInput = serde_json::from_str(json)
+                .unwrap_or_else(|e| panic!("parse {json}: {e}"));
+            assert!(matches!(
+                parsed,
+                LineageTargetInput::Board { .. }
+                    | LineageTargetInput::Page { .. }
+                    | LineageTargetInput::Component { .. }
+            ));
+        }
+        let unknown = r#"{"kind":"history"}"#;
+        assert!(serde_json::from_str::<LineageTargetInput>(unknown).is_err());
+    }
+
+    #[test]
+    fn lineage_for_target_finds_latest_batch_per_chain() {
+        fn batch(candidate_ids: &[&str], prompt: &str) -> store::GenRecord {
+            store::GenRecord {
+                at: store::now_rfc3339(),
+                endpoint: "generations".into(),
+                prompt: prompt.into(),
+                params: rudder_core::store::GenParams {
+                    model: "gpt-image-2".into(),
+                    size: "1536x1024".into(),
+                    quality: "low".into(),
+                    n: 1,
+                    seed: Some(42),
+                    thinking: None,
+                },
+                candidate_ids: candidate_ids.iter().map(|id| id.to_string()).collect(),
+                source: Some("engine".into()),
+                template_id: None,
+            }
+        }
+
+        let mut project = sample_project();
+        project.board_generations.push(batch(&["0001", "0002"], "board"));
+        let mut page = rudder_core::store::Page::new("dash".into(), "b".into());
+        page.generations.push(batch(&["0001"], "page-old"));
+        page.generations.push(batch(&["0001"], "page-new"));
+        project.pages.push(page);
+        let mut component = rudder_core::store::Component::new("btn".into(), "buttons".into(), "b".into());
+        component.generations.push(batch(&["0003"], "comp"));
+        project.components.push(component);
+
+        let board = lineage_for_target(
+            &project,
+            &LineageTargetInput::Board { candidate_id: "0002".into() },
+        )
+        .expect("board lineage");
+        assert_eq!(board.prompt, "board");
+
+        let page = lineage_for_target(
+            &project,
+            &LineageTargetInput::Page { slug: "dash".into(), candidate_id: "0001".into() },
+        )
+        .expect("page lineage");
+        assert_eq!(page.prompt, "page-new", "latest batch wins");
+
+        let component = lineage_for_target(
+            &project,
+            &LineageTargetInput::Component { name: "btn".into(), candidate_id: "0003".into() },
+        )
+        .expect("component lineage");
+        assert_eq!(component.prompt, "comp");
+
+        // Unknown target or candidate → None (empty state, no error).
+        let missing_page = LineageTargetInput::Page { slug: "nope".into(), candidate_id: "0001".into() };
+        assert!(lineage_for_target(&project, &missing_page).is_none());
+        let stray_candidate = LineageTargetInput::Board { candidate_id: "9999".into() };
+        assert!(lineage_for_target(&project, &stray_candidate).is_none());
     }
 
     #[test]

@@ -17,6 +17,7 @@ pub fn run() {
             commands::create_project,
             commands::list_projects,
             commands::get_project,
+            commands::get_lineage,
             commands::generate_board,
             commands::pick_anchor,
             commands::add_page,
