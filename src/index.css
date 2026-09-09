@@ -19,7 +19,8 @@
   --muted-foreground: #5c6e80; /* 墨灰·深，纸底 ≈4.8:1 */
   --accent: #d9a514; /* 缃色：步条当前步、锚点徽标、焦点环 */
   --accent-foreground: #2a2410; /* 金底深字 ≈6.9:1 */
-  --destructive: #c3402b; /* 朱砂（兼印章红） */
+  --destructive: #c3402b; /* 朱砂 */
+  --seal: #c3402b; /* 印章红：品牌「舵」字印专用，与 destructive 解耦（THEME §2 v3.1） */
   --border: #e3e4dc; /* 淡墨发丝线 */
   --input: #d6d8ce;
   --ring: #d9a514;
@@ -44,6 +45,7 @@
   --accent: #d9a514; /* 缃色原值：深底 ≈7.5:1，无需调整 */
   --accent-foreground: #1c1607;
   --destructive: #e08873; /* 朱砂·亮，墨绢上 ≈5.1:1 */
+  --seal: #e08873; /* 印章红·亮（dark 派生同 destructive 节奏） */
   --border: #2c3639;
   --input: #2c3639;
   --ring: #d9a514;
@@ -70,6 +72,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-seal: var(--seal);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
