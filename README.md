@@ -96,3 +96,13 @@ ui-designer/
 ## 许可
 
 [MIT](LICENSE) © Rudder Contributors
+
+## 故障排查
+
+| 症状 | 处置 |
+|---|---|
+| `pnpm install` 长时间无响应 | `ps aux \| grep pnpm` 找到挂起进程并 `kill`；仍卡则 `pnpm store prune`，最后删 `~/Library/pnpm/store`（仅索引，重装会重下） |
+| `cargo` 命令不存在 | 验收/构建 shell 需先 `source "$HOME/.cargo/env"`（rustup 默认不进 PATH） |
+| 桌面端提示未配置凭证 | 打开 ⚙ 设置：填 Base URL + API Key（存钥匙串）+ 模型名，点「测试连接」；CLI 走 `rudder config set api-key`（stdin 管道）|
+| 生图 429/超时 | CLI 已自动指数退避重试 ≤3 次；仍失败请降 `--quality low` 或减小 `--n` 后再试 |
+| dmg 打开提示已损坏 | 本包为 ad-hoc 签名：`xattr -cr /Applications/Rudder.app` 后重开 |
