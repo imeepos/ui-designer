@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderOutput } from "lucide-react";
+import pkg from "../package.json";
 
 import { HelmMark } from "@/components/icons";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -98,7 +99,7 @@ function AppShell() {
         <span data-testid="api-mode" className="font-mono">
           {apiMode === "mock" ? t("status.api.mock") : t("status.api.tauri")}
         </span>
-        <span className="ml-auto font-mono">{t("footer.phase")}</span>
+        <span className="ml-auto font-mono">v{pkg.version}</span>
       </footer>
 
       <CreateProjectDialog open={createOpen} onClose={() => setCreateOpen(false)} />

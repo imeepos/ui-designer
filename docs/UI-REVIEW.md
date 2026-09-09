@@ -75,3 +75,10 @@
 | 10 export 静默丢未 pick | ExportReport.warnings：board 无锚、page/component 有候选无主稿各出一条；stderr `warning:` + `--json data.warnings` | export `export_warns_about_generated_but_unpicked_targets`；cli `export_warns_on_generated_but_unpicked_targets` |
 
 界面改进项 4/5/7/9 于 Phase 5 落地（表单 schema 统一、空态插画规范入 THEME §5、徽标 ≥11px、悬停浮层按 §5 姿态）；3/6/8 按裁决不动。
+
+## 负责人视觉终审（Playwright 无头走查，2026-09-09）
+
+- 走查脚本 `e2e/visual-walkthrough.mjs`：无头 Chromium 驱动 Mock 模式走完四步流程 + 暗/英切换，9 张截图存 `e2e/screenshots/`（不入库）。结论：**通过**。
+- 已当场修复：页脚开发期标签「Phase 3 · 桌面端应用（Mock 优先）」→ 显示 `v{package.json#version}`。
+- **P2 · VALIDATION_ERROR 文案过泛**：组件简报为空时 toast 仅"输入不合法，请检查表单"，未指明字段与规则。建议 core 校验错误携带字段级 hint（如"组件简报需 2-200 字"），桌面 toast 与 CLI `--json` 的 `error.hint` 同源展示。
+- 亮点记录：步条前置门控（未设锚点/未转正页面时后续步禁用并提示"先完成前置步骤"）工作准确；创建项目/转正锚点/页面转正均自动步进，toast 反馈链完整；暗色派生对比度合格。

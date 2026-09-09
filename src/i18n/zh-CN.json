@@ -52,9 +52,7 @@
       "tauri": "Tauri 已接入"
     }
   },
-  "footer": {
-    "phase": "Phase 3 · 桌面应用（Mock 优先）"
-  },
+  "footer": {},
   "panel": {
     "projects": {
       "title": "项目",

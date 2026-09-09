@@ -22,3 +22,5 @@ coverage/
 
 # Tauri generated schemas
 src-tauri/gen/
+
+e2e/screenshots/

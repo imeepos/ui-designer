@@ -1,0 +1,21 @@
+import { chromium } from "playwright";
+const run = async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  page.on("console", m => { if (m.type() === "error") console.log("[console.error]", m.text().slice(0, 200)); });
+  await page.goto("http://localhost:4173/", { waitUntil: "networkidle" });
+  await page.getByTestId("new-project").click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: "e2e/screenshots/dbg-form.png" });
+  await page.getByTestId("project-name-input").fill("远洋航运 SaaS");
+  await page.getByTestId("project-brief-input").fill("深海航行，海军蓝+琥珀金，克制专业");
+  await page.getByTestId("create-project-submit").click();
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: "e2e/screenshots/dbg-after.png" });
+  const toast = await page.getByTestId("toast-viewport").textContent().catch(() => "(no toast)");
+  console.log("toast:", toast?.slice(0, 300));
+  console.log("body has project-overview:", await page.getByTestId("project-overview").count());
+  console.log("url hash:", page.url());
+  await browser.close();
+};
+run().catch(e => { console.error("FAIL:", e.message); process.exit(1); });

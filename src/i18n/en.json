@@ -52,9 +52,7 @@
       "tauri": "Tauri connected"
     }
   },
-  "footer": {
-    "phase": "Phase 3 · Desktop app (mock-first)"
-  },
+  "footer": {},
   "panel": {
     "projects": {
       "title": "Projects",
