@@ -1,15 +1,16 @@
 import type { ReactNode } from "react";
 
-import { AnchorMark, CompassMark, HelmMark } from "@/components/icons";
+import { AnchorMark, BoatMark, CompassMark, HelmMark } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
-/** Allowed nautical marks only (THEME §5 v2): helm / compass / anchor. */
-type EmptyStateMark = "helm" | "compass" | "anchor";
+/** Allowed nautical marks only (THEME §5 v3): helm / compass / anchor / boat. */
+type EmptyStateMark = "helm" | "compass" | "anchor" | "boat";
 
 const MARKS = {
   helm: HelmMark,
   compass: CompassMark,
   anchor: AnchorMark,
+  boat: BoatMark,
 } as const;
 
 type EmptyStateProps = {
@@ -22,8 +23,8 @@ type EmptyStateProps = {
 };
 
 /**
- * Empty state posture (THEME §5 v2): centered 176px line illustration
- * (within the 160-200px band), 1.5px stroke, single navy tone
+ * Empty state posture (THEME §5 v3): centered 176px line illustration
+ * (within the 160-200px band), 1.5px stroke, single celadon tone
  * (`--primary`), 24px gap below the artwork, then title/CTA.
  */
 export function EmptyState({ title, description, action, mark = "compass", className }: EmptyStateProps) {
