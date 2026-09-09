@@ -82,3 +82,11 @@
 - 已当场修复：页脚开发期标签「Phase 3 · 桌面端应用（Mock 优先）」→ 显示 `v{package.json#version}`。
 - **P2 · VALIDATION_ERROR 文案过泛**：组件简报为空时 toast 仅"输入不合法，请检查表单"，未指明字段与规则。建议 core 校验错误携带字段级 hint（如"组件简报需 2-200 字"），桌面 toast 与 CLI `--json` 的 `error.hint` 同源展示。
 - 亮点记录：步条前置门控（未设锚点/未转正页面时后续步禁用并提示"先完成前置步骤"）工作准确；创建项目/转正锚点/页面转正均自动步进，toast 反馈链完整；暗色派生对比度合格。
+
+## 模板协议验收（2026-09-09，负责人实测）
+
+- 代理填槽全链路通过：`templates show`（fillGuide 逐槽「要什么/好例子/常见错误」）→ 代理 LLM 填槽写文件 → `generate --prompt-file --template <id>` → 出图转正。实测领域：新中式茶饮「山茶客」会员小程序（移动端 1024x1536，与既有测试域无关，验证泛化性）。
+- **Labels 逐字约束生效**：brief 中 `Labels: 点单|会员|我的|…` 声明的 10 个标签全部逐字渲染，激活态位置正确——原 weakness「步条标签失真」的改进方案落地。
+- **元素计数精确**：导航 3 + 横幅 1 + 分类 5 + 产品卡 8 + 底栏 1，与 brief 完全一致。
+- 原三项 weakness 关闭：中英混排（模板自定）、负面清单不可配（project.negativeHints + explicit-negatives 行）、无 verbatim 标签（Labels 槽）。
+- 真实花费：low × 5（总板 4 候选 + 页面 1）≈ $0.06。
