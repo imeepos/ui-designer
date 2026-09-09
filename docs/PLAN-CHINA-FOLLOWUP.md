@@ -29,3 +29,17 @@
 - 每项完成立刻测试并 commit（中文祈使句小步提交）；合并回 main 后 `git worktree remove` + `git branch -d` 清理。
 - 真实生图仅 F2/F3：low/medium 探索、high 只掷终版锚点 1 张，单张 high ≤ $0.5 预算线。
 - 不代改并发 WIP 的功能逻辑；发现缺陷只记录。
+
+## 执行状态（2026-09-10 02:30 更新）
+
+| # | 状态 | 备注 |
+|---|---|---|
+| F0 | ✅ 完成 | `3542aa6` WIP 快照（tsc/cargo check 双绿），并发会话随后将 WIP 正式化为 `23093d2` |
+| F1 | ✅ 完成 | `219de0b` BAD_RESPONSE 退避重试，新增 2 mock 用例；worktree 已清理 |
+| F1b | ✅ 完成（计划外新增） | `c2d9493` 硬超时天花板：当晚端点两次挂起（high 36min / medium 18min 无响应）证明 reqwest 自身超时覆盖不了连接停滞，改用 `tokio::time::timeout` 全周期封顶，挂起转化为 `API_UNREACHABLE` 快速失败；新增静默监听器 hang 测试 |
+| F2 | ⚠️ 端点侧受阻 | high 档重掷两次均挂起（重试预算 4×300s 耗尽仍无响应），判定镜像端 high 队列夜间劣化；low 锚点（0001）继续服役，seed 已记录可复现，待端点恢复后重掷 |
+| F3 | 🔄 重试中 | 首掷 medium n=2 同样挂起被终止；项目目录已从 design-china/ 内挪正至 `design-china-dark/`；待 F1b 二进制重建后以 low n=1 快速失败语义重试 |
+| F4 | ✅ 完成 | `73e0e1f` 帆舟空态合并；注释过 lint 由并发会话补刀 `b7969f0` |
+| F5 | ✅ 完成 | `29567d5` --seal token，构建产物含 seal token |
+| F6 | ⏳ 待办 | pnpm build + visual-walkthrough 回归 |
+| F7 | ✅ 完成 | `541ec05`（并发会话执行） |
