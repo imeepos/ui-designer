@@ -37,9 +37,10 @@
 | F0 | ✅ 完成 | `3542aa6` WIP 快照（tsc/cargo check 双绿），并发会话随后将 WIP 正式化为 `23093d2` |
 | F1 | ✅ 完成 | `219de0b` BAD_RESPONSE 退避重试，新增 2 mock 用例；worktree 已清理 |
 | F1b | ✅ 完成（计划外新增） | `c2d9493` 硬超时天花板：当晚端点两次挂起（high 36min / medium 18min 无响应）证明 reqwest 自身超时覆盖不了连接停滞，改用 `tokio::time::timeout` 全周期封顶，挂起转化为 `API_UNREACHABLE` 快速失败；新增静默监听器 hang 测试 |
-| F2 | ⚠️ 端点侧受阻 | high 档重掷两次均挂起（重试预算 4×300s 耗尽仍无响应），判定镜像端 high 队列夜间劣化；low 锚点（0001）继续服役，seed 已记录可复现，待端点恢复后重掷 |
-| F3 | 🔄 重试中 | 首掷 medium n=2 同样挂起被终止；项目目录已从 design-china/ 内挪正至 `design-china-dark/`；待 F1b 二进制重建后以 low n=1 快速失败语义重试 |
-| F4 | ✅ 完成 | `73e0e1f` 帆舟空态合并；注释过 lint 由并发会话补刀 `b7969f0` |
+| F2 | ⛔ 阻塞（钥匙串，见 F8） | high 重掷两段结论：① 旧二进制下挂起＝镜像端 high 队列夜间劣化；② 新二进制下连免费命令都挂＝钥匙串 ACL。二者解耦后待端点恢复＋钥匙串重授权，seed 已记录可复现 |
+| F3 | ⛔ 阻塞（钥匙串，见 F8） | 首掷 medium n=2 挂起被终止（旧二进制，端点侧）；项目已挪正至 `design-china-dark/`，提示词就绪（prompts/board-dark.md），待钥匙串重授权后以 low n=1 一击重试 |
+| F4 | ✅ 完成 | `73e0e1f` 帆舟空态合并；注释过 lint 由并发会话补刀 `b7969f0`；走查截图确认渲染 |
 | F5 | ✅ 完成 | `29567d5` --seal token，构建产物含 seal token |
-| F6 | ⏳ 待办 | pnpm build + visual-walkthrough 回归 |
+| F6 | ✅ 完成 | `pnpm build` exit 0（1m02s）；visual-walkthrough PASS 全 15 步 16 截图（步条 7 已由 `23093d2` 修复） |
 | F7 | ✅ 完成 | `541ec05`（并发会话执行） |
+| F8 | ✅ 完成（诊断） | **钥匙串 ACL 事故**：CLI 二进制重编译替换后 securityd 重新鉴权，`config test`（免费、无网络）挂起 >10s 实证——02:37/03:01 两次"网络挂起"实为卡在 require_key()，未到网络层；F1b 硬超时单测仍绿（机制正确，当时根本没走到）。恢复：批准桌面「rudder 想要访问钥匙串」弹窗并选**始终允许**，或改用环境变量注入密钥。教训：重建二进制后先跑 `rudder config test` 看门狗再发起真实生图 |
