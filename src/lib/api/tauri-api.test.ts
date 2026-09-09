@@ -176,6 +176,26 @@ describe("TauriApi", () => {
     expect(fallback).toMatchObject({ code: "UNKNOWN" });
   });
 
+  it("passes update payloads to update_page/update_component", async () => {
+    const { calls, invokeFn } = makeInvoke({
+      update_page: projectDto(),
+      update_component: projectDto(),
+    });
+    const api = new TauriApi(invokeFn, toUrl);
+
+    await api.updatePage("p1", "dashboard", { brief: "grid v2" });
+    await api.updateComponent("p1", "button-set", { brief: "three states v2" });
+
+    expect(calls[0]).toMatchObject({
+      command: "update_page",
+      args: { projectId: "p1", slug: "dashboard", input: { brief: "grid v2" } },
+    });
+    expect(calls[1]).toMatchObject({
+      command: "update_component",
+      args: { projectId: "p1", name: "button-set", input: { brief: "three states v2" } },
+    });
+  });
+
   it("maps export_project results and passes the jobId", async () => {
     const { calls, invokeFn } = makeInvoke({
       export_project: {

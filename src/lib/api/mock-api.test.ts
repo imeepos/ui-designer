@@ -84,6 +84,41 @@ describe("MockApi four-step flow", () => {
     expect(paths).toContain("PROMPTS.md");
   });
 
+  test("update ops persist amended briefs and validate input", async () => {
+    const api = new MockApi({ min: 5, max: 15 });
+    const project = await api.createProject({
+      name: "Update",
+      size: { w: 1536, h: 1024, preset: "web" },
+      brandBrief: "",
+    });
+    await api.addPage(project.id, { slug: "gallery", brief: "grid" });
+    await api.addComponent(project.id, {
+      name: "button-set",
+      type: "buttons",
+      brief: "three states",
+    });
+
+    const pageUpdated = await api.updatePage(project.id, "gallery", { brief: "grid v2" });
+    expect(pageUpdated.pages.find((item) => item.slug === "gallery")?.brief).toBe("grid v2");
+
+    const componentUpdated = await api.updateComponent(project.id, "button-set", {
+      brief: "three states v2",
+    });
+    expect(
+      componentUpdated.components.find((item) => item.name === "button-set")?.brief,
+    ).toBe("three states v2");
+
+    await expect(
+      api.updatePage(project.id, "gallery", { brief: "   " }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" } satisfies Partial<ApiError>);
+    await expect(
+      api.updatePage(project.id, "missing", { brief: "x" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" } satisfies Partial<ApiError>);
+    await expect(
+      api.updateComponent(project.id, "missing", { brief: "x" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" } satisfies Partial<ApiError>);
+  });
+
   test("rejects duplicates, anchor deletion and missing export dir", async () => {
     const api = new MockApi({ min: 5, max: 15 });
     const project = await api.createProject({
