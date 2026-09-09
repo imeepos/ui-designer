@@ -208,6 +208,13 @@ export interface ApiAdapter {
     input: { slug: string; brief: string },
     options?: CallOptions,
   ): Promise<ProjectDetail>;
+  /** Amend a page's brief (core `page_update`); used by the regenerate drawer. */
+  updatePage(
+    projectId: string,
+    slug: string,
+    input: { brief: string },
+    options?: CallOptions,
+  ): Promise<ProjectDetail>;
   generatePage(
     projectId: string,
     slug: string,
@@ -222,6 +229,13 @@ export interface ApiAdapter {
   addComponent(
     projectId: string,
     input: { name: string; type: ComponentType; brief: string },
+    options?: CallOptions,
+  ): Promise<ProjectDetail>;
+  /** Amend a component's brief (core `component_update`); used by the regenerate drawer. */
+  updateComponent(
+    projectId: string,
+    name: string,
+    input: { brief: string },
     options?: CallOptions,
   ): Promise<ProjectDetail>;
   generateComponent(

@@ -37,20 +37,6 @@
     "saveOk": "已保存到系统钥匙串。",
     "cleared": "已清除钥匙串中的 API Key。"
   },
-  "tree": {
-    "title": "目录",
-    "overview": "总览",
-    "pages": "页面",
-    "components": "组件",
-    "expand": "展开",
-    "collapse": "折叠",
-    "addPage": "添加页面",
-    "addComponent": "添加组件",
-    "emptyCta": "新建项目",
-    "emptyHint": "新建项目后，这里会显示它的设计目录。",
-    "lockedPage": "先在总览生成候选并设置锚点，再开始页面设计。",
-    "lockedComponent": "先完成一个页面（生成并转正），再开始组件设计。"
-  },
   "common": {
     "cancel": "取消",
     "delete": "删除",
@@ -71,37 +57,73 @@
       "tauri": "Tauri 已接入"
     }
   },
-  "footer": {},
-  "panel": {
-    "projects": {
-      "title": "项目",
-      "new": "新建项目",
-      "empty": "暂无项目，点击「新建项目」开始",
-      "pageCount": "{{count}} 页",
-      "componentCount": "{{count}} 组件"
-    },
-    "gallery": {
-      "title": "画廊",
-      "empty": {
-        "title": "从设计系统总板开始",
-        "desc": "新建项目并生成总板后，页面与组件都会沿用同一套风格。",
-        "cta": "新建项目"
-      }
-    },
-    "detail": {
-      "title": "详情与操作",
-      "placeholder": {
-        "title": "暂未选择内容"
-      },
-      "empty": "在画廊中选择一项后，这里会显示简报表单、生成按钮与历史版本。",
-      "project": {
-        "created": "创建于 {{date}}",
-        "brand": "品牌简报",
-        "style": "风格要点",
-        "pages": "页面",
-        "components": "组件"
-      }
+  "home": {
+    "searchPlaceholder": "搜索项目名称…",
+    "newProject": "新建项目",
+    "searchEmpty": "没有匹配的项目。",
+    "prevPage": "上一页",
+    "nextPage": "下一页",
+    "pageCount": "{{count}} 页",
+    "componentCount": "{{count}} 组件",
+    "created": "创建于 {{date}}",
+    "empty": {
+      "title": "还没有项目",
+      "desc": "新建项目，从设计系统总览开始一套 UI 设计。"
     }
+  },
+  "wizard": {
+    "title": "新建项目",
+    "step": {
+      "info": "项目信息",
+      "overview": "生成总览",
+      "save": "保存进入项目"
+    },
+    "createAndNext": "创建项目，下一步",
+    "skip": "跳过，稍后在项目内完成",
+    "nextSave": "下一步",
+    "saveHint": "项目已创建并保存；之后可随时从项目列表进入。",
+    "saveEnter": "保存并进入项目"
+  },
+  "workspace": {
+    "menu": "项目菜单",
+    "backHome": "返回项目列表",
+    "searchPlaceholder": "过滤页面 / 组件…",
+    "overview": "总览",
+    "pages": "页面",
+    "components": "组件",
+    "addPage": "添加页面",
+    "addComponent": "添加组件",
+    "lockedHint": "先在总览生成候选并设置锚点",
+    "emptyPages": "暂无页面",
+    "emptyComponents": "暂无组件",
+    "picked": "已转正",
+    "regenerate": "重新生成",
+    "switchAnchor": "切换锚点",
+    "switchDraft": "切换设计稿",
+    "stageEmpty": {
+      "overview": "尚未设置锚点",
+      "overviewDesc": "生成总板候选并点选一张作为风格锚点。",
+      "entry": "尚未生成",
+      "entryDesc": "在抽屉里填写简报并生成；候选完成后可在这里切换主稿。",
+      "unpicked": "已有候选，尚未转正"
+    }
+  },
+  "drawer": {
+    "titleBoard": "重新生成总览",
+    "titlePage": "重新生成页面「{{name}}」",
+    "titleComponent": "重新生成组件「{{name}}」",
+    "brief": "简报",
+    "briefDirty": "已修改，生成前会先保存",
+    "generateBoard": "生成总览候选",
+    "generate": "生成候选",
+    "hint": "生成过程中可留在抽屉查看进度；完成后用「切换设计稿」选定主稿。"
+  },
+  "switch": {
+    "titlePage": "切换设计稿 · {{name}}",
+    "titleComponent": "切换设计稿 · {{name}}",
+    "confirm": "确认切换",
+    "empty": "暂无候选：请先「重新生成」。",
+    "historyHint": "确认后，当前主稿将进入历史版本。"
   },
   "project": {
     "form": {
@@ -158,8 +180,6 @@
     },
     "page": {
       "addTitle": "添加页面",
-      "pickTitle": "选择页面",
-      "detailTitle": "页面操作",
       "slug": "页面 slug",
       "slugPlaceholder": "例如：project-library",
       "slugHint": "小写字母、数字与中划线，最长 48 字符。",
@@ -167,13 +187,10 @@
       "briefPlaceholder": "描述信息架构与布局，例如：左栏列表 + 中间画廊 + 右栏详情。",
       "add": "添加页面",
       "generate": "生成页面多稿",
-      "regenerate": "重新生成",
-      "hint": "候选在画廊对比后转正，旧主稿进入历史版本。"
+      "regenerate": "重新生成"
     },
     "component": {
       "addTitle": "添加组件",
-      "pickTitle": "选择组件",
-      "detailTitle": "组件操作",
       "name": "组件名称",
       "namePlaceholder": "例如：button-set",
       "nameHint": "仅小写字母、数字与中划线，最长 48 字符。",
@@ -182,8 +199,7 @@
       "briefPlaceholder": "例如：primary / secondary / ghost 三态，含 hover 与 disabled。",
       "add": "添加组件",
       "generate": "生成组件细节图",
-      "regenerate": "重新生成",
-      "hint": "锚点图为主参考，可结合页面图输出细节。"
+      "regenerate": "重新生成"
     },
     "error": {
       "slugRequired": "请输入页面 slug。",
@@ -207,46 +223,9 @@
     }
   },
   "gallery": {
-    "section": {
-      "board": "总板候选"
-    },
     "board": {
-      "anchorTitle": "当前锚点",
-      "anchorDesc": "后续页面与组件生成都以这张图为 Image 1 参考。",
-      "anchorEmpty": "尚未设置锚点：生成候选后，点选一张设为风格锚点。",
       "anchorBadge": "锚点",
-      "setAnchor": "设为锚点",
-      "candidateAlt": "总板候选 {{id}}",
-      "empty": {
-        "title": "还没有总板候选",
-        "desc": "在右侧填写品牌与风格简报，生成 1~4 张候选。"
-      },
-      "pickHint": "悬停候选卡片，点击「设为锚点」；锚点卡片带黄铜色标记。"
-    },
-    "flow": {
-      "items": "列表",
-      "candidates": "候选对比 · {{name}}",
-      "candidatesEmpty": "暂无候选：在右侧点击生成。",
-      "candidateAlt": "候选 {{id}}",
-      "pick": "转正",
-      "history": "历史版本（{{count}}）",
-      "picked": "已转正",
-      "pickedShort": "已转正",
-      "candidatesShort": "候选 {{count}}",
-      "untouched": "未生成",
-      "placeholder": "尚未生成"
-    },
-    "pages": {
-      "empty": {
-        "title": "还没有页面",
-        "desc": "在右侧添加页面 slug 与布局简报，开始生成。"
-      }
-    },
-    "components": {
-      "empty": {
-        "title": "还没有组件",
-        "desc": "在右侧添加组件与类型，生成细节图。"
-      }
+      "candidateAlt": "总板候选 {{id}}"
     }
   },
   "job": {

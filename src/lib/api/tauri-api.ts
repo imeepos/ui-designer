@@ -496,6 +496,26 @@ export class TauriApi implements ApiAdapter {
     }
   }
 
+  async updatePage(
+    projectId: string,
+    slug: string,
+    input: { brief: string },
+    _options?: CallOptions,
+  ): Promise<ProjectDetail> {
+    const dto = await this.call<ProjectDetailDto>("update_page", { projectId, slug, input });
+    return mapProject(this.toUrl, dto);
+  }
+
+  async updateComponent(
+    projectId: string,
+    name: string,
+    input: { brief: string },
+    _options?: CallOptions,
+  ): Promise<ProjectDetail> {
+    const dto = await this.call<ProjectDetailDto>("update_component", { projectId, name, input });
+    return mapProject(this.toUrl, dto);
+  }
+
   async deleteArtifact(
     projectId: string,
     target: DeleteTarget,

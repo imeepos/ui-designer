@@ -6,10 +6,11 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { ProjectDetail } from "@/lib/api/types";
 import { createApi } from "@/lib/api";
 import type {
   ApiAdapter,
@@ -18,43 +19,12 @@ import type {
   CreateProjectInput,
   DeleteTarget,
   ExportResult,
-  ProjectDetail,
   ProjectSummary,
 } from "@/lib/api/types";
 import { DEFAULT_QUALITY, type QualityLevel } from "@/lib/form-schema";
 import { useToast } from "@/state/toast";
 
 export type JobKind = "board" | "page" | "component" | "export";
-
-/**
- * Tree navigation target (replaces the former horizontal StepId):
- * - overview / pages / components are the three fixed group nodes;
- * - `page:<slug>` / `component:<name>` select a leaf under its group.
- */
-export type TreeViewId =
-  | "overview"
-  | "pages"
-  | "components"
-  | `page:${string}`
-  | `component:${string}`;
-
-/** Fixed group node ids (the tree's static level under the project root). */
-export type TreeGroupId = "overview" | "pages" | "components";
-
-/**
- * Whether a tree group may be opened: migrated from the former
- * `stepUnlockedMap` gating (PRD §3) — same invariants, new surface.
- */
-export function treeNodeUnlocked(
-  project: ProjectDetail | null,
-): Record<TreeGroupId, boolean> {
-  return {
-    overview: project !== null,
-    pages: project?.anchor != null,
-    components:
-      project?.anchor != null && project.pages.some((page) => page.current !== null),
-  };
-}
 
 export interface ActiveJob {
   kind: JobKind;
@@ -65,13 +35,36 @@ export interface ActiveJob {
   target?: string;
 }
 
+/**
+ * Workspace selection: the fixed overview entry (anchor stage) or a
+ * page/component leaf selected in the left menu.
+ */
+export type TreeViewId = "overview" | `page:${string}` | `component:${string}`;
+
+/** Left-menu group ids; `unlocked` gates only the inline add actions. */
+export type MenuGroupId = "overview" | "pages" | "components";
+
+/**
+ * Whether a menu group's add action may run: no anchor -> guide back to
+ * overview (PRD §3 gating, former `stepUnlockedMap` invariants).
+ */
+export function menuUnlocked(
+  project: ProjectDetail | null,
+): Record<MenuGroupId, boolean> {
+  return {
+    overview: project !== null,
+    pages: project?.anchor != null,
+    components: project?.anchor != null,
+  };
+}
+
 export interface StudioState {
   projects: ProjectSummary[];
   project: ProjectDetail | null;
   projectsLoading: boolean;
+  /** Home (project list) vs workspace routing. */
+  entered: boolean;
   view: TreeViewId;
-  selectedPage: string | null;
-  selectedComponent: string | null;
   job: ActiveJob | null;
   lastExport: ExportResult | null;
 }
@@ -90,9 +83,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [project, setProject] = useState<ProjectDetail | null>(null);
+  const [entered, setEntered] = useState(false);
   const [view, setView] = useState<TreeViewId>("overview");
-  const [selectedPage, setSelectedPage] = useState<string | null>(null);
-  const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
   const [job, setJob] = useState<ActiveJob | null>(null);
   const [lastExport, setLastExport] = useState<ExportResult | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -161,34 +153,54 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
   const activateProject = useCallback((detail: ProjectDetail) => {
     setProject(detail);
-    setSelectedPage(null);
-    setSelectedComponent(null);
-    // Auto-step equivalent: a fresh/switched project lands on the overview.
     setView("overview");
   }, []);
 
-  const selectProject = useCallback(async (id: string) => {
-    try {
-      const detail = await api.getProject(id);
-      activateProject(detail);
-    } catch (error) {
-      toast.error(error);
-    }
-  }, [activateProject, api, toast]);
+  /** Open a project from the home list -> enter its workspace. */
+  const selectProject = useCallback(
+    async (id: string) => {
+      try {
+        const detail = await api.getProject(id);
+        activateProject(detail);
+        setEntered(true);
+      } catch (error) {
+        toast.error(error);
+      }
+    },
+    [activateProject, api, toast],
+  );
 
+  /**
+   * Wizard step 1: create the project record but stay in the wizard; the
+   * workspace is only entered via `enterWorkspace` (step 3 save).
+   */
   const createProject = useCallback(
-    async (input: CreateProjectInput) => {
+    async (input: CreateProjectInput): Promise<ProjectDetail | null> => {
       try {
         const detail = await api.createProject(input);
         activateProject(detail);
         void refreshProjects();
         toast.success(t("toast.success.project"));
+        return detail;
       } catch (error) {
         toast.error(error);
+        return null;
       }
     },
     [activateProject, api, refreshProjects, t, toast],
   );
+
+  /** Wizard step 3: save -> leave the wizard into the project workspace. */
+  const enterWorkspace = useCallback(() => {
+    setEntered(true);
+  }, []);
+
+  /** Back from the workspace to the home project list. */
+  const closeProject = useCallback(() => {
+    setProject(null);
+    setEntered(false);
+    setView("overview");
+  }, []);
 
   const generateBoard = useCallback(
     async (brief: BoardBrief, count: number, quality: QualityLevel = DEFAULT_QUALITY) => {
@@ -211,8 +223,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         const detail = await api.pickAnchor(project.id, candidateId);
         setProject(detail);
         void refreshProjects();
-        // No forced jump (tree era): the success toast invites the user to
-        // start page design; the pages group unlocks in the tree.
+        // Guidance only: the pages group unlocks; no forced navigation.
         toast.success(t("toast.success.anchor"));
       } catch (error) {
         toast.error(error);
@@ -227,7 +238,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       try {
         const detail = await api.addPage(project.id, { slug, brief });
         setProject(detail);
-        setSelectedPage(slug);
         setView(`page:${slug}`);
         void refreshProjects();
         toast.success(t("toast.success.pageAdded", { slug }));
@@ -236,6 +246,21 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       }
     },
     [api, project, refreshProjects, t, toast],
+  );
+
+  const updatePageBrief = useCallback(
+    async (slug: string, brief: string) => {
+      if (!project) return false;
+      try {
+        const detail = await api.updatePage(project.id, slug, { brief });
+        setProject(detail);
+        return true;
+      } catch (error) {
+        toast.error(error);
+        return false;
+      }
+    },
+    [api, project, toast],
   );
 
   const generatePage = useCallback(
@@ -272,7 +297,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       try {
         const detail = await api.addComponent(project.id, { name, type, brief });
         setProject(detail);
-        setSelectedComponent(name);
         setView(`component:${name}`);
         void refreshProjects();
         toast.success(t("toast.success.componentAdded", { name }));
@@ -281,6 +305,21 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       }
     },
     [api, project, refreshProjects, t, toast],
+  );
+
+  const updateComponentBrief = useCallback(
+    async (name: string, brief: string) => {
+      if (!project) return false;
+      try {
+        const detail = await api.updateComponent(project.id, name, { brief });
+        setProject(detail);
+        return true;
+      } catch (error) {
+        toast.error(error);
+        return false;
+      }
+    },
+    [api, project, toast],
   );
 
   const generateComponent = useCallback(
@@ -331,20 +370,18 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         const detail = await api.deleteArtifact(project.id, target);
         setProject(detail);
         void refreshProjects();
-        if (target.kind === "page") {
-          setSelectedPage((prev) => (prev === target.slug ? null : prev));
-          setView((prev) => (prev === `page:${target.slug}` ? "pages" : prev));
+        if (target.kind === "page" && view === `page:${target.slug}`) {
+          setView("overview");
         }
-        if (target.kind === "component") {
-          setSelectedComponent((prev) => (prev === target.name ? null : prev));
-          setView((prev) => (prev === `component:${target.name}` ? "components" : prev));
+        if (target.kind === "component" && view === `component:${target.name}`) {
+          setView("overview");
         }
         toast.success(t("toast.success.deleted"));
       } catch (error) {
         toast.error(error);
       }
     },
-    [api, project, refreshProjects, t, toast],
+    [api, project, refreshProjects, t, toast, view],
   );
 
   const state = useMemo<StudioState>(
@@ -352,13 +389,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       projects,
       project,
       projectsLoading,
+      entered,
       view,
-      selectedPage,
-      selectedComponent,
       job,
       lastExport,
     }),
-    [projects, project, projectsLoading, view, selectedPage, selectedComponent, job, lastExport],
+    [projects, project, projectsLoading, entered, view, job, lastExport],
   );
 
   const value = useMemo<StudioApi>(
@@ -366,17 +402,19 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       state,
       apiMode: api.mode,
       setView,
-      selectPage: (slug: string | null) => setSelectedPage(slug),
-      selectComponent: (name: string | null) => setSelectedComponent(name),
+      enterWorkspace,
+      closeProject,
       cancelJob,
       createProject,
       selectProject,
       generateBoard,
       pickAnchor,
       addPage,
+      updatePageBrief,
       generatePage,
       pickPage,
       addComponent,
+      updateComponentBrief,
       generateComponent,
       pickComponent,
       exportProject,
@@ -386,14 +424,18 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       state,
       api.mode,
       cancelJob,
+      closeProject,
       createProject,
+      enterWorkspace,
       selectProject,
       generateBoard,
       pickAnchor,
       addPage,
+      updatePageBrief,
       generatePage,
       pickPage,
       addComponent,
+      updateComponentBrief,
       generateComponent,
       pickComponent,
       exportProject,
@@ -408,17 +450,22 @@ export interface StudioApi {
   state: StudioState;
   apiMode: "mock" | "tauri";
   setView: (view: TreeViewId) => void;
-  selectPage: (slug: string | null) => void;
-  selectComponent: (name: string | null) => void;
+  enterWorkspace: () => void;
+  closeProject: () => void;
   cancelJob: () => void;
-  createProject: (input: CreateProjectInput) => Promise<void>;
+  /** Wizard step 1: create without entering; returns the detail or null. */
+  createProject: (input: CreateProjectInput) => Promise<ProjectDetail | null>;
+  /** Home list -> open a project into the workspace. */
   selectProject: (id: string) => Promise<void>;
   generateBoard: (brief: BoardBrief, count: number, quality?: QualityLevel) => Promise<void>;
   pickAnchor: (candidateId: string) => Promise<void>;
   addPage: (slug: string, brief: string) => Promise<void>;
+  /** Persist an amended brief before regenerating (core update ops). */
+  updatePageBrief: (slug: string, brief: string) => Promise<boolean>;
   generatePage: (slug: string, count: number, quality?: QualityLevel) => Promise<void>;
   pickPage: (slug: string, candidateId: string) => Promise<void>;
   addComponent: (name: string, type: ComponentType, brief: string) => Promise<void>;
+  updateComponentBrief: (name: string, brief: string) => Promise<boolean>;
   generateComponent: (name: string, count: number, quality?: QualityLevel) => Promise<void>;
   pickComponent: (name: string, candidateId: string) => Promise<void>;
   exportProject: (outDir: string) => Promise<void>;

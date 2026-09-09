@@ -167,6 +167,13 @@ pub struct AddComponentInput {
     pub brief: String,
 }
 
+/// Brief-only amend for pages/components (core `*_update` ops).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateBriefInput {
+    pub brief: String,
+}
+
 /// Mirrors `DeleteTarget` from `src/lib/api/types.ts`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(
@@ -397,6 +404,17 @@ pub async fn pick_page(
 }
 
 #[tauri::command]
+pub async fn update_page(
+    project_id: String,
+    slug: String,
+    input: UpdateBriefInput,
+) -> Result<ProjectDetailDto, CommandError> {
+    let (root, _) = resolve_project(&project_id)?;
+    ops::page_update(&root, &slug, input.brief.trim()).map_err(into_command)?;
+    detail_view(&root)
+}
+
+#[tauri::command]
 pub async fn add_component(
     project_id: String,
     input: AddComponentInput,
@@ -434,6 +452,17 @@ pub async fn pick_component(
 ) -> Result<ProjectDetailDto, CommandError> {
     let (root, _) = resolve_project(&project_id)?;
     ops::component_pick(&root, &name, &candidate_id).map_err(into_command)?;
+    detail_view(&root)
+}
+
+#[tauri::command]
+pub async fn update_component(
+    project_id: String,
+    name: String,
+    input: UpdateBriefInput,
+) -> Result<ProjectDetailDto, CommandError> {
+    let (root, _) = resolve_project(&project_id)?;
+    ops::component_update(&root, &name, None, Some(input.brief.trim())).map_err(into_command)?;
     detail_view(&root)
 }
 

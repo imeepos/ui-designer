@@ -37,20 +37,6 @@
     "saveOk": "API key saved to the OS keychain.",
     "cleared": "API key removed from the keychain."
   },
-  "tree": {
-    "title": "Library",
-    "overview": "Overview",
-    "pages": "Pages",
-    "components": "Components",
-    "expand": "Expand",
-    "collapse": "Collapse",
-    "addPage": "Add page",
-    "addComponent": "Add component",
-    "emptyCta": "New project",
-    "emptyHint": "Create a project and its design tree shows up here.",
-    "lockedPage": "Generate board candidates and set the anchor in Overview first.",
-    "lockedComponent": "Finish one page (generate and pick) before component design."
-  },
   "common": {
     "cancel": "Cancel",
     "delete": "Delete",
@@ -71,37 +57,73 @@
       "tauri": "Tauri connected"
     }
   },
-  "footer": {},
-  "panel": {
-    "projects": {
-      "title": "Projects",
-      "new": "New project",
-      "empty": "No projects yet. Click \"New project\" to start.",
-      "pageCount": "{{count}} pages",
-      "componentCount": "{{count}} comps"
-    },
-    "gallery": {
-      "title": "Gallery",
-      "empty": {
-        "title": "Start from the design system board",
-        "desc": "Create a project and generate the board first; pages and components will share its style.",
-        "cta": "New project"
-      }
-    },
-    "detail": {
-      "title": "Details & actions",
-      "placeholder": {
-        "title": "Nothing selected"
-      },
-      "empty": "Pick an item in the gallery to see its brief form, generate button and history.",
-      "project": {
-        "created": "Created {{date}}",
-        "brand": "Brand brief",
-        "style": "Style notes",
-        "pages": "Pages",
-        "components": "Components"
-      }
+  "home": {
+    "searchPlaceholder": "Search projects…",
+    "newProject": "New project",
+    "searchEmpty": "No projects match.",
+    "prevPage": "Previous page",
+    "nextPage": "Next page",
+    "pageCount": "{{count}} pages",
+    "componentCount": "{{count}} comps",
+    "created": "Created {{date}}",
+    "empty": {
+      "title": "No projects yet",
+      "desc": "Create a project and start a UI set from the design overview."
     }
+  },
+  "wizard": {
+    "title": "New project",
+    "step": {
+      "info": "Project info",
+      "overview": "Generate overview",
+      "save": "Save & enter"
+    },
+    "createAndNext": "Create & continue",
+    "skip": "Skip, do it later",
+    "nextSave": "Next",
+    "saveHint": "The project is saved; you can re-enter it from the project list anytime.",
+    "saveEnter": "Save & enter project"
+  },
+  "workspace": {
+    "menu": "Project menu",
+    "backHome": "Back to projects",
+    "searchPlaceholder": "Filter pages / components…",
+    "overview": "Overview",
+    "pages": "Pages",
+    "components": "Components",
+    "addPage": "Add page",
+    "addComponent": "Add component",
+    "lockedHint": "Set the anchor in Overview first",
+    "emptyPages": "No pages yet",
+    "emptyComponents": "No components yet",
+    "picked": "Picked",
+    "regenerate": "Regenerate",
+    "switchAnchor": "Switch anchor",
+    "switchDraft": "Switch draft",
+    "stageEmpty": {
+      "overview": "No anchor yet",
+      "overviewDesc": "Generate board candidates and pick one as the style anchor.",
+      "entry": "Nothing generated yet",
+      "entryDesc": "Fill the brief in the drawer and generate; switch the draft here once candidates are ready.",
+      "unpicked": "Candidates ready, none picked"
+    }
+  },
+  "drawer": {
+    "titleBoard": "Regenerate overview",
+    "titlePage": "Regenerate page \"{{name}}\"",
+    "titleComponent": "Regenerate component \"{{name}}\"",
+    "brief": "Brief",
+    "briefDirty": "Changed; saved before generating",
+    "generateBoard": "Generate overview candidates",
+    "generate": "Generate candidates",
+    "hint": "Progress stays in the drawer; use Switch draft to pick the new current when done."
+  },
+  "switch": {
+    "titlePage": "Switch draft · {{name}}",
+    "titleComponent": "Switch draft · {{name}}",
+    "confirm": "Switch to selected",
+    "empty": "No candidates yet: regenerate first.",
+    "historyHint": "Confirming moves the current draft into history."
   },
   "project": {
     "form": {
@@ -158,8 +180,6 @@
     },
     "page": {
       "addTitle": "Add page",
-      "pickTitle": "Pick a page",
-      "detailTitle": "Page actions",
       "slug": "Page slug",
       "slugPlaceholder": "e.g. project-library",
       "slugHint": "Lowercase letters, digits and dashes, up to 48 chars.",
@@ -167,13 +187,10 @@
       "briefPlaceholder": "Describe the information architecture, e.g. left list + center gallery + right details.",
       "add": "Add page",
       "generate": "Generate page drafts",
-      "regenerate": "Regenerate",
-      "hint": "Compare candidates in the gallery, pick one; the old current moves to history."
+      "regenerate": "Regenerate"
     },
     "component": {
       "addTitle": "Add component",
-      "pickTitle": "Pick a component",
-      "detailTitle": "Component actions",
       "name": "Component name",
       "namePlaceholder": "e.g. button-set",
       "nameHint": "Lowercase letters, digits and dashes, up to 48 chars.",
@@ -182,8 +199,7 @@
       "briefPlaceholder": "e.g. primary / secondary / ghost states with hover and disabled.",
       "add": "Add component",
       "generate": "Generate component detail",
-      "regenerate": "Regenerate",
-      "hint": "The anchor board is reference 1; page images can be added for context."
+      "regenerate": "Regenerate"
     },
     "error": {
       "slugRequired": "Enter a page slug.",
@@ -207,46 +223,9 @@
     }
   },
   "gallery": {
-    "section": {
-      "board": "Board candidates"
-    },
     "board": {
-      "anchorTitle": "Current anchor",
-      "anchorDesc": "Page and component generations use this image as reference 1.",
-      "anchorEmpty": "No anchor yet: generate candidates, then click one to set the style anchor.",
       "anchorBadge": "Anchor",
-      "setAnchor": "Set as anchor",
-      "candidateAlt": "Board candidate {{id}}",
-      "empty": {
-        "title": "No board candidates yet",
-        "desc": "Fill in the brand and style brief on the right, then generate 1–4 candidates."
-      },
-      "pickHint": "Hover a candidate and click \"Set as anchor\"; the anchor card carries a brass badge."
-    },
-    "flow": {
-      "items": "Items",
-      "candidates": "Candidates · {{name}}",
-      "candidatesEmpty": "No candidates yet: hit generate on the right.",
-      "candidateAlt": "Candidate {{id}}",
-      "pick": "Pick",
-      "history": "History ({{count}})",
-      "picked": "Picked",
-      "pickedShort": "Picked",
-      "candidatesShort": "{{count}} candidates",
-      "untouched": "Not generated",
-      "placeholder": "Not generated yet"
-    },
-    "pages": {
-      "empty": {
-        "title": "No pages yet",
-        "desc": "Add a page slug and layout brief on the right to start generating."
-      }
-    },
-    "components": {
-      "empty": {
-        "title": "No components yet",
-        "desc": "Add a component and its type on the right to generate details."
-      }
+      "candidateAlt": "Board candidate {{id}}"
     }
   },
   "job": {

@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderOutput, Settings } from "lucide-react";
+import { ArrowLeft, FolderOutput, Settings } from "lucide-react";
 import pkg from "../package.json";
 
 import { HelmMark } from "@/components/icons";
 import { LanguageSwitcher } from "@/components/language-switcher";
-import { CreateProjectDialog } from "@/components/create-project-dialog";
+import { AnchorBadge } from "@/components/card-actions";
+import { CreateWizard } from "@/components/create-wizard";
+import { HomeView } from "@/components/home-view";
+import { WorkspaceView } from "@/components/workspace/workspace-view";
 import { ExportDialog } from "@/components/export-dialog";
 import { SettingsDialog } from "@/components/settings-dialog";
-import { DetailPanel } from "@/components/panels/detail-panel";
-import { GalleryPanel } from "@/components/panels/gallery-panel";
-import { ProjectsPanel } from "@/components/panels/projects-panel";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useCoreStatus } from "@/hooks/use-core-status";
@@ -31,8 +31,8 @@ export default function App() {
 function AppShell() {
   const { t } = useTranslation();
   const core = useCoreStatus();
-  const { state, apiMode } = useStudio();
-  const [createOpen, setCreateOpen] = useState(false);
+  const { state, apiMode, closeProject } = useStudio();
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -47,6 +47,8 @@ function AppShell() {
     document.title = t("app.title");
   }, [t]);
 
+  const inWorkspace = state.project !== null && state.entered;
+
   return (
     <div
       data-testid="app-shell"
@@ -54,23 +56,46 @@ function AppShell() {
     >
       <header className="flex h-12 shrink-0 items-center justify-between gap-4 border-b px-4">
         <div className="flex min-w-0 items-center gap-2">
+          {inWorkspace && (
+            <Button
+              variant="ghost"
+              size="icon"
+              data-testid="back-home"
+              aria-label={t("workspace.backHome")}
+              title={t("workspace.backHome")}
+              onClick={closeProject}
+            >
+              <ArrowLeft className="size-4" />
+            </Button>
+          )}
           <HelmMark className="size-5 shrink-0 text-primary" />
           <span className="truncate text-sm font-semibold">{t("app.title")}</span>
-          <span className="hidden truncate text-xs text-muted-foreground md:inline">
-            {t("app.subtitle")}
-          </span>
+          {inWorkspace && state.project ? (
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span aria-hidden="true" className="text-muted-foreground">/</span>
+              <span className="min-w-0 truncate text-sm text-muted-foreground">
+                {state.project.name}
+              </span>
+              {state.project.anchor && <AnchorBadge className="scale-90" />}
+            </span>
+          ) : (
+            <span className="hidden truncate text-xs text-muted-foreground md:inline">
+              {t("app.subtitle")}
+            </span>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="sm"
-            data-testid="export-open"
-            disabled={state.project === null}
-            onClick={() => setExportOpen(true)}
-          >
-            <FolderOutput className="size-3.5" />
-            {t("common.export")}
-          </Button>
+          {inWorkspace && (
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="export-open"
+              onClick={() => setExportOpen(true)}
+            >
+              <FolderOutput className="size-3.5" />
+              {t("common.export")}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -86,11 +111,11 @@ function AppShell() {
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1">
-        <ProjectsPanel />
-        <GalleryPanel onNewProject={() => setCreateOpen(true)} />
-        <DetailPanel onNewProject={() => setCreateOpen(true)} />
-      </main>
+      {inWorkspace ? (
+        <WorkspaceView />
+      ) : (
+        <HomeView onCreate={() => setWizardOpen(true)} />
+      )}
 
       <footer className="flex h-8 shrink-0 items-center gap-2 border-t px-4 text-xs text-muted-foreground">
         <span>{t("status.core.label")}</span>
@@ -107,7 +132,7 @@ function AppShell() {
         <span className="ml-auto font-mono">v{pkg.version}</span>
       </footer>
 
-      <CreateProjectDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>

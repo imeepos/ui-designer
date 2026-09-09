@@ -1,12 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useStudio } from "@/state/studio";
 import type { ComponentType } from "@/lib/api/types";
 import { COMPONENT_TYPES } from "@/lib/api/types";
-import { BRIEF_MAX, DEFAULT_QUALITY, QUALITY_LEVELS, type QualityLevel } from "@/lib/form-schema";
+import { BRIEF_MAX, QUALITY_LEVELS, type QualityLevel } from "@/lib/form-schema";
 import { identifierErrorKey, slugifyHint } from "@/lib/validate";
-import { useConfirm } from "@/hooks/use-confirm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -230,72 +229,6 @@ export function AddPageForm({ onAdded }: { onAdded?: () => void }) {
   );
 }
 
-/** Selected-page operations: brief, count, quality, regenerate, delete. */
-export function PageDetailForm() {
-  const { t } = useTranslation();
-  const { state, generatePage, deleteArtifact } = useStudio();
-  const { ask, element: confirmElement } = useConfirm();
-  const project = state.project;
-  const page = project?.pages.find((item) => item.slug === state.selectedPage);
-  const [brief, setBrief] = useState(page?.brief ?? "");
-  const [count, setCount] = useState(2);
-  const [quality, setQuality] = useState<QualityLevel>(DEFAULT_QUALITY);
-
-  useEffect(() => {
-    setBrief(page?.brief ?? "");
-  }, [page?.slug, page?.brief]);
-
-  if (!project || !page) return null;
-  const jobRunning = state.job !== null;
-
-  return (
-    <div data-testid="page-detail-form" className="flex flex-col gap-3">
-      {confirmElement}
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate font-mono text-xs font-semibold">
-          {page.slug}
-        </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          data-testid="page-delete"
-          className="text-destructive hover:text-destructive"
-          onClick={() =>
-            ask({
-              title: t("confirm.deleteItem.title"),
-              description: t("confirm.deleteItem.desc", { name: page.slug }),
-              onConfirm: () => void deleteArtifact({ kind: "page", slug: page.slug }),
-            })
-          }
-        >
-          {t("common.delete")}
-        </Button>
-      </div>
-      <BriefField
-        id="page-detail-brief"
-        testId="page-detail-brief"
-        label={t("form.page.brief")}
-        placeholder={t("form.page.briefPlaceholder")}
-        value={brief}
-        onChange={setBrief}
-      />
-      <CountPicker value={count} onChange={setCount} testIdPrefix="page-detail" />
-      <QualityPicker value={quality} onChange={setQuality} testIdPrefix="page-detail" />
-      <Button
-        size="sm"
-        data-testid="page-generate"
-        disabled={jobRunning || !brief.trim()}
-        onClick={() => void generatePage(page.slug, count, quality)}
-      >
-        {page.candidates.length > 0 || page.current
-          ? t("form.page.regenerate")
-          : t("form.page.generate")}
-      </Button>
-      <p className="text-[11px] text-muted-foreground">{t("form.page.hint")}</p>
-    </div>
-  );
-}
-
 /** Add component form (step 4 entry) with the seven type choices. */
 export function AddComponentForm({ onAdded }: { onAdded?: () => void }) {
   const { t } = useTranslation();
@@ -396,76 +329,5 @@ export function AddComponentForm({ onAdded }: { onAdded?: () => void }) {
         {t("form.component.add")}
       </Button>
     </form>
-  );
-}
-
-/** Selected-component operations: type, brief, count, quality, regenerate. */
-export function ComponentDetailForm() {
-  const { t } = useTranslation();
-  const { state, generateComponent, deleteArtifact } = useStudio();
-  const { ask, element: confirmElement } = useConfirm();
-  const project = state.project;
-  const component = project?.components.find(
-    (item) => item.name === state.selectedComponent,
-  );
-  const [brief, setBrief] = useState(component?.brief ?? "");
-  const [count, setCount] = useState(2);
-  const [quality, setQuality] = useState<QualityLevel>(DEFAULT_QUALITY);
-
-  useEffect(() => {
-    setBrief(component?.brief ?? "");
-  }, [component?.name, component?.brief]);
-
-  if (!project || !component) return null;
-  const jobRunning = state.job !== null;
-
-  return (
-    <div data-testid="component-detail-form" className="flex flex-col gap-3">
-      {confirmElement}
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate font-mono text-xs font-semibold">
-          {component.name}
-        </span>
-        <span className="shrink-0 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
-          {t(`component.type.${component.type}`)}
-        </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          data-testid="component-delete"
-          className="text-destructive hover:text-destructive"
-          onClick={() =>
-            ask({
-              title: t("confirm.deleteItem.title"),
-              description: t("confirm.deleteItem.desc", { name: component.name }),
-              onConfirm: () => void deleteArtifact({ kind: "component", name: component.name }),
-            })
-          }
-        >
-          {t("common.delete")}
-        </Button>
-      </div>
-      <BriefField
-        id="component-detail-brief"
-        testId="component-detail-brief"
-        label={t("form.component.brief")}
-        placeholder={t("form.component.briefPlaceholder")}
-        value={brief}
-        onChange={setBrief}
-      />
-      <CountPicker value={count} onChange={setCount} testIdPrefix="component-detail" />
-      <QualityPicker value={quality} onChange={setQuality} testIdPrefix="component-detail" />
-      <Button
-        size="sm"
-        data-testid="component-generate"
-        disabled={jobRunning || !brief.trim()}
-        onClick={() => void generateComponent(component.name, count, quality)}
-      >
-        {component.candidates.length > 0 || component.current
-          ? t("form.component.regenerate")
-          : t("form.component.generate")}
-      </Button>
-      <p className="text-[11px] text-muted-foreground">{t("form.component.hint")}</p>
-    </div>
   );
 }

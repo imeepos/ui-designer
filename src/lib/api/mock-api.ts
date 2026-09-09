@@ -253,6 +253,23 @@ export class MockApi implements ApiAdapter {
     return clone(project);
   }
 
+  async updatePage(
+    projectId: string,
+    slug: string,
+    input: { brief: string },
+    options?: CallOptions,
+  ): Promise<ProjectDetail> {
+    this.assertNotAborted(options?.signal);
+    const project = requireProject(this.store, projectId);
+    const page = requirePage(project, slug);
+    if (!input.brief.trim()) {
+      throw new ApiError("VALIDATION_ERROR", "Page brief is required");
+    }
+    page.brief = input.brief.trim();
+    page.updatedAt = Date.now();
+    return clone(project);
+  }
+
   async generatePage(
     projectId: string,
     slug: string,
@@ -326,6 +343,23 @@ export class MockApi implements ApiAdapter {
       history: [],
       updatedAt: Date.now(),
     });
+    return clone(project);
+  }
+
+  async updateComponent(
+    projectId: string,
+    name: string,
+    input: { brief: string },
+    options?: CallOptions,
+  ): Promise<ProjectDetail> {
+    this.assertNotAborted(options?.signal);
+    const project = requireProject(this.store, projectId);
+    const component = requireComponent(project, name);
+    if (!input.brief.trim()) {
+      throw new ApiError("VALIDATION_ERROR", "Component brief is required");
+    }
+    component.brief = input.brief.trim();
+    component.updatedAt = Date.now();
     return clone(project);
   }
 

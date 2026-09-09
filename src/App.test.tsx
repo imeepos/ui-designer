@@ -8,45 +8,39 @@ beforeAll(async () => {
   await i18n.changeLanguage("zh-CN");
 });
 
-test("renders three-column shell with directory tree (zh-CN)", () => {
+test("renders the home project list shell (zh-CN)", () => {
   const html = renderToString(<App />);
 
   expect(html).toContain('data-testid="app-shell"');
-  expect(html).toContain('data-testid="projects-panel"');
-  expect(html).toContain('data-testid="gallery-panel"');
-  expect(html).toContain('data-testid="detail-panel"');
+  expect(html).toContain('data-testid="home-view"');
+  expect(html).toContain('data-testid="project-search"');
+  expect(html).toContain('data-testid="new-project"');
 
-  // 横向步条已删除，取而代之的是目录树。
+  // 无项目不进入工作区；旧三栏/步条/树全部退役。
+  expect(html).not.toContain('data-testid="workspace-view"');
   expect(html).not.toContain('data-testid="stepper"');
-  expect(html).toContain('data-testid="project-tree"');
+  expect(html).not.toContain('data-testid="left-menu"');
+  expect(html).not.toContain('data-testid="project-tree"');
 
-  // 无项目：树只显示新建入口。
-  expect(html).toContain('data-testid="tree-empty-create"');
-  expect(html).not.toContain('data-testid="tree-root"');
-
-  expect(html).toContain("画廊");
-  expect(html).toContain("详情与操作");
   expect(html).toContain("新建项目");
-  expect(html).toContain("目录");
+  expect(html).toContain("还没有项目");
 });
 
 test("switching language to en updates all visible copy", async () => {
   await i18n.changeLanguage("en");
   const html = renderToString(<App />);
 
-  expect(html).toContain("Gallery");
-  expect(html).toContain("Details");
   expect(html).toContain("New project");
-  expect(html).toContain("Library");
-  expect(html).not.toContain("画廊");
+  expect(html).toContain("No projects yet");
   expect(html).not.toContain("新建项目");
+  expect(html).not.toContain("还没有项目");
 
   await i18n.changeLanguage("zh-CN");
 });
 
-test("stepper markup is fully gone from the shell", () => {
+test("legacy stepper and tree markup are fully gone", () => {
   const html = renderToString(<App />);
   expect(html).not.toContain('data-testid="step-project"');
   expect(html).not.toContain('data-testid="step-nav-');
-  expect(html).not.toContain("设计流程");
+  expect(html).not.toContain('data-testid="tree-root"');
 });
