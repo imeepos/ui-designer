@@ -183,6 +183,7 @@
       "detailTitle": "组件操作",
       "name": "组件名称",
       "namePlaceholder": "例如：button-set",
+      "nameHint": "仅小写字母、数字与中划线，最长 48 字符。",
       "type": "组件类型",
       "brief": "组件简报",
       "briefPlaceholder": "例如：primary / secondary / ghost 三态，含 hover 与 disabled。",
@@ -196,7 +197,9 @@
       "slugTaken": "该 slug 已存在。",
       "slugFormat": "slug 仅支持小写字母、数字与中划线。",
       "nameRequired": "请输入组件名称。",
-      "nameTaken": "该组件名已存在。"
+      "nameTaken": "该组件名已存在。",
+      "nameFormat": "组件名称仅支持小写字母、数字与中划线。",
+      "briefRequired": "请输入组件简报。"
     }
   },
   "component": {
@@ -320,7 +323,7 @@
   },
   "errors": {
     "VALIDATION_ERROR": {
-      "message": "输入不合法，请检查表单。",
+      "message": "输入不合法：{{detail}}",
       "hint": "修正后重试。"
     },
     "ANCHOR_REQUIRED": {
@@ -369,6 +372,11 @@
     }
   },
   "lightbox": {
-    "hint": "Esc 关闭"
+    "hint": "Esc 关闭 · 滚轮缩放 · 拖拽平移 · 双击 1:1",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "fit": "适应窗口",
+    "actualSize": "实际大小（1:1）",
+    "loadFailed": "图像加载失败"
   }
 }

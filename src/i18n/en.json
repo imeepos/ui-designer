@@ -183,6 +183,7 @@
       "detailTitle": "Component actions",
       "name": "Component name",
       "namePlaceholder": "e.g. button-set",
+      "nameHint": "Lowercase letters, digits and dashes, up to 48 chars.",
       "type": "Component type",
       "brief": "Component brief",
       "briefPlaceholder": "e.g. primary / secondary / ghost states with hover and disabled.",
@@ -196,7 +197,9 @@
       "slugTaken": "This slug already exists.",
       "slugFormat": "Slugs allow lowercase letters, digits and dashes only.",
       "nameRequired": "Enter a component name.",
-      "nameTaken": "This component name already exists."
+      "nameTaken": "This component name already exists.",
+      "nameFormat": "Component names allow lowercase letters, digits and dashes only.",
+      "briefRequired": "Enter a component brief."
     }
   },
   "component": {
@@ -320,7 +323,7 @@
   },
   "errors": {
     "VALIDATION_ERROR": {
-      "message": "Invalid input, please check the form.",
+      "message": "Invalid input: {{detail}}",
       "hint": "Fix the fields and retry."
     },
     "ANCHOR_REQUIRED": {
@@ -369,6 +372,11 @@
     }
   },
   "lightbox": {
-    "hint": "Esc to close"
+    "hint": "Esc to close · Scroll to zoom · Drag to pan · Double-click for 1:1",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fit": "Fit to window",
+    "actualSize": "Actual size (1:1)",
+    "loadFailed": "Failed to load image"
   }
 }
