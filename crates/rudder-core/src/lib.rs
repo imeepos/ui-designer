@@ -7,6 +7,8 @@
 //!   [`config::credential`] — OS-keychain API key (env → keychain → none)
 //!   and the free `/v1/models` connectivity probe
 //! - [`prompt`] — three-part prompt engine for board/page/component
+//! - [`templates`] — agent-consumable template protocol (skeletons + fill
+//!   guides; PRD §0: intelligence lives in the external coding agent)
 //! - [`image`]  — gpt-image-2 client with dry-run, retry, b64 decode
 //! - [`export`] — asset bundle export (images + manifest + PROMPTS.md)
 //! - [`ops`]    — high-level flows shared by CLI and desktop shell
@@ -19,6 +21,7 @@ pub mod ops;
 pub mod export;
 pub mod image;
 pub mod prompt;
+pub mod templates;
 
 pub use canvas::CanvasSize;
 pub use config::Config;
@@ -26,6 +29,9 @@ pub use error::{Result, RudderError};
 
 /// Crate version, surfaced to both CLI and desktop shell.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[cfg(test)]
+pub(crate) mod test_support;
 
 #[cfg(test)]
 mod tests {

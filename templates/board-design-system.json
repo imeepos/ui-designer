@@ -1,0 +1,61 @@
+{
+  "id": "board-design-system",
+  "version": 1,
+  "appliesTo": "board",
+  "name": { "zh": "设计系统总板（默认）", "en": "Design System Board (default)" },
+  "summary": {
+    "zh": "五分区规格板：色板(hex 标签) → 字体层级 → 组件样本 → 图标风格 → 间距栅格。参数化自舵默认引擎骨架，出「一套系统」的锚点图。",
+    "en": "Five-section spec sheet: color palette (hex labels), type scale, component samples, icon style, spacing grid. Parameterized from Rudder's default engine skeleton."
+  },
+  "attribution": "骨架由舵默认引擎参数化而来；分区法结构模式参考 awesome-gpt-image-2（MIT）案例 133/132/243 的分区+计数思路，未内嵌任何案例原文。",
+  "slots": [
+    { "name": "project.name", "required": true, "description": { "zh": "产品/项目名，出现在 Purpose 行。", "en": "Product name, appears in the Purpose line." } },
+    { "name": "project.brandBrief", "required": false, "description": { "zh": "品牌简报（行业、受众、气质）；为空时整行自动省略。", "en": "Brand brief (industry, audience, mood); the line is dropped when empty." } },
+    { "name": "project.styleBrief", "required": false, "description": { "zh": "风格简报（配色方向、圆角、密度）；为空时整行自动省略。", "en": "Style brief (palette direction, radius, density); the line is dropped when empty." } },
+    { "name": "canvas.w", "required": true, "description": { "zh": "画布宽（像素），来自项目 canvasSize。", "en": "Canvas width in pixels from project canvasSize." } },
+    { "name": "canvas.h", "required": true, "description": { "zh": "画布高（像素），来自项目 canvasSize。", "en": "Canvas height in pixels from project canvasSize." } },
+    { "name": "project.negativeHints", "required": false, "description": { "zh": "项目级自定义排除项（rudder project update --negative-hint 追加）；本骨架未直接引用，由引擎 Constraints 块注入。", "en": "Project-level custom exclusions (appended via rudder project update --negative-hint); injected by the engine Constraints block." } }
+  ],
+  "skeleton": "Purpose: a UI design system board (风格总板) for the product \"{project.name}\".\nBrand brief: {project.brandBrief}\nStyle brief: {project.styleBrief}\nCanvas: {canvas.w}x{canvas.h}. Lay out ONE labeled sheet with these sections:\n1. COLOR PALETTE — 5-8 swatch chips as rounded rectangles, each with its exact hex code printed as a label under or inside the chip.\n2. TYPOGRAPHY — type hierarchy specimen: display / heading / subheading / body / caption rows, each labeled with size and weight.\n3. COMPONENT SAMPLES — a row of buttons (primary, secondary, ghost; default/hover/disabled states), one text input, one select, one card, one toggle, one checkbox, labeled.\n4. ICON STYLE — a row of 6-8 sample icons showing stroke weight and corner treatment.\n5. SPACING & GRID RULES — a spacing scale diagram (4/8/16/24/32px) and corner-radius samples per element class.\nSections separated by thin dividers, generous margins, engineering spec-sheet clarity.",
+  "fillGuide": {
+    "howTo": "总板是整套设计唯一的风格锚点：先读 project.json 拿 name/brandBrief/styleBrief 与 canvasSize，逐槽填入即可。所有分区名与计数已由骨架锁定，不要增删分区；要改风格只改槽位值。填完后把整段文本写入临时文件，用 rudder board generate --prompt-file <file> 出图。",
+    "slots": [
+      {
+        "slot": "project.name",
+        "what": "产品显示名，原样填入引号内；中英文皆可。",
+        "goodExample": "「远洋航运 SaaS」→ \"远洋航运 SaaS\"",
+        "commonMistakes": ["填成项目目录名或 id（如 oceanship-prod）", "把一句话简介塞进名字槽"]
+      },
+      {
+        "slot": "project.brandBrief",
+        "what": "行业+受众+气质的一句话；没有就留空（该行自动消失，不要写 N/A）。",
+        "goodExample": "远洋航运行业，面向船东货主的专业 B 端工具，气质克制",
+        "commonMistakes": ["写形容词堆砌（高级、现代、大气）而无行业与受众", "为空时硬填 placeholder 文本"]
+      },
+      {
+        "slot": "project.styleBrief",
+        "what": "可落地的视觉规则：主色方向、点缀色、圆角档位、密度；为空留空。",
+        "goodExample": "海军蓝 + 黄铜点缀，圆角 8px，紧凑密度",
+        "commonMistakes": ["与 brandBrief 重复", "写死具体 hex 但与项目锚点冲突（总板正是定 hex 的地方）"]
+      },
+      {
+        "slot": "canvas.w",
+        "what": "画布宽像素，取 project.json 的 canvasSize.w，不要自造。",
+        "goodExample": "1536",
+        "commonMistakes": ["填成比例（16:9）", "改小画布想让模型『画得更细』——比例由 API size 参数锁定，改文本无效"]
+      },
+      {
+        "slot": "canvas.h",
+        "what": "画布高像素，取 project.json 的 canvasSize.h。",
+        "goodExample": "1024",
+        "commonMistakes": ["与 w 对调", "填非 16 倍数的自造值"]
+      },
+      {
+        "slot": "project.negativeHints",
+        "what": "可选。默认骨架不直接引用它；引擎会把项目 negativeHints 追加进 Constraints 的 explicit-negatives 行。想自定义排除项时改用 rudder project update --negative-hint，而不是改这里。",
+        "goodExample": "（一般留空不引用）",
+        "commonMistakes": ["在骨架里手写大量禁用清单，与 Constraints 块重复"]
+      }
+    ]
+  }
+}

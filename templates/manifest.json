@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "attribution": {
+    "basedOn": "awesome-gpt-image-2 — 工业级提示词模板与防坑指南（freestylefly/awesome-gpt-image-2）",
+    "url": "https://github.com/freestylefly/awesome-gpt-image-2",
+    "license": "MIT",
+    "usage": "仅吸收结构模式与防坑规则（分区法、计数显式、逐字文本、负面清单等）；任何画廊案例原文均未逐字内嵌。骨架与填槽指南为舵 Rudder 原创改写。",
+    "notice": "Template skeletons and fill guides © 舵 Rudder contributors (MIT). Structure patterns adapted from awesome-gpt-image-2 (MIT) — see docs/GPT-IMAGE-2-DESIGN-KNOWLEDGE.md for the distillation map."
+  },
+  "slotVocabulary": {
+    "project.name": "项目名",
+    "project.brandBrief": "品牌简报（可空）",
+    "project.styleBrief": "风格简报（可空）",
+    "project.negativeHints": "项目级排除项（; 连接；可空）",
+    "project.invariants": "引擎渲染的锚点不变量清单（页面/组件模板用）",
+    "canvas.w": "画布宽（像素）",
+    "canvas.h": "画布高（像素）",
+    "page.slug": "页面 slug（页面模板）",
+    "page.brief": "页面布局简报（页面模板）",
+    "component.name": "组件族注册名（组件模板，可选）",
+    "component.kind": "组件类型标签（组件模板）",
+    "component.brief": "组件变体×状态简报（组件模板）",
+    "anchor.reference": "锚点引用行常量（页面/组件模板）"
+  },
+  "fillProtocol": "代理工作流：rudder templates show <id> 读骨架+fillGuide → 用你自己的 LLM 按逐槽指南填值 → 把填好的最终提示词写入临时文件 → rudder <kind> generate --prompt-file <file> [--template <id>]。引擎对 --prompt-file 路径零改写、零注入，代理对最终文本全权负责。",
+  "templates": [
+    {
+      "id": "board-design-system",
+      "file": "board-design-system.json",
+      "appliesTo": "board",
+      "name": { "zh": "设计系统总板（默认）", "en": "Design System Board (default)" },
+      "summary": { "zh": "五分区规格板：色板/字阶/组件样本/图标/间距，参数化自默认引擎骨架。", "en": "Five-section spec sheet parameterized from the default engine skeleton." },
+      "slots": ["project.name", "project.brandBrief", "project.styleBrief", "canvas.w", "canvas.h", "project.negativeHints"]
+    },
+    {
+      "id": "page-ui-standard",
+      "file": "page-ui-standard.json",
+      "appliesTo": "page",
+      "name": { "zh": "标准界面页（默认）", "en": "Standard UI Page (default)" },
+      "summary": { "zh": "功能页默认骨架：锚点引用+布局简报+五步结构法+不变量清单。", "en": "Default functional-page skeleton with anchor reference and five-pass structure method." },
+      "slots": ["anchor.reference", "page.slug", "page.brief", "project.invariants", "project.styleBrief"]
+    },
+    {
+      "id": "page-landing-sections",
+      "file": "page-landing-sections.json",
+      "appliesTo": "page",
+      "name": { "zh": "落地页（分段式）", "en": "Landing Page (Sections)" },
+      "summary": { "zh": "营销落地页：sections 逐段定义+导航逐项+社证+CTA band。", "en": "Marketing landing page with a section-by-section contract and itemized nav." },
+      "slots": ["anchor.reference", "page.slug", "page.brief", "project.invariants"]
+    },
+    {
+      "id": "component-sheet-grid",
+      "file": "component-sheet-grid.json",
+      "appliesTo": "component",
+      "name": { "zh": "组件细节图（网格）", "en": "Component Detail Sheet (Grid)" },
+      "summary": { "zh": "组件族细节图：网格规格+变体×状态+同族锁定+小尺寸可读。", "en": "Component detail sheet: grid spec, variant-by-state coverage, small-size legibility." },
+      "slots": ["anchor.reference", "component.kind", "component.brief", "component.name", "project.invariants"]
+    },
+    {
+      "id": "brand-identity-lite",
+      "file": "brand-identity-lite.json",
+      "appliesTo": "board",
+      "name": { "zh": "品牌身份板（轻量）", "en": "Brand Identity Board (Lite)" },
+      "summary": { "zh": "品牌关键词先行+纯白背景+恰好 3 条禁用规则的可选锚点板。", "en": "Keyword-first brand board on pure white with exactly 3 never-do rules." },
+      "slots": ["project.name", "project.brandBrief", "project.styleBrief", "canvas.w", "canvas.h", "project.negativeHints"]
+    }
+  ]
+}

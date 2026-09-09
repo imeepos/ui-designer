@@ -1,0 +1,54 @@
+{
+  "id": "component-sheet-grid",
+  "version": 1,
+  "appliesTo": "component",
+  "name": { "zh": "组件细节图（网格）", "en": "Component Detail Sheet (Grid)" },
+  "summary": {
+    "zh": "组件细节图骨架：网格规格（等格/等距/标注）+ 变体×状态全覆盖 + 同族身份锁定 + 小尺寸可读约束。",
+    "en": "Component detail-sheet skeleton: grid spec (equal cells, consistent gutters, labels), full variant-by-state coverage, same-family identity lock, small-size legibility constraint."
+  },
+  "attribution": "结构模式参考 awesome-gpt-image-2（MIT）组件三元组（位置+类型+内容）、一致性网格与「小尺寸可辨认」防坑要点，未内嵌任何案例原文。",
+  "slots": [
+    { "name": "anchor.reference", "required": true, "description": { "zh": "锚点引用行，引擎常量，保持原样。", "en": "Anchor reference line, an engine constant; keep as-is." } },
+    { "name": "component.kind", "required": true, "description": { "zh": "组件类型标签（buttons/forms/cards/navigation/icons/tables/modals 等）。", "en": "Component type label (buttons/forms/cards/navigation/icons/tables/modals, …)." } },
+    { "name": "component.brief", "required": true, "description": { "zh": "变体×状态清单：哪些变体、哪些状态、每个的具体要求。可用 `Labels: a|b|c` 行声明逐字标签。", "en": "Variant-by-state list: which variants, which states, per-item requirements. Declare verbatim labels with a `Labels: a|b|c` line." } },
+    { "name": "component.name", "required": false, "description": { "zh": "组件族注册名；本骨架默认不引用，供自定义模板选用。", "en": "Registered family name; not referenced by this skeleton by default." } },
+    { "name": "project.invariants", "required": false, "description": { "zh": "不变量清单，引擎从项目数据渲染，保持占位在骨架末尾。", "en": "Invariant list rendered by the engine; keep the placeholder near the end." } }
+  ],
+  "skeleton": "{anchor.reference}。严格沿用它的设计语言，为单个组件族出细节图。\nTask: a component detail sheet for the \"{component.kind}\" family: {component.brief}\nSheet contract:\n- tidy grid: a fixed column count, equal cell sizes, consistent gutters; every cell labeled \"variant · state\".\n- cover every variant and state in the brief, at minimum default / hover / active / disabled / focus.\n- same-family identity lock: identical geometry, radius and styling across all cells; only the labeled state or variant changes between cells.\n- small-size legibility: all labels stay readable when the sheet is viewed at 50% zoom; short real labels, no decorative filler text.\n{project.invariants}",
+  "fillGuide": {
+    "howTo": "按钮组/表单/卡片/导航等组件族细节图用这套。骨架锁定网格合同与「变体×状态全覆盖」，你负责把 component.brief 写成一份变体×状态清单：有哪些变体（primary/secondary/ghost…）、每个覆盖哪些状态（default/hover/active/disabled/focus）、特殊要求（尺寸/图标/圆角）。组件卡内会出现小号文字时，在 brief 加 `Labels:` 行声明要逐字渲染的标签。填完写入临时文件，用 rudder component generate <name> --prompt-file <file> 出图。",
+    "slots": [
+      {
+        "slot": "anchor.reference",
+        "what": "固定文案，原样保留——组件的配色/圆角/描边必须来自总板。",
+        "goodExample": "保持该行不动",
+        "commonMistakes": ["删掉后组件自创一套配色，与页面接不上"]
+      },
+      {
+        "slot": "component.kind",
+        "what": "与 rudder component add --type 一致的类型标签（开放枚举）。",
+        "goodExample": "buttons",
+        "commonMistakes": ["填成组件注册名（那是 name 槽）", "一句话描述塞进类型槽"]
+      },
+      {
+        "slot": "component.brief",
+        "what": "变体×状态清单：变体逐个点名、每个变体的状态集合、每格标签文字、尺寸或图标要求。",
+        "goodExample": "3 变体（primary/secondary/ghost）× 5 状态（default/hover/active/disabled/focus），每格下方标注变体·状态；primary 用主色，ghost 透明底细描边。Labels: 提交|取消",
+        "commonMistakes": ["只写『全部状态』而不点名变体（模型会漏格）", "状态名自造（用 default/hover/active/disabled/focus 这套通用词）", "要求每格长句说明（小尺寸必花字，标签保持 1-3 词）", "变体数量与 Label 行数量不一致"]
+      },
+      {
+        "slot": "component.name",
+        "what": "可选。自定义模板想在文本里点名组件族时使用；默认骨架不引用。",
+        "goodExample": "button-set",
+        "commonMistakes": ["与 kind 槽混用"]
+      },
+      {
+        "slot": "project.invariants",
+        "what": "引擎渲染的不变量清单，原样保留在末尾。",
+        "goodExample": "原样保留占位符一行",
+        "commonMistakes": ["删掉或改写"]
+      }
+    ]
+  }
+}

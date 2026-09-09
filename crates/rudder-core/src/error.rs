@@ -21,6 +21,11 @@ pub enum RudderError {
     #[error("{detail}")]
     InvalidArg { detail: String },
 
+    /// Unknown prompt template id (`--template` / `project.templateId` /
+    /// `templates show`).
+    #[error("unknown template `{id}` (available: {available})")]
+    TemplateNotFound { id: String, available: String },
+
     // ---- API class (exit 2) -------------------------------------------
     /// No API key could be resolved from the environment or the OS keychain
     /// but a real (non dry-run) call was made.
@@ -80,7 +85,7 @@ impl RudderError {
     pub fn code(&self) -> &'static str {
         match self {
             RudderError::SizeInvalid { .. } => "SIZE_INVALID",
-            RudderError::InvalidArg { .. } => "INVALID_ARG",
+            RudderError::InvalidArg { .. } | RudderError::TemplateNotFound { .. } => "INVALID_ARG",
             RudderError::CredentialMissing => "CREDENTIAL_MISSING",
             RudderError::KeychainAccess { .. } => "KEYCHAIN_ACCESS",
             RudderError::ApiError { .. } => "API_ERROR",
@@ -99,7 +104,9 @@ impl RudderError {
     /// CLI exit code contract: 1 argument / 2 API / 3 project state.
     pub fn exit_code(&self) -> i32 {
         match self {
-            RudderError::SizeInvalid { .. } | RudderError::InvalidArg { .. } => 1,
+            RudderError::SizeInvalid { .. }
+            | RudderError::InvalidArg { .. }
+            | RudderError::TemplateNotFound { .. } => 1,
             RudderError::CredentialMissing
             | RudderError::KeychainAccess { .. }
             | RudderError::ApiError { .. }
@@ -124,6 +131,11 @@ impl RudderError {
                     .to_string()
             }
             RudderError::InvalidArg { .. } => "check the flag value against references/cli.md".to_string(),
+            RudderError::TemplateNotFound { .. } => {
+                "run `rudder templates list` to see built-in template ids; \
+                 fill one via its fillGuide and pass the final text as --prompt-file"
+                    .to_string()
+            }
             RudderError::CredentialMissing => {
                 "export OPENAI_API_KEY (env wins) or store a key: `echo <key> | rudder config set \
                  api-key`, or the desktop Settings dialog"

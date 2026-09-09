@@ -1,0 +1,47 @@
+{
+  "id": "page-landing-sections",
+  "version": 1,
+  "appliesTo": "page",
+  "name": { "zh": "落地页（分段式）", "en": "Landing Page (Sections)" },
+  "summary": {
+    "zh": "营销落地页骨架：sections 逐段定义（header 逐项导航 → hero → 内容段 → 社证 → CTA band），每段带元素计数与逐字标题约束。",
+    "en": "Marketing landing-page skeleton: section-by-section contract (header with itemized nav, hero, content sections, social proof, CTA band), each with element counts and verbatim headline rules."
+  },
+  "attribution": "结构模式参考 awesome-gpt-image-2（MIT）landing page 类案例的 sections 数组与导航逐项思路，未内嵌任何案例原文。",
+  "slots": [
+    { "name": "anchor.reference", "required": true, "description": { "zh": "锚点引用行，引擎常量，保持原样。", "en": "Anchor reference line, an engine constant; keep as-is." } },
+    { "name": "page.slug", "required": true, "description": { "zh": "页面 slug，出现在 Task 行。", "en": "Page slug, used in the Task line." } },
+    { "name": "page.brief", "required": true, "description": { "zh": "分段内容清单：每段的主题、元素与数量、导航逐项、标题文案。可用 `Labels: a|b|c` 行声明逐字标签。", "en": "Per-section content list: topic, elements and counts per section, itemized nav, headline copy. Declare verbatim labels with a `Labels: a|b|c` line." } },
+    { "name": "project.invariants", "required": false, "description": { "zh": "不变量清单，引擎从项目数据渲染，保持占位在骨架末尾。", "en": "Invariant list rendered by the engine; keep the placeholder near the end." } }
+  ],
+  "skeleton": "{anchor.reference}。严格沿用它的设计语言，只组合新的页面内容。\nTask: design the \"{page.slug}\" landing page as one high-fidelity UI mockup, composed section by section.\nSections, top to bottom, from the brief: {page.brief}\nSection contract:\n- header: logo left; nav items listed one by one exactly as the brief counts them; one primary CTA button on the right.\n- hero: one headline, one subheadline, two buttons (primary + secondary), three feature callouts with icons.\n- every middle section: one visual block plus one text block, with the element count stated in the brief.\n- social proof strip: a client logo wall plus 1-2 short testimonial cards.\n- closing CTA band: one-line pitch, one input field, one glowing primary button.\nHeadlines and nav items are real text spelled exactly as briefed; all body copy renders as simulated text blocks.\n{project.invariants}",
+  "fillGuide": {
+    "howTo": "营销/产品首页用这套。骨架已锁定「header→hero→内容段→社证→CTA」的分段合同与每段元素数量；你的工作是把 page.brief 写成一份分段内容清单：有几段、每段讲什么、每段几个元素、导航项逐个列出、大标题文案写死。正文一律交给模拟文本块。需要中文导航/按钮逐字出现时加 `Labels:` 行。填完写入临时文件，用 rudder page generate <slug> --prompt-file <file> 出图。",
+    "slots": [
+      {
+        "slot": "anchor.reference",
+        "what": "固定文案，原样保留（落地页也必须沿用总板设计语言）。",
+        "goodExample": "保持该行不动",
+        "commonMistakes": ["以为落地页可以另起风格——会破坏成套一致性"]
+      },
+      {
+        "slot": "page.slug",
+        "what": "注册过的页面 slug，如 landing / home / pricing。",
+        "goodExample": "landing",
+        "commonMistakes": ["填成完整 URL 或中文标题"]
+      },
+      {
+        "slot": "page.brief",
+        "what": "分段内容清单，按骨架的 section 顺序写：header 导航逐项 → hero 标题/副标题 → 各内容段主题与元素数 → 社证内容 → CTA 文案。",
+        "goodExample": "导航 4 项（产品/定价/客户/博客）+ 登录；hero：标题「让货运像点外卖一样简单」副标题一句 + 双按钮；3 个特性段（每段 1 图 1 文 3 要点）；客户 logo 墙 6 家 + 2 张见证卡；CTA「免费开始试用」。Labels: 产品|定价|客户|博客",
+        "commonMistakes": ["段落顺序与骨架合同对不上（骨架按 header→hero→…→CTA 渲染）", "导航项不逐个列（模型会自己编菜单项）", "把正文段落全写死（正文应保持模拟文本块，只写死标题）", "数字类内容不给具体数值（数据卡片要写死数字，防止模型编数）"]
+      },
+      {
+        "slot": "project.invariants",
+        "what": "引擎渲染的不变量清单，原样保留在末尾。",
+        "goodExample": "原样保留占位符一行",
+        "commonMistakes": ["删掉或改写"]
+      }
+    ]
+  }
+}

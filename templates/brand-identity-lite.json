@@ -1,0 +1,61 @@
+{
+  "id": "brand-identity-lite",
+  "version": 1,
+  "appliesTo": "board",
+  "name": { "zh": "品牌身份板（轻量）", "en": "Brand Identity Board (Lite)" },
+  "summary": {
+    "zh": "品牌身份式总板：品牌关键词先行 → logo（多尺寸示意）→ 关键词标签行 → 色板/字体 → 恰好 3 条禁用规则；纯白背景便于抠图。可替代默认总板做锚点。",
+    "en": "Brand-identity style board: brand keywords first, one logo direction at three sizes, keyword label row, palette/type specimens, exactly 3 never-do rules; pure white background for clean cut-out. Use as an alternative anchor."
+  },
+  "attribution": "结构模式参考 awesome-gpt-image-2（MIT）品牌模板要点（关键词先行、纯白背景、3 条永不打破的品牌规则、应用场景验证），未内嵌任何案例原文。",
+  "slots": [
+    { "name": "project.name", "required": true, "description": { "zh": "品牌/产品名，出现在 Purpose 行与 logo 主体。", "en": "Brand/product name, appears in the Purpose line and the logo subject." } },
+    { "name": "project.brandBrief", "required": true, "description": { "zh": "品牌关键词：3 个左右，先行决定整板气质；建议用「关键词1、关键词2、关键词3」形式。", "en": "Brand keywords, about 3, lead the whole sheet; prefer the form keyword1、keyword2、keyword3." } },
+    { "name": "project.styleBrief", "required": false, "description": { "zh": "配色方向/气质补充；为空时整行自动省略。", "en": "Palette direction / mood addendum; the line is dropped when empty." } },
+    { "name": "canvas.w", "required": true, "description": { "zh": "画布宽（像素）。", "en": "Canvas width in pixels." } },
+    { "name": "canvas.h", "required": true, "description": { "zh": "画布高（像素）。", "en": "Canvas height in pixels." } },
+    { "name": "project.negativeHints", "required": false, "description": { "zh": "项目级自定义排除项；由引擎 Constraints 块注入，骨架一般不引用。", "en": "Project-level custom exclusions; injected by the engine Constraints block." } }
+  ],
+  "skeleton": "Purpose: a brand identity board (品牌身份板) for \"{project.name}\".\nBrand keywords come first — the whole sheet must express: {project.brandBrief}\nStyle brief: {project.styleBrief}\nCanvas: {canvas.w}x{canvas.h}, pure white background (for clean cut-out). ONE labeled sheet, keyword-led:\n1. LOGO — one primary logo direction, centered, generous clear space; a small row shows the same logo at large / medium / icon sizes to prove it stays readable.\n2. KEYWORDS — the brand keywords printed verbatim as a short label row under the logo.\n3. COLOR — primary / accent / neutral swatch chips, each with its exact hex code printed as a label.\n4. TYPE — one headline specimen plus one body specimen, labeled with the intended mood (no real font names required).\n5. NEVER DO — exactly 3 forbidden-usage rules, printed as short labeled rows, each starting with \"never\".\nComposition reads like a top design agency proposal page: tidy but not rigid; the logo stays the single hero.",
+  "fillGuide": {
+    "howTo": "想把锚点做成「品牌身份板」而非纯 UI 规格板时用这套（适合品牌感强的产品）。核心槽只有 brandBrief：把品牌提炼成 3 个左右关键词，它们决定 logo 方向、配色与气质。3 条禁用规则由骨架锁定为恰好转 3 条（来自品牌方法论：不写禁用规则延展必跑偏）——你不需要在槽里写规则，骨架第 5 分区会让模型自己基于关键词生成；若想指定，把规则写进 styleBrief 并注明「禁用规则：…」。填完写入临时文件，用 rudder board generate --prompt-file <file> 出图，之后照常 board pick 设锚点。",
+    "slots": [
+      {
+        "slot": "project.name",
+        "what": "品牌名，logo 的主体文字；中文品牌直接填中文。",
+        "goodExample": "「舵 Rudder」",
+        "commonMistakes": ["填英文目录名导致 logo 文字与品牌不符", "填一句话定位（那是 brandBrief 的事）"]
+      },
+      {
+        "slot": "project.brandBrief",
+        "what": "品牌关键词 3 个左右，名词或形容词，先行决定整板气质；这是本模板最重要的槽。",
+        "goodExample": "掌舵、专业、克制——远洋航运工具",
+        "commonMistakes": ["丢一段业务描述进来当关键词（logo 会变插画）", "关键词超过 6 个（气质涣散）", "只给行业不给气质词"]
+      },
+      {
+        "slot": "project.styleBrief",
+        "what": "配色方向与气质补充；想指定 3 条禁用规则时也写在这里（前缀「禁用规则：」）。",
+        "goodExample": "海军蓝+黄铜；禁用规则：不做渐变堆砌、不用卡通形象、品牌色不大面积铺底",
+        "commonMistakes": ["与 brandBrief 重复", "留空时写了 N/A（该行应整体消失）"]
+      },
+      {
+        "slot": "canvas.w",
+        "what": "画布宽像素，取 project.json 的 canvasSize.w。",
+        "goodExample": "1536",
+        "commonMistakes": ["自造非 16 倍数值"]
+      },
+      {
+        "slot": "canvas.h",
+        "what": "画布高像素，取 project.json 的 canvasSize.h。",
+        "goodExample": "1024",
+        "commonMistakes": ["与 w 对调"]
+      },
+      {
+        "slot": "project.negativeHints",
+        "what": "可选。由引擎 Constraints 注入；本骨架一般不引用。",
+        "goodExample": "（一般留空不引用）",
+        "commonMistakes": ["在骨架里重复写禁用清单，与 NEVER DO 分区及 Constraints 块三重叠加"]
+      }
+    ]
+  }
+}

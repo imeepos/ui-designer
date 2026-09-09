@@ -1,0 +1,54 @@
+{
+  "id": "page-ui-standard",
+  "version": 1,
+  "appliesTo": "page",
+  "name": { "zh": "标准界面页（默认）", "en": "Standard UI Page (default)" },
+  "summary": {
+    "zh": "功能页面默认骨架：锚点引用 + 布局简报 + 五步结构法（分区→计数→栅格→风格→溢出检查）+ 不变量清单。写死标题类文字，正文用模拟文本块。",
+    "en": "Default functional-page skeleton: anchor reference, layout brief, five-pass structure method (regions, counts, grid, style, overflow check), invariant list. Headings are real text; body copy uses simulated text blocks."
+  },
+  "attribution": "结构模式参考 awesome-gpt-image-2（MIT）tpl-ui 防坑要点（平台+比例+布局明确、文字锁定、计数显式），未内嵌任何案例原文。",
+  "slots": [
+    { "name": "anchor.reference", "required": true, "description": { "zh": "锚点引用行，引擎常量「Image 1 是本产品设计系统总板」，保持原样。", "en": "Anchor reference line, an engine constant; keep as-is." } },
+    { "name": "page.slug", "required": true, "description": { "zh": "页面 slug（a-z0-9-），作为页面名称出现在 Task 行。", "en": "Page slug (a-z0-9-), used as the page name in the Task line." } },
+    { "name": "page.brief", "required": true, "description": { "zh": "布局简报：分区+每区元素与数量+导航逐项。可用 `Labels: a|b|c` 行声明逐字标签。", "en": "Layout brief: regions with element counts, nav items listed one by one. Declare verbatim labels with a `Labels: a|b|c` line." } },
+    { "name": "project.invariants", "required": false, "description": { "zh": "不变量清单（沿用锚点配色/字体/圆角/组件/间距），引擎从项目数据渲染；保持占位在骨架末尾。", "en": "Invariant list (reuse anchor palette/type/radius/components/spacing), rendered by the engine; keep the placeholder near the end." } },
+    { "name": "project.styleBrief", "required": false, "description": { "zh": "风格简报；本骨架经由 invariants 引用，一般不直接使用。", "en": "Style brief; consumed via invariants, usually not referenced directly." } }
+  ],
+  "skeleton": "{anchor.reference}。严格沿用它的设计语言，只组合新的页面内容。\nTask: design the full \"{page.slug}\" page as one high-fidelity UI mockup.\nLayout brief: {page.brief}\nStructure the layout in five passes before detailing: (1) name every region top to bottom, (2) give each region its exact element counts from the brief, (3) fix the alignment grid and margins, (4) apply the anchor's style, (5) check that no text overflows its container.\nReal text only for headings, nav items, button labels and the labels the brief quotes; long body copy renders as simulated text blocks.\n{project.invariants}",
+  "fillGuide": {
+    "howTo": "标准功能页（仪表盘/列表/详情/设置）用这套。先从 project.json 读页面 slug 与 brief；重点打磨 page.brief——它是唯一真正决定版面的槽。brief 写「布局结构」不写「感觉」：每个分区点名、每个重复元素给数量、导航项逐个列出。需要界面出现指定文案（如步条标签、按钮名）时，在 brief 末尾加一行 `Labels: 标签1|标签2`，引擎会自动追加逐字渲染约束。填完写入临时文件，用 rudder page generate <slug> --prompt-file <file> 出图（锚点仍作为 Image 1 传入）。",
+    "slots": [
+      {
+        "slot": "anchor.reference",
+        "what": "固定文案，原样保留；它告诉模型第一张参考图是总板。",
+        "goodExample": "保持「{anchor.reference}。严格沿用它的设计语言，只组合新的页面内容。」不动",
+        "commonMistakes": ["改写或翻译这一行，破坏与引擎默认路径的可比性", "删掉它——页面会漂移成新风格"]
+      },
+      {
+        "slot": "page.slug",
+        "what": "注册过的页面 slug，与 rudder page add 的名字一致，用于 Task 行命名。",
+        "goodExample": "dashboard",
+        "commonMistakes": ["填中文页面名（与磁盘目录不一致）", "把整句页面描述填进来"]
+      },
+      {
+        "slot": "page.brief",
+        "what": "布局结构描述：分区（顶部导航/侧栏/主区/底栏）+ 每区元素数量 + 导航逐项 + 需要写死的标签。",
+        "goodExample": "顶部导航 5 项（概览/报表/设置/文档/头像），左侧栏 4 张 KPI 指标卡，主区折线图+下方 8 行任务表，右栏任务列表 6 条。Labels: 概览|报表|设置",
+        "commonMistakes": ["写成『简洁现代、层次清晰』等形容词而不给分区与数量", "把整段正文文案塞进 brief（正文应为模拟文本块）", "导航不逐项列，模型自己编菜单", "加了 Labels: 行却与正文描述的标签数量对不上"]
+      },
+      {
+        "slot": "project.invariants",
+        "what": "引擎渲染的不变量清单，保持在骨架末尾，不要改写内容。",
+        "goodExample": "原样保留占位符一行",
+        "commonMistakes": ["删掉它导致风格漂移", "把不变量复制成两份"]
+      },
+      {
+        "slot": "project.styleBrief",
+        "what": "可选。仅当页面需要临时偏离锚点风格时才直接引用；默认不要使用（风格应来自总板）。",
+        "goodExample": "（一般留空不引用）",
+        "commonMistakes": ["每个页面各填一份风格，破坏成套一致性"]
+      }
+    ]
+  }
+}
