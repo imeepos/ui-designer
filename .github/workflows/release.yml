@@ -105,7 +105,15 @@ jobs:
           if cargo clippy -p rudder-core -p rudder-cli --all-targets -- -D warnings 2>&1 | tee /tmp/clippy.log; then
             echo "clippy: 0 告警"
           else
-            grep -E "^error" /tmp/clippy.log | head -40 | while IFS= read -r line; do
+            {
+              echo "log-lines=$(wc -l < /tmp/clippy.log)"
+              echo "cargo=$(cargo --version 2>&1)"
+              echo "clippy=$(cargo clippy --version 2>&1)"
+              echo "rustc=$(rustc --version 2>&1)"
+              echo "disk=$(df -h / | tail -1 | awk '{print $4" free"}')"
+              echo "mem: $(free -m | awk 'NR==2{print $2"MB total, "$7"MB avail"}')"
+            } | while IFS= read -r line; do echo "::error::ENV $line"; done
+            tail -40 /tmp/clippy.log | while IFS= read -r line; do
               echo "::error::${line:0:500}"
             done
             exit 1
