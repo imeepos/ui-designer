@@ -23,4 +23,7 @@ coverage/
 # Tauri generated schemas
 src-tauri/gen/
 
+# Tauri sidecar binaries（release.yml/prepare-sidecar.mjs 按 target triple 命名的构建产物）
+src-tauri/binaries/
+
 e2e/screenshots/
