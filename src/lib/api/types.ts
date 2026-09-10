@@ -188,6 +188,7 @@ export type ApiErrorCode =
   | "DUPLICATE_SLUG"
   | "DUPLICATE_NAME"
   | "NO_CREDENTIALS"
+  | "NO_SESSION"
   | "KEYCHAIN_ACCESS"
   | "CANCELLED"
   | "EXPORT_FAILED"

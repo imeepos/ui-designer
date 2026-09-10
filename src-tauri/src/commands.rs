@@ -9,9 +9,12 @@
 //!   `started` / `finished` / `failed` phases so the UI can drive skeleton
 //!   copy; `jobId` correlates events with the invoking call.
 
-use rudder_core::config::{credential, resolve_base_url, resolve_model, Config};
+use rudder_core::config::{
+    credential, resolve_base_url, resolve_model, resolve_server_base_url, Config,
+};
 use rudder_core::image::ImageClient;
 use rudder_core::ops::{self, GenerateOptions, Target};
+use rudder_core::server_auth::{self, AuthSession, AuthUser};
 use rudder_core::store::{self, Project};
 use rudder_core::{export, RudderError};
 use serde::{Deserialize, Serialize};
@@ -882,6 +885,173 @@ pub async fn test_connection(
     })
 }
 
+// ---------------------------------------------------------------------------
+// Server account auth (rudder-server; the session token lives ONLY in the
+// OS keychain — never in plain files, logs or stdout)
+// ---------------------------------------------------------------------------
+
+/// Login/register payload from the Settings account form.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthInput {
+    pub username: String,
+    pub password: String,
+    /// Optional on register; ignored by login.
+    #[serde(default)]
+    pub email: Option<String>,
+}
+
+/// Public view of the signed-in user. Never carries the session token.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserDto {
+    pub id: String,
+    pub username: String,
+    pub email: Option<String>,
+    /// `user` | `admin`.
+    pub role: String,
+    /// `active` | …
+    pub status: String,
+    /// Pay-per-image balance (admin accounts bill 0).
+    pub credits: i64,
+    pub created_at: String,
+}
+
+impl From<AuthUser> for UserDto {
+    fn from(user: AuthUser) -> Self {
+        UserDto {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            status: user.status,
+            credits: user.credits,
+            created_at: user.created_at,
+        }
+    }
+}
+
+/// Login/register reply. The token is handed to the frontend once for its
+/// in-memory session and persisted (keychain-side) right after; the stored
+/// copy is the source of truth for later `auth_me` calls. `Debug` is
+/// hand-written and redacted (mirrors core `AuthSession`): an accidental
+/// `{:?}` log line can never leak the session token.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthSessionDto {
+    pub token: String,
+    pub user: UserDto,
+}
+
+impl std::fmt::Debug for AuthSessionDto {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthSessionDto")
+            .field("token", &"<redacted; set>")
+            .field("user", &self.user)
+            .finish()
+    }
+}
+
+fn session_dto(session: AuthSession) -> AuthSessionDto {
+    AuthSessionDto {
+        token: session.token,
+        user: UserDto::from(session.user),
+    }
+}
+
+/// Shell-level session status: whether a session token is available. Never
+/// carries the token itself.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionStatusDto {
+    pub has_token: bool,
+}
+
+fn session_status() -> SessionStatusDto {
+    SessionStatusDto {
+        has_token: credential::resolve_session_token().key.is_some(),
+    }
+}
+
+async fn auth_login_or_register(
+    input: AuthInput,
+    register: bool,
+) -> Result<AuthSessionDto, CommandError> {
+    let base = resolve_server_base_url();
+    let username = input.username.trim().to_string();
+    let email = input
+        .email
+        .as_deref()
+        .map(str::trim)
+        .filter(|email| !email.is_empty())
+        .map(str::to_string);
+    let session = if register {
+        server_auth::register(&base, &username, &input.password, email.as_deref())
+    } else {
+        server_auth::login(&base, &username, &input.password)
+    }
+    .await
+    .map_err(into_command)?;
+    // Persist the token in the OS keychain (blocking pool); a keychain
+    // failure fails the login so the UI does not show a session that will
+    // not survive a restart.
+    let token = session.token.clone();
+    blocking("keychain", "retry the sign-in", move || {
+        credential::store_session_token(&token).map_err(into_command)
+    })
+    .await?;
+    Ok(session_dto(session))
+}
+
+/// Sign in against the configured rudder-server; stores the token.
+#[tauri::command]
+pub async fn auth_login(input: AuthInput) -> Result<AuthSessionDto, CommandError> {
+    auth_login_or_register(input, false).await
+}
+
+/// Register a new account (and sign in); stores the token.
+#[tauri::command]
+pub async fn auth_register(input: AuthInput) -> Result<AuthSessionDto, CommandError> {
+    auth_login_or_register(input, true).await
+}
+
+/// Current user profile via the stored session token.
+#[tauri::command]
+pub async fn auth_me() -> Result<UserDto, CommandError> {
+    let token = blocking("keychain", "retry", || {
+        credential::resolve_session_token()
+            .key
+            .ok_or_else(|| {
+                CommandError::new(
+                    codes::NO_SESSION,
+                    "no session token stored",
+                    "sign in from Settings first",
+                )
+            })
+    })
+    .await?;
+    let base = resolve_server_base_url();
+    server_auth::me(&base, &token)
+        .await
+        .map(UserDto::from)
+        .map_err(into_command)
+}
+
+/// Whether a session token exists (login view vs. account view).
+#[tauri::command]
+pub async fn get_session_status() -> Result<SessionStatusDto, CommandError> {
+    blocking("keychain", "retry", || Ok(session_status())).await
+}
+
+/// Sign out: remove the stored session token (idempotent).
+#[tauri::command]
+pub async fn clear_session_token() -> Result<(), CommandError> {
+    blocking("keychain", "retry the sign-out", move || {
+        credential::clear_session_token().map_err(into_command)
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1157,5 +1327,61 @@ mod tests {
         assert_eq!(parsed.api_key.as_deref(), Some(" draft-key-9 "));
         let empty: TestConnectionInput = serde_json::from_str("{}").unwrap();
         assert!(empty.base_url.is_none() && empty.api_key.is_none());
+    }
+
+    #[test]
+    fn auth_input_deserializes_camel_case_with_optional_email() {
+        let parsed: AuthInput = serde_json::from_str(
+            r#"{"username":"helmsman","password":"secret-1","email":"u@example.com"}"#,
+        )
+        .unwrap();
+        assert_eq!(parsed.username, "helmsman");
+        assert_eq!(parsed.password, "secret-1");
+        assert_eq!(parsed.email.as_deref(), Some("u@example.com"));
+        let bare: AuthInput =
+            serde_json::from_str(r#"{"username":"helmsman","password":"secret-1"}"#).unwrap();
+        assert!(bare.email.is_none());
+    }
+
+    #[test]
+    fn user_dto_serializes_camel_case_and_never_carries_the_token() {
+        let user = UserDto {
+            id: "u-1".into(),
+            username: "helmsman".into(),
+            email: None,
+            role: "user".into(),
+            status: "active".into(),
+            credits: 90,
+            created_at: "2026-09-10T00:00:00Z".into(),
+        };
+        let json = serde_json::to_value(&user).unwrap();
+        assert_eq!(json["id"], "u-1");
+        assert_eq!(json["username"], "helmsman");
+        assert_eq!(json["role"], "user");
+        assert_eq!(json["status"], "active");
+        assert_eq!(json["credits"], 90);
+        assert_eq!(json["createdAt"], "2026-09-10T00:00:00Z");
+        assert!(json.get("created_at").is_none());
+        assert!(json.to_string().to_lowercase().contains("token") == false);
+
+        let session = AuthSessionDto { token: "jwt-secret".into(), user };
+        let session_json = serde_json::to_value(&session).unwrap();
+        assert_eq!(session_json["token"], "jwt-secret");
+        assert!(session_json["user"].get("token").is_none());
+        // Debug is redacted: the token must not survive a `{:?}`.
+        let debugged = format!("{session:?}");
+        assert!(!debugged.contains("jwt-secret"), "Debug leaked the token: {debugged}");
+        assert!(debugged.contains("redacted"));
+    }
+
+    #[test]
+    fn session_status_serializes_has_token_only() {
+        // Pure shaping: build the flag directly instead of touching the
+        // real keychain. Exactly one camelCase field, never a token value.
+        let status = SessionStatusDto { has_token: true };
+        let json = serde_json::to_value(&status).unwrap();
+        let obj = json.as_object().unwrap();
+        assert_eq!(obj.len(), 1, "unexpected fields: {obj:?}");
+        assert_eq!(obj["hasToken"], true);
     }
 }

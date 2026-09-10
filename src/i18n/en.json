@@ -15,29 +15,40 @@
   "settings": {
     "open": "Settings",
     "title": "Settings",
-    "baseUrl": "Base URL",
-    "baseUrlPlaceholder": "https://api.openai.com",
-    "baseUrlHint": "Leave empty for the official endpoint; the OPENAI_BASE_URL env var wins over this value.",
-    "apiKey": "API Key",
-    "apiKeyPlaceholder": "Paste a new API key (saved to the OS keychain)",
-    "apiKeyStored": "Stored in keychain (tail {{tail}})",
-    "apiKeyEnv": "Using the env key (tail {{tail}})",
-    "model": "Model name",
-    "modelHint": "Leave empty for the default gpt-image-2; env OPENAI_MODEL wins. Run Test connection to fill the datalist with available models.",
-    "keySourceValue": "Current source: {{source}}",
-    "sourceEnv": "Environment",
-    "sourceKeychain": "OS keychain",
-    "sourceNone": "Not configured",
-    "priorityHint": "Keys are kept only in the OS keychain, never in plain files; env OPENAI_API_KEY takes priority over the keychain.",
-    "save": "Save to keychain",
-    "saving": "Saving…",
-    "clear": "Clear",
-    "test": "Test connection",
-    "testing": "Testing…",
-    "testOk": "Connected: {{count}} models available",
-    "testFailed": "Connection failed",
-    "saveOk": "API key saved to the OS keychain.",
-    "cleared": "API key removed from the keychain."
+    "account": {
+      "title": "Account",
+      "statusChecking": "Checking sign-in status…",
+      "tabLogin": "Sign in",
+      "tabRegister": "Register",
+      "username": "Username",
+      "usernamePlaceholder": "3–32 letters, digits, _ or -",
+      "password": "Password",
+      "passwordPlaceholder": "At least 6 characters",
+      "email": "Email (optional)",
+      "emailPlaceholder": "Optional",
+      "login": "Sign in",
+      "loginBusy": "Signing in…",
+      "register": "Register",
+      "registerBusy": "Registering…",
+      "credits": "Credits",
+      "roleAdmin": "Admin",
+      "roleUser": "User",
+      "memberSince": "Joined {{date}}",
+      "refresh": "Refresh",
+      "refreshBusy": "Refreshing…",
+      "logout": "Sign out",
+      "loginOk": "Signed in. Welcome back!",
+      "registerOk": "Registered and signed in.",
+      "logoutOk": "Signed out.",
+      "refreshOk": "Account refreshed."
+    },
+    "connection": {
+      "title": "Server connection",
+      "test": "Test connection",
+      "testing": "Testing…",
+      "testOk": "Connected: {{count}} models available",
+      "testFailed": "Connection failed"
+    }
   },
   "common": {
     "cancel": "Cancel",
@@ -344,8 +355,12 @@
       "hint": "Choose another name."
     },
     "NO_CREDENTIALS": {
-      "message": "No API credentials configured yet.",
-      "hint": "Open Settings and save an API key first."
+      "message": "You are not signed in yet.",
+      "hint": "Open Settings and sign in first."
+    },
+    "NO_SESSION": {
+      "message": "You are not signed in.",
+      "hint": "Sign in from Settings first."
     },
     "KEYCHAIN_ACCESS": {
       "message": "OS keychain access failed.",

@@ -95,10 +95,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 defaultValue: error.hint,
               })
             : undefined;
-          // NO_CREDENTIALS guides the user straight into the Settings dialog
-          // (the keychain can only be filled there or via the CLI).
+          // Missing credentials / session guide the user straight into the
+          // Settings dialog (the account form lives there).
           const action =
-            error.code === "NO_CREDENTIALS"
+            error.code === "NO_CREDENTIALS" || error.code === "NO_SESSION"
               ? { label: t("toast.openSettings"), run: requestOpenSettings }
               : undefined;
           push(

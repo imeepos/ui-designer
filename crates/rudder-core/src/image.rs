@@ -34,8 +34,12 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(300);
 pub const DEFAULT_BACKOFF: Duration = Duration::from_secs(2);
 /// Maximum number of retries after the initial attempt.
 pub const MAX_RETRIES: u32 = 3;
-/// Default endpoint base when `OPENAI_BASE_URL` is unset.
-pub const DEFAULT_BASE_URL: &str = "https://api.openai.com";
+/// Default endpoint base when `OPENAI_BASE_URL` is unset: the self-hosted
+/// Rudder backend (`https://veren.top/api`). The client appends
+/// `/v1/images/generations` / `/v1/images/edits`, landing on the backend's
+/// OpenAI-compatible `/api/v1/images/...` proxy routes. `OPENAI_BASE_URL` /
+/// `config.json` `base_url` still override this for BYO-key setups.
+pub const DEFAULT_BASE_URL: &str = "https://veren.top/api";
 
 // ---------------------------------------------------------------------------
 // Parameters & plan types

@@ -82,7 +82,7 @@ async fn dry_run_plan_reports_missing_credentials_without_failing() {
     )
     .unwrap();
     let plan = client.plan_generations(&params("p", 1));
-    assert_eq!(plan.url, "https://api.openai.com/v1/images/generations");
+    assert_eq!(plan.url, "https://veren.top/api/v1/images/generations");
     assert!(!plan.auth_header_present);
 }
 

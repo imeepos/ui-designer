@@ -1,9 +1,11 @@
 //! Global defaults stored at `~/Rudder/config.json` (ARCHITECTURE §6).
 //!
 //! Holds generation defaults (`quality`, `thinking`, `n`), the non-sensitive
-//! `base_url` override, and the last-used project path. Secrets are NEVER
-//! stored here — the API key lives in the OS keychain only
+//! `base_url` override, the self-hosted backend override (`server_url`), and
+//! the last-used project path. Secrets are NEVER stored here — the API key
+//! and the backend session token live in the OS keychain only
 //! ([`credential`]); resolution priority is env → keychain (AGENTS.md v2).
+//! 0-配置模式：桌面端登录后用会话令牌直连后端，无需自配 baseUrl/apiKey。
 
 use crate::error::{Result, RudderError};
 use serde::{Deserialize, Serialize};
@@ -12,8 +14,9 @@ use std::path::{Path, PathBuf};
 pub mod credential;
 
 pub use credential::{
-    clear_api_key, resolve_api_key, set_api_key, test_connection, ApiKeyResolution,
-    ConnectionTestReport, KeySource,
+    clear_api_key, clear_session_token, resolve_api_key, resolve_session_token, set_api_key,
+    store_session_token, test_connection, ApiKeyResolution, ConnectionTestReport, KeySource,
+    KEYCHAIN_SESSION_ACCOUNT, SESSION_TOKEN_ENV,
 };
 
 /// Every non-secret key accepted by [`Config::set`] / [`Config::get`]
@@ -47,6 +50,12 @@ pub struct Config {
     /// files without this field keep working via the serde default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// Non-sensitive self-hosted backend base override (session-token auth
+    /// lives here, not in `base_url`). Resolution: `RUDDER_SERVER_URL` env →
+    /// this field → `server_auth::DEFAULT_SERVER_URL`
+    /// (`resolve_server_base_url`). Empty/blank values never take effect.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server_url: Option<String>,
     /// Last successfully resolved project directory.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_project: Option<PathBuf>,
@@ -202,7 +211,8 @@ impl Config {
 }
 
 /// Effective API base URL: `OPENAI_BASE_URL` env → `config.json` `base_url`
-/// → official endpoint (docs/ARCHITECTURE.md §4). Trailing slashes stripped.
+/// → default image endpoint (`image::DEFAULT_BASE_URL`, the self-hosted
+/// Rudder backend; docs/ARCHITECTURE.md §4). Trailing slashes stripped.
 pub fn resolve_base_url() -> String {
     if let Some(env_base) = credential::env_trimmed("OPENAI_BASE_URL") {
         return env_base.trim_end_matches('/').to_string();
@@ -215,6 +225,25 @@ pub fn resolve_base_url() -> String {
         return config_base;
     }
     crate::image::DEFAULT_BASE_URL.to_string()
+}
+
+/// Effective self-hosted backend base URL: `RUDDER_SERVER_URL` env →
+/// `config.json` `server_url` → `server_auth::DEFAULT_SERVER_URL`
+/// (`https://veren.top/api`). Trailing slashes stripped; blank values at any
+/// level fall through to the next one. Mirrors [`resolve_base_url`] so the
+/// auth client, the session probe and `config get` can all agree.
+pub fn resolve_server_base_url() -> String {
+    if let Some(env_server) = credential::env_trimmed("RUDDER_SERVER_URL") {
+        return env_server.trim_end_matches('/').to_string();
+    }
+    if let Some(config_server) = Config::load()
+        .server_url
+        .map(|base| base.trim().trim_end_matches('/').to_string())
+        .filter(|base| !base.is_empty())
+    {
+        return config_server;
+    }
+    crate::server_auth::DEFAULT_SERVER_URL.to_string()
 }
 
 /// Effective image model name: `OPENAI_MODEL` env → `config.json` `model`
@@ -309,9 +338,9 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// Restores OPENAI_BASE_URL / OPENAI_MODEL / RUDDER_HOME on drop. All
-    /// config env tests share one lock: they mutate the same `RUDDER_HOME`
-    /// key and must not run in parallel.
+    /// Restores OPENAI_BASE_URL / OPENAI_MODEL / RUDDER_SERVER_URL /
+    /// RUDDER_HOME on drop. All config env tests share one lock: they mutate
+    /// the same `RUDDER_HOME` key and must not run in parallel.
     struct BaseUrlEnvGuard {
         saved: Vec<(String, Option<String>)>,
         _lock: std::sync::MutexGuard<'static, ()>,
@@ -323,7 +352,7 @@ mod tests {
         fn clear() -> BaseUrlEnvGuard {
             let lock = CONFIG_ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             let mut saved = Vec::new();
-            for name in ["OPENAI_BASE_URL", "OPENAI_MODEL", "RUDDER_HOME"] {
+            for name in ["OPENAI_BASE_URL", "OPENAI_MODEL", "RUDDER_SERVER_URL", "RUDDER_HOME"] {
                 saved.push((name.to_string(), std::env::var(name).ok()));
                 std::env::remove_var(name);
             }
@@ -451,5 +480,61 @@ mod tests {
         BaseUrlEnvGuard::set("OPENAI_MODEL", "env-model-9");
         let cfg = Config::default();
         assert_eq!(cfg.get("model").unwrap(), "env-model-9");
+    }
+
+    #[test]
+    fn resolve_server_base_url_env_then_config_then_default() {
+        let _guard = BaseUrlEnvGuard::clear();
+
+        // Hermetic home: neither env nor config → the self-hosted backend.
+        // (Never read the developer's real ~/Rudder/config.json here.)
+        let empty = std::env::temp_dir().join(format!("rudder-srv-empty-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&empty).unwrap();
+        BaseUrlEnvGuard::set("RUDDER_HOME", &empty.display().to_string());
+        assert_eq!(resolve_server_base_url(), crate::server_auth::DEFAULT_SERVER_URL);
+
+        // config.json override applies when env is absent/empty.
+        let dir = std::env::temp_dir().join(format!("rudder-srv-res-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("config.json"), r#"{"server_url":"https://server.example.com"}"#)
+            .unwrap();
+        BaseUrlEnvGuard::set("RUDDER_HOME", &dir.display().to_string());
+        assert_eq!(resolve_server_base_url(), "https://server.example.com");
+
+        // Env wins over config; trailing slashes are stripped.
+        BaseUrlEnvGuard::set("RUDDER_SERVER_URL", "https://env-server.example.com///");
+        assert_eq!(resolve_server_base_url(), "https://env-server.example.com");
+        BaseUrlEnvGuard::set("RUDDER_SERVER_URL", "   ");
+        assert_eq!(resolve_server_base_url(), "https://server.example.com");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn server_url_blank_config_value_never_takes_effect() {
+        let _guard = BaseUrlEnvGuard::clear();
+        let dir = std::env::temp_dir().join(format!("rudder-srv-blank-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // Blank/whitespace server_url in config.json must fall through to the
+        // default, and old configs without the field must keep parsing.
+        std::fs::write(dir.join("config.json"), r#"{"server_url":"   ","quality":"low"}"#).unwrap();
+        BaseUrlEnvGuard::set("RUDDER_HOME", &dir.display().to_string());
+        let cfg = Config::load();
+        assert_eq!(cfg.quality.as_deref(), Some("low"), "legacy fields still load");
+        assert_eq!(cfg.server_url.as_deref(), Some("   "));
+        assert_eq!(resolve_server_base_url(), crate::server_auth::DEFAULT_SERVER_URL);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn server_url_survives_disk_roundtrip() {
+        let dir = std::env::temp_dir().join(format!("rudder-srt-rt-{}", uuid::Uuid::new_v4()));
+        let path = dir.join("config.json");
+        let mut cfg = Config::default();
+        cfg.server_url = Some("https://server.example.com".into());
+        Config::save_to(Some(&path), &cfg).unwrap();
+        let loaded = Config::load_from(Some(&path));
+        assert_eq!(loaded.server_url.as_deref(), Some("https://server.example.com"));
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
