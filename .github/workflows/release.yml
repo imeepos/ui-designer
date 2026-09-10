@@ -93,6 +93,9 @@ jobs:
       # build 矩阵在三个平台全量覆盖）；core+cli 纯 Rust 无系统依赖，
       # clippy -D warnings 对齐 docs/PLAN.md Phase 2 验收口径
       - uses: dtolnay/rust-toolchain@stable
+        # --profile minimal 默认不含 clippy：缺组件时 cargo clippy 直接失败
+        # （p2p ci.yml 同款教训），显式补装
+      - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
       - name: clippy（core + cli）
         run: cargo clippy -p rudder-core -p rudder-cli --all-targets -- -D warnings
