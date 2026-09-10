@@ -43,6 +43,8 @@ refs/                 # 用户提供的布局参考图
 
 `project.json` 字段：`{ id, name, canvasSize{w,h,preset}, brandBrief, styleBrief, anchor{candidateId,prompt,seed?,createdAt}, pages[{slug,brief,prompt,seed?,updatedAt}], components[{name,type,brief,prompt?,updatedAt}], promptLog[] }`。全部 serde 序列化；写入用「写临时文件+rename」保证原子性。
 
+**共享项目目录（CLI ↔ 桌面端单一事实源）**：桌面端项目列表 = 扫描 `~/Rudder/projects/` **并入** `~/Rudder/registry.json` 登记的外部项目根。`rudder init` 缺省创建于扫描根内（`~/Rudder/projects/<uuid>`），显式 `--dir` 落在扫描根外时自动登记；`rudder project register/unregister` 可补登记/注销存量项目。登记项为规范化绝对路径、按规范形态去重、读取时自愈剔除已删除目录（prune 持久化清理），写盘原子（tempfile+rename）。`config.json` 的 `last_project` 同样存规范化绝对路径。
+
 ## 4. gpt-image-2 客户端（rudder-core::image）
 - 端点：`{base}/v1/images/generations` 与 `{base}/v1/images/edits`（multipart：image[] 多参考图）。
 - 鉴权：`Authorization: Bearer <api key>`。**凭证解析优先级：环境变量 `OPENAI_API_KEY` → OS 钥匙串（`rudder-core::config::credential`，service `rudder` / account `openai-api-key`）→ 未配置**；env 覆盖钥匙串，保证 CI/代理行为不变（`RUDDER_KEYCHAIN=0` 可整体关闭钥匙串，用于 CI 与隔离测试）。base 取 `$OPENAI_BASE_URL` → `config.json` 的 `base_url` → 默认 `https://api.openai.com`。**密钥唯一持久化位置是钥匙串；禁止明文落盘/日志/stdout；界面只显示尾 4 位。**
@@ -70,7 +72,11 @@ project.negativeHints 扩展与 `Labels: a|b|c` 逐字标签约束）；代理�
 ## 6. CLI 命令集（rudder-cli）
 ```
 rudder init <name> [--size web|mobile|desktop|WxH] [--dir <path>] [--brief "..."]
+                            # 缺省落点 ~/Rudder/projects/<uuid>（桌面目录可见）；--dir 在扫描根外时自动登记
 rudder project update [--name <n>] [--brand-brief <s>] [--style-brief <s>] [--template <id>] [--clear-template] [--negative-hint <s>]... [--clear-negative-hints]
+rudder project register [--dir <path>]     # 把扫描根外项目登记进桌面目录（缺省最近项目；幂等）
+rudder project unregister [--dir <path>]   # 从桌面目录注销（缺省最近项目）
+rudder project list-roots                  # 输出扫描根 + 已登记项目根（--json 供代理消费）
 rudder templates list [--json]               # 模板清单 + 槽位词表 + attribution
 rudder templates show <id> [--json]          # 骨架 + fillGuide（代理读后自行填槽）
 rudder board generate [--n 4] [--quality low] [--seed <int>] [--yes] [--template <id>] [--prompt-file <path>]

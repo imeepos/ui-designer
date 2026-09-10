@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+### CLI 项目在桌面端可见：共享项目目录登记表（缺陷修复）
+
+- 缺陷：`rudder init` 缺省在当前目录创建项目，桌面端项目列表只扫描 `~/Rudder/projects/`，CLI 建的项目在 GUI 完全不可见；`last_project` 还会存入相对路径，跨工作目录失配。
+- `rudder init` 缺省落点改为 `~/Rudder/projects/<uuid>`（ARCHITECTURE §3 共享目录），GUI 直接可见；显式 `--dir` 行为不变，落在扫描根外时自动登记进 `~/Rudder/registry.json`。
+- 新共享登记表（rudder-core::registry）：条目规范化绝对路径、按规范形态去重、原子写；读取自愈剔除已删除目录，prune 持久化清理；进程级互斥防并发丢更新。
+- CLI 新命令：`rudder project register [--dir]`（存量项目补登记，幂等；扫描根内项目说明跳过）、`rudder project unregister [--dir]`、`rudder project list-roots`（扫描根 + 已登记根，`--json` 供代理消费）。
+- 桌面端项目列表合并登记表：规范路径去重、失效项自动剔除、仍按创建时间倒序；`projects_root`/`new_project_dir` 委托 core 共享实现，消除双份逻辑。
+- `last_project` 改存规范化绝对路径，跨工作目录解析不再失配。
+- `rudder e2e` 自测项目不再登记进用户目录（冒烟零污染）。
+
 ### 模板协议：代理可消费的提示词资产（PRD §0 产品边界落地）
 
 - `templates/` 资产包：5 套参数化模板（`board-design-system` / `page-ui-standard` / `page-landing-sections` / `component-sheet-grid` / `brand-identity-lite`），每套 = 参数化骨架 + 逐槽填槽指南（fillGuide：要什么/好例子/常见错误）+ 中英文名与来源标注；`manifest.json` 汇总槽位词表、填槽协议与 attribution（awesome-gpt-image-2，MIT，仅吸收结构模式、案例原文零内嵌）。
