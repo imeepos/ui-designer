@@ -302,7 +302,10 @@ export function InfiniteCanvas({
         onPointerCancel={endPan}
         onDoubleClick={onDoubleClick}
         className={cn(
-          "absolute inset-0 touch-none select-none",
+          // overflow-hidden clips the transformed bitmap at the viewport:
+          // an infinite canvas pans via translate3d, and visible overflow
+          // would leak scrollable overflow onto the document (scrollbars).
+          "absolute inset-0 touch-none overflow-hidden select-none",
           panning ? "cursor-grabbing" : "cursor-grab",
         )}
         style={{

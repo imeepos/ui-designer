@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 
 import { useStudio } from "@/state/studio";
 import { InfiniteCanvas } from "@/components/infinite-canvas";
-import { AnchorBadge } from "@/components/card-actions";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/use-confirm";
@@ -58,7 +57,6 @@ export function Stage({
   const title = isOverview
     ? t("workspace.overview")
     : (page?.slug ?? component?.name ?? "");
-  const brief = isOverview ? project.brandBrief : (page?.brief ?? component?.brief ?? "");
   const lineageTarget: LineageTarget | null = !current
     ? null
     : isOverview
@@ -154,22 +152,6 @@ export function Stage({
         >
           {({ percent, actions }) => (
             <>
-              {/* Info card, top-left */}
-              <div className="pointer-events-none absolute left-3 top-3 max-w-[min(420px,55%)]">
-                <div className="pointer-events-auto flex flex-col gap-1 rounded-lg border bg-card px-3 py-2 shadow-[0_8px_24px_rgba(2,8,23,0.08)]">
-                  <p className="truncate font-mono text-sm font-semibold text-foreground">{title}</p>
-                  <span className="flex items-center gap-2">
-                    {isOverview && <AnchorBadge />}
-                    {brief && (
-                      <span className="line-clamp-2 text-xs text-muted-foreground">{brief}</span>
-                    )}
-                  </span>
-                  <span className="font-mono text-[11px] text-muted-foreground">
-                    {current.candidateId}
-                  </span>
-                </div>
-              </div>
-
               {/* Zoom badge + reset, bottom-right */}
               <div className="absolute bottom-3 right-3 flex items-center gap-0.5 rounded-lg border bg-card p-1 shadow-[0_8px_24px_rgba(2,8,23,0.08)]">
                 <span
