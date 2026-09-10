@@ -6,6 +6,8 @@
 //! - [`config`] — `~/Rudder/config.json` defaults + last-used project;
 //!   [`config::credential`] — OS-keychain API key (env → keychain → none)
 //!   and the free `/v1/models` connectivity probe
+//! - [`registry`] — `~/Rudder/registry.json` shared project catalog
+//!   (CLI-created projects outside `~/Rudder/projects` register here)
 //! - [`prompt`] — three-part prompt engine for board/page/component
 //! - [`templates`] — agent-consumable template protocol (skeletons + fill
 //!   guides; PRD §0: intelligence lives in the external coding agent)
@@ -16,6 +18,7 @@
 pub mod canvas;
 pub mod config;
 pub mod error;
+pub mod registry;
 pub mod store;
 pub mod ops;
 pub mod export;
