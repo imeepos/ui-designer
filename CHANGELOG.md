@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+### 服务端上线：用户系统 + 按次计费 + 客户端 0 配置
+
+- 新增 Go 后端 `server/`（rudder-server）：用户注册/登录（JWT）、按次积分计费（默认每图 10 积分，可配）、gpt-image-2 上游代理、管理 API 与内置 Web 管理台（`/api/v1/admin/console`）。
+- 计费规则：生成前预扣（事务+行锁）、上游失败全额退款并记录流水；`n` 张按倍数计费；admin 角色免计费；注册赠送积分可配；积分不足返回 402 `INSUFFICIENT_CREDITS`。
+- 管理能力（admin 登录后）：配置每图积分单价、注册开关、注册赠送、上游 Base URL / 模型 / API Key（密钥只存服务端，仅显示尾 4 位）；用户列表/搜索/禁用启用/充值扣减/重置密码；统计面板与最近生成审计。
+- 部署：43.240.223.138（Ubuntu 22.04）systemd 常驻，nginx 挂载 `https://veren.top/api/v1/`，Postgres 复用服务器 docker 实例（库 `rudder`）；`server/deploy.sh` 一键交叉编译部署。已全链路验证：注册→充值→generations/edits 真实生图→扣费/退款→流水。
+- 客户端改造（进行中）：桌面端删除 baseUrl/apiKey/model 手动配置，改为登录/注册；默认 API 基址 `https://veren.top/api`，Bearer 使用会话令牌（钥匙串 `session-token`）；旧 BYO 链保留为 fallback。
+
 ### CLI 项目在桌面端可见：共享项目目录登记表（缺陷修复）
 
 - 缺陷：`rudder init` 缺省在当前目录创建项目，桌面端项目列表只扫描 `~/Rudder/projects/`，CLI 建的项目在 GUI 完全不可见；`last_project` 还会存入相对路径，跨工作目录失配。

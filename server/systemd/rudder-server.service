@@ -1,0 +1,23 @@
+[Unit]
+Description=Rudder Server (gpt-image-2 代理 + 用户/计费)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ops
+Group=ops
+EnvironmentFile=/etc/rudder-server.env
+ExecStart=/opt/rudder-server/rudder-server
+Restart=always
+RestartSec=3
+
+# 基本加固：只监听环回，无特权。
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=
+
+[Install]
+WantedBy=multi-user.target

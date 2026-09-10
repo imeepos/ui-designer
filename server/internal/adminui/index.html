@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>舵 Rudder · 管理控制台</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #0f1115; color: #e6e8ee; }
+  a { color: #7aa2f7; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; background: #161923; border-bottom: 1px solid #232733; position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .spacer { flex: 1; }
+  main { max-width: 1080px; margin: 0 auto; padding: 24px; }
+  .card { background: #161923; border: 1px solid #232733; border-radius: 10px; padding: 18px 20px; margin-bottom: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .stat { background: #161923; border: 1px solid #232733; border-radius: 10px; padding: 14px 16px; }
+  .stat b { display: block; font-size: 22px; margin-top: 2px; }
+  .stat span { color: #8b93a7; font-size: 12px; }
+  label { display: block; font-size: 12px; color: #8b93a7; margin: 10px 0 4px; }
+  input, select { width: 100%; max-width: 420px; padding: 8px 10px; border: 1px solid #2a2f3d; border-radius: 8px; background: #0f1115; color: #e6e8ee; font: inherit; }
+  input:focus { outline: 1px solid #7aa2f7; }
+  button { padding: 7px 14px; border-radius: 8px; border: 1px solid #2a2f3d; background: #1d2333; color: #e6e8ee; font: inherit; cursor: pointer; }
+  button:hover { border-color: #7aa2f7; }
+  button.primary { background: #2f4bdd; border-color: #2f4bdd; }
+  button.danger { background: #3a1d24; border-color: #64222e; color: #ff9aa8; }
+  button.mini { padding: 3px 9px; font-size: 12px; border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #1e2230; white-space: nowrap; }
+  th { color: #8b93a7; font-weight: 500; font-size: 12px; }
+  td.wrap { white-space: normal; word-break: break-all; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; border: 1px solid #2a2f3d; color: #8b93a7; }
+  .tag.ok { color: #7ee2a8; border-color: #1f5c37; }
+  .tag.bad { color: #ff9aa8; border-color: #64222e; }
+  .tag.admin { color: #f4c97a; border-color: #6b5320; }
+  .row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 18px; }
+  .tabs button { border-radius: 8px; }
+  .tabs button.on { background: #2f4bdd; border-color: #2f4bdd; }
+  .msg { padding: 8px 12px; border-radius: 8px; margin: 10px 0; display: none; }
+  .msg.err { background: #3a1d24; color: #ff9aa8; display: block; }
+  .msg.ok { background: #16301f; color: #7ee2a8; display: block; }
+  .muted { color: #8b93a7; font-size: 12px; }
+  .hide { display: none !important; }
+  dialog { background: #161923; color: #e6e8ee; border: 1px solid #2a2f3d; border-radius: 12px; padding: 20px; width: 380px; }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  h2 { font-size: 15px; margin: 4px 0 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>舵 Rudder · 管理控制台</h1>
+  <span class="spacer"></span>
+  <span id="who" class="muted"></span>
+  <button id="logout" class="hide mini">退出登录</button>
+</header>
+<main>
+  <div id="loginCard" class="card" style="max-width:420px;margin:60px auto;">
+    <h2>管理员登录</h2>
+    <div id="loginMsg" class="msg"></div>
+    <label>用户名</label><input id="loginUser" autocomplete="username">
+    <label>密码</label><input id="loginPass" type="password" autocomplete="current-password">
+    <div class="row" style="margin-top:14px"><button class="primary" id="loginBtn">登录</button></div>
+    <p class="muted" style="margin-top:14px">仅 admin 角色可进入控制台。</p>
+  </div>
+
+  <div id="app" class="hide">
+    <div class="tabs">
+      <button data-tab="dash" class="on">概览</button>
+      <button data-tab="users">用户管理</button>
+      <button data-tab="settings">系统设置</button>
+    </div>
+
+    <section id="tab-dash">
+      <div class="grid" id="stats"></div>
+      <div class="card">
+        <h2>最近生成</h2>
+        <table id="genTable"><thead><tr><th>时间</th><th>用户</th><th>类型</th><th>模型</th><th>n</th><th>积分</th><th>状态</th><th>错误</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section id="tab-users" class="hide">
+      <div class="card">
+        <div class="row">
+          <input id="userQuery" placeholder="搜索用户名 / 邮箱" style="max-width:280px">
+          <button id="userSearch">搜索</button>
+          <button id="userReload">刷新</button>
+          <span class="muted" id="userTotal"></span>
+        </div>
+      </div>
+      <div class="card">
+        <table id="usersTable"><thead><tr><th>用户名</th><th>邮箱</th><th>积分</th><th>角色</th><th>状态</th><th>注册时间</th><th>最近登录</th><th>操作</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section id="tab-settings" class="hide">
+      <div class="card">
+        <h2>计费</h2>
+        <div class="row">
+          <div><label>每张图片积分（默认 10）</label><input id="sCpi" type="number" min="0" style="max-width:160px"></div>
+          <div><label>注册赠送积分</label><input id="sBonus" type="number" min="0" style="max-width:160px"></div>
+          <div><label>开放注册</label>
+            <select id="sReg" style="width:120px"><option value="true">开放</option><option value="false">关闭</option></select>
+          </div>
+        </div>
+        <h2 style="margin-top:22px">上游（gpt-image-2 服务地址）</h2>
+        <label>Base URL</label><input id="sBase" placeholder="https://api.example.com">
+        <label>模型</label><input id="sModel" placeholder="gpt-image-2">
+        <label>API Key（留空 = 不修改；当前尾号：<span id="sKeyTail">—</span>）</label><input id="sKey" type="password" placeholder="sk-..." autocomplete="new-password">
+        <div class="row" style="margin-top:16px">
+          <button class="primary" id="saveSettings">保存设置</button>
+          <span class="muted">密钥只存服务端，界面仅显示尾 4 位。</span>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<dialog id="dlg">
+  <h2 id="dlgTitle"></h2>
+  <div id="dlgMsg" class="msg"></div>
+  <div id="dlgBody"></div>
+  <div class="row" style="margin-top:16px;justify-content:flex-end">
+    <button id="dlgCancel">取消</button>
+    <button class="primary" id="dlgOk">确定</button>
+  </div>
+</dialog>
+
+<script>
+const API = location.pathname.replace(/\/admin\/console$/, '');
+const $ = id => document.getElementById(id);
+let token = localStorage.getItem('rudder_admin_token') || '';
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(opts.headers || {}) },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const e = body.error || {};
+    const err = new Error(e.message || ('HTTP ' + res.status));
+    err.code = e.code; err.status = res.status;
+    throw err;
+  }
+  return body;
+}
+function fmtTime(s) { return s ? new Date(s).toLocaleString('zh-CN', { hour12: false }) : '—'; }
+function showMsg(id, text, ok) { const el = $(id); el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'err'); if (ok) setTimeout(() => el.className = 'msg', 2500); }
+
+/* ---------- 登录 ---------- */
+async function doLogin() {
+  try {
+    const r = await api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ username: $('loginUser').value.trim(), password: $('loginPass').value }) });
+    if (r.user.role !== 'admin') throw new Error('该账号不是管理员');
+    token = r.token; localStorage.setItem('rudder_admin_token', token);
+    enter(r.user);
+  } catch (e) { showMsg('loginMsg', e.message, false); }
+}
+function enter(user) {
+  $('loginCard').classList.add('hide'); $('app').classList.remove('hide');
+  $('logout').classList.remove('hide');
+  $('who').textContent = user.username + ' · 管理员';
+  refreshDash();
+}
+$('loginBtn').onclick = doLogin;
+$('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+$('logout').onclick = () => { token = ''; localStorage.removeItem('rudder_admin_token'); location.reload(); };
+
+/* ---------- Tabs ---------- */
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  ['dash', 'users', 'settings'].forEach(t => $('tab-' + t).classList.toggle('hide', t !== b.dataset.tab));
+  if (b.dataset.tab === 'dash') refreshDash();
+  if (b.dataset.tab === 'users') loadUsers();
+  if (b.dataset.tab === 'settings') loadSettings();
+});
+
+/* ---------- 概览 ---------- */
+async function refreshDash() {
+  try {
+    const st = await api('/api/v1/admin/stats');
+    $('stats').innerHTML = [
+      ['用户总数', st.users], ['正常用户', st.activeUsers],
+      ['生成次数', st.generations], ['成功出图', st.imagesGenerated],
+      ['消耗积分', st.creditsConsumed], ['授予积分', st.creditsGranted], ['用户持有积分', st.creditsOutstanding],
+    ].map(([k, v]) => `<div class="stat"><span>${k}</span><b>${v ?? 0}</b></div>`).join('');
+    const gens = await api('/api/v1/admin/generations?limit=20');
+    $('genTable').querySelector('tbody').innerHTML = (gens.generations || []).map(g => `
+      <tr><td>${fmtTime(g.createdAt)}</td><td>${esc(g.username)}</td><td>${g.kind}</td><td>${esc(g.model)}</td>
+      <td>${g.n}</td><td>${g.cost}</td>
+      <td><span class="tag ${g.status === 'ok' ? 'ok' : 'bad'}">${g.status}</span></td>
+      <td class="wrap muted">${esc((g.error || '').slice(0, 80))}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">暂无记录</td></tr>';
+  } catch (e) { if (e.status === 401 || e.status === 403) { logout401(); } }
+}
+
+/* ---------- 用户 ---------- */
+async function loadUsers() {
+  try {
+    const q = $('userQuery').value.trim();
+    const r = await api('/api/v1/admin/users?limit=100' + (q ? '&query=' + encodeURIComponent(q) : ''));
+    $('userTotal').textContent = '共 ' + r.total + ' 人';
+    $('usersTable').querySelector('tbody').innerHTML = (r.users || []).map(u => `
+      <tr>
+        <td>${esc(u.username)}</td><td class="wrap">${esc(u.email || '—')}</td><td><b>${u.credits}</b></td>
+        <td>${u.role === 'admin' ? '<span class="tag admin">admin</span>' : '<span class="tag">user</span>'}</td>
+        <td><span class="tag ${u.status === 'active' ? 'ok' : 'bad'}">${u.status}</span></td>
+        <td>${fmtTime(u.createdAt)}</td><td>${fmtTime(u.lastLoginAt)}</td>
+        <td>
+          <button class="mini" onclick="adjustCredits('${u.id}',${u.credits},'${esc(u.username)}')">积分</button>
+          <button class="mini" onclick="toggleUser('${u.id}','${u.status}')">${u.status === 'active' ? '禁用' : '启用'}</button>
+          <button class="mini" onclick="resetPwd('${u.id}','${esc(u.username)}')">重置密码</button>
+        </td>
+      </tr>`).join('');
+  } catch (e) { if (e.status === 401 || e.status === 403) logout401(); }
+}
+$('userSearch').onclick = loadUsers;
+$('userReload').onclick = loadUsers;
+$('userQuery').addEventListener('keydown', e => { if (e.key === 'Enter') loadUsers(); });
+
+window.adjustCredits = (id, balance, name) => openDlg('调整积分 · ' + name, `
+  <label>变动数量（正数充值 / 负数扣减）</label><input id="dlgAmount" type="number" value="100">
+  <label>备注</label><input id="dlgNote" placeholder="手动充值">
+`, async () => {
+  const amount = parseInt($('dlgAmount').value, 10);
+  if (!amount) throw new Error('数量不能为 0');
+  await api(`/api/v1/admin/users/${id}/credits`, { method: 'POST', body: JSON.stringify({ amount, note: $('dlgNote').value }) });
+  loadUsers();
+});
+window.toggleUser = async (id, status) => {
+  try {
+    await api(`/api/v1/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ status: status === 'active' ? 'disabled' : 'active' }) });
+    loadUsers();
+  } catch (e) { alert(e.message); }
+};
+window.resetPwd = (id, name) => openDlg('重置密码 · ' + name, `
+  <label>新密码（≥6 位）</label><input id="dlgPwd" type="text" value="">
+`, async () => {
+  await api(`/api/v1/admin/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ newPassword: $('dlgPwd').value }) });
+});
+
+/* ---------- 设置 ---------- */
+async function loadSettings() {
+  try {
+    const s = await api('/api/v1/admin/settings');
+    $('sCpi').value = s.creditsPerImage; $('sBonus').value = s.signupBonusCredits;
+    $('sReg').value = String(s.registrationOpen);
+    $('sBase').value = s.upstreamBaseUrl || ''; $('sModel').value = s.upstreamModel || '';
+    $('sKeyTail').textContent = s.upstreamConfigured ? s.upstreamKeyTail : '未配置';
+  } catch (e) { if (e.status === 401 || e.status === 403) logout401(); }
+}
+$('saveSettings').onclick = async () => {
+  try {
+    const body = {
+      creditsPerImage: parseInt($('sCpi').value, 10) || 0,
+      signupBonusCredits: parseInt($('sBonus').value, 10) || 0,
+      registrationOpen: $('sReg').value === 'true',
+      upstreamBaseUrl: $('sBase').value.trim(),
+      upstreamModel: $('sModel').value.trim(),
+    };
+    const key = $('sKey').value.trim();
+    if (key) body.upstreamApiKey = key;
+    await api('/api/v1/admin/settings', { method: 'PUT', body: JSON.stringify(body) });
+    $('sKey').value = '';
+    showMsg('dlgMsg', '已保存', true); alert('设置已保存');
+    loadSettings();
+  } catch (e) { alert(e.message); }
+};
+
+/* ---------- 对话框 ---------- */
+let dlgAction = null;
+function openDlg(title, bodyHTML, action) {
+  $('dlgTitle').textContent = title; $('dlgBody').innerHTML = bodyHTML; $('dlgMsg').className = 'msg';
+  dlgAction = action; $('dlg').showModal();
+}
+$('dlgCancel').onclick = () => $('dlg').close();
+$('dlgOk').onclick = async () => {
+  try { await dlgAction(); $('dlg').close(); }
+  catch (e) { showMsg('dlgMsg', e.message, false); }
+};
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function logout401() { token = ''; localStorage.removeItem('rudder_admin_token'); location.reload(); }
+
+/* ---------- boot ---------- */
+(async function boot() {
+  if (!token) return;
+  try { const r = await api('/api/v1/auth/me'); enter(r.user); }
+  catch { token = ''; localStorage.removeItem('rudder_admin_token'); }
+})();
+</script>
+</body>
+</html>
