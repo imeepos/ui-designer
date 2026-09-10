@@ -117,8 +117,14 @@ impl Target {
 // ---------------------------------------------------------------------------
 
 /// `rudder init` — create the project directory + project.json.
+///
+/// Without an explicit directory the project is created under the shared
+/// scan root `~/Rudder/projects/<uuid>` so the desktop catalog lists it
+/// without extra steps. An explicit `--dir` keeps full control; roots
+/// outside the scan root are additionally registered in
+/// `~/Rudder/registry.json` so both frontends surface them.
 pub fn init_project(
-    dir: &Path,
+    dir: Option<&Path>,
     name: &str,
     size_spec: &str,
     brief: Option<&str>,
@@ -133,16 +139,34 @@ pub fn init_project(
         "",
         brief.unwrap_or(""),
     );
-    store::create_project(dir, &project)?;
-    // Best effort: an unwritable ~/Rudder must not fail `init`.
-    let _ = remember_last_project(dir);
-    Ok(dir.to_path_buf())
+    let target = match dir {
+        Some(dir) => dir.to_path_buf(),
+        None => crate::registry::new_project_dir()?,
+    };
+    store::create_project(&target, &project)?;
+
+    // Bookkeeping below is best effort: an unwritable ~/Rudder must not
+    // fail `init`. `last_project` is stored canonical-absolute so it keeps
+    // resolving regardless of the caller's cwd.
+    let canonical = std::fs::canonicalize(&target).unwrap_or_else(|_| target.clone());
+    let _ = remember_last_project(&canonical);
+    let under_scan_root = crate::registry::projects_root()
+        .ok()
+        .and_then(|root| std::fs::canonicalize(root).ok())
+        .map(|root| canonical.starts_with(root))
+        .unwrap_or(false);
+    if !under_scan_root {
+        let _ = crate::registry::register(&canonical);
+    }
+    Ok(target)
 }
 
-/// Persist the last-used project pointer (best effort; never fatal).
+/// Persist the last-used project pointer (best effort; never fatal). The
+/// canonical absolute form survives later cwd changes.
 fn remember_last_project(dir: &Path) -> Result<()> {
+    let canonical = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
     let mut config = Config::load();
-    config.last_project = Some(dir.to_path_buf());
+    config.last_project = Some(canonical);
     config.save()
 }
 /// `rudder page add` — register a page.
@@ -895,7 +919,12 @@ pub async fn run_e2e(client: &ImageClient, quality: &str) -> Result<E2eReport> {
     let work = std::env::temp_dir().join(format!("rudder-e2e-{}", uuid::Uuid::new_v4()));
     let project_dir = work.join("proj");
 
-    init_project(&project_dir, "e2e-sample", "web", Some("rudder self-test, clean neutral style"))?;
+    init_project(Some(&project_dir), "e2e-sample", "web", Some("rudder self-test, clean neutral style"))?;
+    // `rudder e2e` is a self-test: its temp project must never pollute the
+    // user's desktop catalog (registration is init's default side effect).
+    let _ = crate::registry::unregister(
+        &std::fs::canonicalize(&project_dir).unwrap_or_else(|_| project_dir.clone()),
+    );
     steps.push(E2eStep {
         step: "init".into(),
         dry_run: false,

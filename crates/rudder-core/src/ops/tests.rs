@@ -38,7 +38,7 @@ fn dry_client() -> ImageClient {
 fn seeded_project(tag: &str) -> PathBuf {
     ensure_test_home();
     let root = tmp(tag);
-    init_project(&root, "样例", "web", Some("海军蓝+黄铜")).unwrap();
+    init_project(Some(&root), "样例", "web", Some("海军蓝+黄铜")).unwrap();
     root
 }
 
@@ -61,13 +61,53 @@ fn init_creates_project_and_defaults() {
 }
 
 #[test]
+fn init_without_dir_lands_in_scan_root_and_skips_registry() {
+    ensure_test_home();
+    let dir = init_project(None, "默认落点", "web", None).unwrap();
+    let canonical = dir.canonicalize().unwrap();
+    let scan_root = crate::registry::projects_root().unwrap();
+    assert!(
+        canonical.starts_with(scan_root.canonicalize().unwrap()),
+        "default init must live under the shared scan root, got {dir:?}"
+    );
+    // Under the scan root the catalog already sees it: never registered.
+    assert!(
+        !crate::registry::list_valid().unwrap().contains(&canonical),
+        "scan-root projects must not be registered"
+    );
+    // last_project pointer is canonical-absolute (whatever the latest
+    // parallel init wrote — the invariant is "absolute", not the value).
+    let last = Config::load().last_project.expect("last_project set");
+    assert!(last.is_absolute(), "last_project must be absolute: {last:?}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn init_with_external_dir_registers_for_catalog() {
+    ensure_test_home();
+    let root = tmp("external");
+    let dir = init_project(Some(&root), "外部目录", "web", None).unwrap();
+    let canonical = dir.canonicalize().unwrap();
+    // Outside the scan root → registered so the desktop catalog merges it.
+    assert!(
+        crate::registry::list_valid().unwrap().contains(&canonical),
+        "external init must be registered"
+    );
+    let last = Config::load().last_project.expect("last_project set");
+    assert!(last.is_absolute(), "last_project must be absolute: {last:?}");
+    std::fs::remove_dir_all(&dir).ok();
+    // Self-heal: after deletion the entry drops out of the valid list.
+    assert!(!crate::registry::list_valid().unwrap().contains(&canonical));
+}
+
+#[test]
 fn init_rejects_bad_size_and_empty_name() {
     ensure_test_home();
     let root = tmp("badinit");
-    let err = init_project(&root, "x", "1234x5678", None).unwrap_err();
+    let err = init_project(Some(&root), "x", "1234x5678", None).unwrap_err();
     assert_eq!(err.code(), "SIZE_INVALID");
     assert!(!root.join("project.json").exists(), "no project.json on failed init");
-    let err = init_project(&root, "  ", "web", None).unwrap_err();
+    let err = init_project(Some(&root), "  ", "web", None).unwrap_err();
     assert_eq!(err.code(), "INVALID_ARG");
     std::fs::remove_dir_all(&root).ok();
 }

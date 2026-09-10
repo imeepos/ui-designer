@@ -56,7 +56,8 @@ enum Command {
         /// web | mobile | desktop | WxH (16-multiples, ≤3:1, 0.65-8.3 MP).
         #[arg(long, default_value = "web")]
         size: String,
-        /// Project directory (default: current directory).
+        /// Project directory (default: ~/Rudder/projects/<id>, the shared
+        /// desktop catalog location).
         #[arg(long)]
         dir: Option<PathBuf>,
         /// Seeds styleBrief.
@@ -407,10 +408,9 @@ async fn dispatch(cli: Cli) -> i32 {
 async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
     match &cli.command {
         Command::Init { name, size, dir, brief } => {
-            let dir = dir.clone().unwrap_or_else(|| PathBuf::from("."));
-            ops::init_project(&dir, name, size, brief.as_deref())?;
-            let project = store::load_project(&dir)?;
-            let dir_abs = std::fs::canonicalize(&dir).unwrap_or(dir);
+            let target = ops::init_project(dir.as_deref(), name, size, brief.as_deref())?;
+            let project = store::load_project(&target)?;
+            let dir_abs = std::fs::canonicalize(&target).unwrap_or(target);
             Ok(CmdResult::new(
                 format!(
                     "project `{}` created at {} (canvas {})",

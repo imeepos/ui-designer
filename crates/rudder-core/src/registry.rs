@@ -13,8 +13,16 @@
 //!   filtered; [`prune_at`] persists that cleanup ([`list_at`] stays pure)
 
 use crate::error::{Result, RudderError};
-use crate::store::PROJECT_FILE;use serde::{Deserialize, Serialize};
+use crate::store::PROJECT_FILE;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+/// Serializes registry read-modify-write cycles within one process (the
+/// test harness runs many inits in parallel; the atomic rename alone would
+/// not prevent lost updates). Cross-process writers are rare and the next
+/// registration self-heals the catalog.
+static REGISTRY_LOCK: Mutex<()> = Mutex::new(());
 
 /// Registry file name under the Rudder home (`~/Rudder/registry.json`).
 pub const REGISTRY_FILE: &str = "registry.json";
@@ -27,8 +35,9 @@ pub struct ProjectRegistry {
     pub projects: Vec<PathBuf>,
 }
 
-/// Rudder home directory (`RUDDER_HOME` override → `~`), shared with
-/// [`crate::config::Config::path`]'s convention.
+/// Rudder data directory (`~/Rudder`); `RUDDER_HOME` overrides it directly
+/// (same convention as [`crate::config::Config::path`]: the env var names
+/// the Rudder directory itself, not the OS home).
 pub fn rudder_home() -> Option<PathBuf> {
     if let Ok(home) = std::env::var("RUDDER_HOME") {
         if !home.trim().is_empty() {
@@ -136,6 +145,7 @@ pub fn register_at(path: Option<&Path>, dir: &Path) -> Result<bool> {
             path: canonical.display().to_string(),
         });
     }
+    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut registry = load_at(path);
     if registry.projects.iter().any(|p| p == &canonical) {
         return Ok(false);
@@ -151,6 +161,7 @@ pub fn register_at(path: Option<&Path>, dir: &Path) -> Result<bool> {
 /// are not an error.
 pub fn unregister_at(path: Option<&Path>, dir: &Path) -> Result<bool> {
     let canonical = canonical_or_absolutize(dir);
+    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut registry = load_at(path);
     let before = registry.projects.len();
     registry.projects.retain(|p| p != &canonical);
@@ -174,6 +185,7 @@ pub fn list_valid_at(path: Option<&Path>) -> Result<Vec<PathBuf>> {
 /// Persist the self-healing cleanup: drop entries whose project directory
 /// vanished. Returns the number of removed entries.
 pub fn prune_at(path: Option<&Path>) -> Result<usize> {
+    let _guard = REGISTRY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut registry = load_at(path);
     let before = registry.projects.len();
     registry.projects.retain(|p| p.join(PROJECT_FILE).is_file());

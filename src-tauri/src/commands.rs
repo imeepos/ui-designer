@@ -356,7 +356,7 @@ pub async fn create_project(input: CreateProjectInput) -> Result<ProjectDetailDt
         _ => format!("{}x{}", input.size.w, input.size.h),
     };
     let dir = projects::new_project_dir().map_err(into_command)?;
-    ops::init_project(&dir, input.name.trim(), &size_spec, Some(input.style_brief.trim()))
+    ops::init_project(Some(&dir), input.name.trim(), &size_spec, Some(input.style_brief.trim()))
         .map_err(into_command)?;
     let mut project = store::load_project(&dir).map_err(into_command)?;
     project.brand_brief = input.brand_brief.trim().to_string();
