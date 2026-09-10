@@ -105,15 +105,12 @@ jobs:
           if cargo clippy -p rudder-core -p rudder-cli --all-targets -- -D warnings 2>&1 | tee /tmp/clippy.log; then
             echo "clippy: 0 告警"
           else
+            sed -e 's/\x1b\[[0-9;]*m//g' /tmp/clippy.log > /tmp/clippy-clean.log
             {
-              echo "log-lines=$(wc -l < /tmp/clippy.log)"
-              echo "cargo=$(cargo --version 2>&1)"
-              echo "clippy=$(cargo clippy --version 2>&1)"
-              echo "rustc=$(rustc --version 2>&1)"
-              echo "disk=$(df -h / | tail -1 | awk '{print $4" free"}')"
-              echo "mem: $(free -m | awk 'NR==2{print $2"MB total, "$7"MB avail"}')"
-            } | while IFS= read -r line; do echo "::error::ENV $line"; done
-            tail -40 /tmp/clippy.log | while IFS= read -r line; do
+              grep -m2 -E "error:|custom build command" /tmp/clippy-clean.log || echo "(无 error 行，见上下文)"
+              echo "--- build-command 上下文 ---"
+              grep -m1 -A9 "custom build command" /tmp/clippy-clean.log || echo "(无 custom build command 段)"
+            } | head -13 | while IFS= read -r line; do
               echo "::error::${line:0:500}"
             done
             exit 1
