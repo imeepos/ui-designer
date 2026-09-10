@@ -1,6 +1,7 @@
 package api
 
 import (
+	"regexp"
 	"errors"
 	"net/http"
 	"strconv"
@@ -69,7 +70,11 @@ func (s *Server) handleAdminUserPatch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeValidation, "不能禁用自己", "")
 		return
 	}
-	user, err := s.Store.UpdateProfile(r.Context(), r.PathValue("id"), in.Status, in.Role)
+	id, ok := adminUserOr404(w, r)
+	if !ok {
+		return
+	}
+	user, err := s.Store.UpdateProfile(r.Context(), id, in.Status, in.Role)
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, CodeNotFound, "用户不存在", "")
 		return
@@ -110,7 +115,11 @@ func (s *Server) handleAdminCredits(w http.ResponseWriter, r *http.Request) {
 			in.Note = "管理员扣减"
 		}
 	}
-	user, err := s.Store.AdjustCredits(r.Context(), r.PathValue("id"), in.Amount, in.Note)
+	id, ok := adminUserOr404(w, r)
+	if !ok {
+		return
+	}
+	user, err := s.Store.AdjustCredits(r.Context(), id, in.Amount, in.Note)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, CodeNotFound, "用户不存在", "")
@@ -147,7 +156,11 @@ func (s *Server) handleAdminResetPassword(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, CodeInternal, "internal error", "")
 		return
 	}
-	if err := s.Store.UpdatePassword(r.Context(), r.PathValue("id"), hash); err != nil {
+	id, ok := adminUserOr404(w, r)
+	if !ok {
+		return
+	}
+	if err := s.Store.UpdatePassword(r.Context(), id, hash); err != nil {
 		writeError(w, http.StatusInternalServerError, CodeInternal, "internal error", "")
 		return
 	}
@@ -271,6 +284,21 @@ func (s *Server) handleAdminPutSettings(w http.ResponseWriter, r *http.Request) 
 }
 
 var errAbort = errors.New("abort")
+
+// uuidRe guards admin {id} path params: malformed ids are client errors, not
+// database failures.
+var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// adminUserOr404 validates the {id} path parameter, writing the error response
+// when invalid. ok=false means the response is already written.
+func adminUserOr404(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id := r.PathValue("id")
+	if !uuidRe.MatchString(id) {
+		writeError(w, http.StatusNotFound, CodeNotFound, "用户不存在", "")
+		return "", false
+	}
+	return id, true
+}
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/admin/generations?limit=&userId=
