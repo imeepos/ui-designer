@@ -82,6 +82,18 @@ pub fn new_project_dir_at(home: &Path) -> Result<PathBuf> {
     Ok(projects_root_at(home)?.join(uuid::Uuid::new_v4().to_string()))
 }
 
+/// `true` when `dir` (canonical form) lives under the shared scan root —
+/// those projects are already visible to the desktop catalog and must not
+/// be registered.
+pub fn is_under_scan_root(dir: &Path) -> bool {
+    let canonical = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+    projects_root()
+        .ok()
+        .and_then(|root| std::fs::canonicalize(root).ok())
+        .map(|root| canonical.starts_with(&root))
+        .unwrap_or(false)
+}
+
 /// Best-effort absolutization without requiring the path to exist.
 fn absolutize(dir: &Path) -> PathBuf {
     if dir.is_absolute() {

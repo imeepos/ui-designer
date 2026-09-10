@@ -150,12 +150,7 @@ pub fn init_project(
     // resolving regardless of the caller's cwd.
     let canonical = std::fs::canonicalize(&target).unwrap_or_else(|_| target.clone());
     let _ = remember_last_project(&canonical);
-    let under_scan_root = crate::registry::projects_root()
-        .ok()
-        .and_then(|root| std::fs::canonicalize(root).ok())
-        .map(|root| canonical.starts_with(root))
-        .unwrap_or(false);
-    if !under_scan_root {
+    if !crate::registry::is_under_scan_root(&canonical) {
         let _ = crate::registry::register(&canonical);
     }
     Ok(target)

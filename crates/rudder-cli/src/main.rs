@@ -12,8 +12,7 @@ use output::{emit_err, emit_ok, format_plan, format_plan_summary, CmdResult};
 use rudder_core::config::{credential, resolve_base_url, Config};
 use rudder_core::image::ImageClient;
 use rudder_core::ops::{self, GenerateOptions, Target};
-use rudder_core::store;
-use rudder_core::{export, RudderError};
+use rudder_core::{export, registry, store, RudderError};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
@@ -189,6 +188,24 @@ enum ProjectCommand {
         #[arg(long = "clear-negative-hints", default_value_t = false)]
         clear_negative_hints: bool,
     },
+    /// Register a project root in the shared desktop catalog
+    /// (`~/Rudder/registry.json`) — for projects living outside
+    /// `~/Rudder/projects`. Defaults to the last-used project.
+    Register {
+        /// Project directory to register.
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
+    /// Remove a project root from the shared desktop catalog. Defaults to
+    /// the last-used project.
+    Unregister {
+        /// Project directory to unregister.
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
+    /// Show the desktop catalog roots: the scan root plus every registered
+    /// project directory.
+    ListRoots,
 }
 
 #[derive(Subcommand, Debug)]
@@ -483,6 +500,84 @@ async fn run(cli: &Cli) -> Result<CmdResult, RudderError> {
                         "styleBrief": project.style_brief,
                         "templateId": project.template_id,
                         "negativeHints": project.negative_hints,
+                    }),
+                ))
+            }
+            ProjectCommand::Register { dir } => {
+                let target = match dir {
+                    Some(dir) => dir.clone(),
+                    None => resolve_root(cli.project.as_ref())?,
+                };
+                let canonical =
+                    std::fs::canonicalize(&target).unwrap_or_else(|_| target.clone());
+                if registry::is_under_scan_root(&canonical) {
+                    return Ok(CmdResult::new(
+                        format!(
+                            "`{}` lives under the scan root; the desktop catalog already lists it",
+                            canonical.display()
+                        ),
+                        json!({
+                            "dir": canonical.display().to_string(),
+                            "registered": false,
+                            "underScanRoot": true,
+                        }),
+                    ));
+                }
+                let registered = registry::register(&canonical)?;
+                Ok(CmdResult::new(
+                    format!(
+                        "`{}` {}",
+                        canonical.display(),
+                        if registered { "registered for the desktop catalog" } else { "already registered" }
+                    ),
+                    json!({
+                        "dir": canonical.display().to_string(),
+                        "registered": registered,
+                        "underScanRoot": false,
+                    }),
+                ))
+            }
+            ProjectCommand::Unregister { dir } => {
+                let target = match dir {
+                    Some(dir) => dir.clone(),
+                    None => resolve_root(cli.project.as_ref())?,
+                };
+                let canonical =
+                    std::fs::canonicalize(&target).unwrap_or_else(|_| target.clone());
+                let removed = registry::unregister(&canonical)?;
+                Ok(CmdResult::new(
+                    format!(
+                        "`{}` {}",
+                        canonical.display(),
+                        if removed { "removed from the desktop catalog" } else { "was not registered" }
+                    ),
+                    json!({
+                        "dir": canonical.display().to_string(),
+                        "removed": removed,
+                    }),
+                ))
+            }
+            ProjectCommand::ListRoots => {
+                let scan_root = registry::projects_root()?;
+                let roots = registry::list_valid()?;
+                let registered: Vec<Value> = roots
+                    .iter()
+                    .map(|root| {
+                        let name = store::load_project(root)
+                            .map(|project| project.name)
+                            .unwrap_or_else(|_| "-".into());
+                        json!({ "dir": root.display().to_string(), "name": name })
+                    })
+                    .collect();
+                Ok(CmdResult::new(
+                    format!(
+                        "scan root: {} · registered project roots: {}",
+                        scan_root.display(),
+                        roots.len()
+                    ),
+                    json!({
+                        "scanRoot": scan_root.display().to_string(),
+                        "registered": registered,
                     }),
                 ))
             }
