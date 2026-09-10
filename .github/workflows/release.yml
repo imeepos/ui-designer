@@ -97,13 +97,33 @@ jobs:
         # （p2p ci.yml 同款教训），显式补装
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
+      # CI 日志接口需鉴权：失败时把错误关键行转成 ::error:: 注解，
+      # check-runs annotations API 匿名可读（本地无法复现的远端失败靠它诊断）
       - name: clippy（core + cli）
-        run: cargo clippy -p rudder-core -p rudder-cli --all-targets -- -D warnings
+        run: |
+          set -o pipefail
+          if cargo clippy -p rudder-core -p rudder-cli --all-targets -- -D warnings 2>&1 | tee /tmp/clippy.log; then
+            echo "clippy: 0 告警"
+          else
+            grep -E "^error" /tmp/clippy.log | head -40 | while IFS= read -r line; do
+              echo "::error::${line:0:500}"
+            done
+            exit 1
+          fi
       - name: test（core + cli）
         env:
           # 无头 CI 无 OS 钥匙串：core 测试按 credential.rs 约定走 env 回退路径
           RUDDER_KEYCHAIN: "0"
-        run: cargo test -p rudder-core -p rudder-cli
+        run: |
+          set -o pipefail
+          if cargo test -p rudder-core -p rudder-cli 2>&1 | tee /tmp/test.log; then
+            echo "test: 全部通过"
+          else
+            grep -E "^error|panicked at|FAILED|failures:" /tmp/test.log | head -40 | while IFS= read -r line; do
+              echo "::error::${line:0:500}"
+            done
+            exit 1
+          fi
 
   # ---------- 三平台打包：gate 全绿才进；main push 只跑 gate 不打包 ----------
   build:
