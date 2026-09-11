@@ -111,6 +111,17 @@ export interface BoardBrief {
   reference: string;
 }
 
+/**
+ * Stored-board-brief amendment (`update_board_brief`): `undefined`/omitted
+ * fields keep the stored value; present fields replace it (trimmed). The
+ * SDK-direct board flow persists this before generating so the amendment
+ * survives restarts (C2-FE 偏差① — the old generate_board merged on disk).
+ */
+export interface BoardBriefUpdate {
+  brandBrief?: string;
+  styleBrief?: string;
+}
+
 export interface GenerateOptions {
   count?: number;
   /** Generation quality tier; default low (exploration). */
@@ -242,6 +253,12 @@ export interface ApiAdapter {
     brief: BoardBrief,
     options?: GenerateOptions,
   ): Promise<GenerateResult>;
+  /** Persist the board brief amendment (`update_board_brief`); returns the refreshed detail. */
+  updateBoardBrief(
+    projectId: string,
+    input: BoardBriefUpdate,
+    options?: CallOptions,
+  ): Promise<ProjectDetail>;
   pickAnchor(projectId: string, candidateId: string, options?: CallOptions): Promise<ProjectDetail>;
   addPage(
     projectId: string,

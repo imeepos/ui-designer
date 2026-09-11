@@ -2,6 +2,7 @@ import {
   ApiError,
   type ApiAdapter,
   type BoardBrief,
+  type BoardBriefUpdate,
   type CallOptions,
   type Candidate,
   type ComponentItem,
@@ -243,6 +244,26 @@ export class MockApi implements ApiAdapter {
   async getProject(id: string, options?: CallOptions): Promise<ProjectDetail> {
     this.assertNotAborted(options?.signal);
     return clone(requireProject(this.store, id));
+  }
+
+  /**
+   * Persist a board brief amendment, mirroring the Rust `update_board_brief`
+   * semantics: present fields replace (trimmed), absent fields keep, both
+   * absent is a validation error.
+   */
+  async updateBoardBrief(
+    projectId: string,
+    input: BoardBriefUpdate,
+    options?: CallOptions,
+  ): Promise<ProjectDetail> {
+    this.assertNotAborted(options?.signal);
+    if (input.brandBrief === undefined && input.styleBrief === undefined) {
+      throw new ApiError("VALIDATION_ERROR", "nothing to update: pass brandBrief and/or styleBrief");
+    }
+    const project = requireProject(this.store, projectId);
+    if (input.brandBrief !== undefined) project.brandBrief = input.brandBrief.trim();
+    if (input.styleBrief !== undefined) project.styleBrief = input.styleBrief.trim();
+    return clone(project);
   }
 
   async generateBoard(

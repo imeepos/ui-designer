@@ -167,6 +167,7 @@ describe("TauriApi", () => {
     const images = fakeImagesClient();
     const { calls, invokeFn } = makeInvoke({
       get_project: projectDtoNoAnchor(),
+      update_board_brief: projectDtoNoAnchor(),
       get_cms_api_key: "sk-cms-test-dummy",
       get_generation_config: { baseUrl: "https://veren.top/api", model: "gpt-image-2" },
       record_generated_image: generateDto(),
@@ -190,8 +191,18 @@ describe("TauriApi", () => {
     // in client.test.ts against the real factory.)
     expect(calls.map((c) => c.command)).toEqual([
       "get_project",
+      "update_board_brief",
       "record_generated_image",
     ]);
+    // C2-FE 偏差①: the merged brief is persisted BEFORE the SDK call (the
+    // old generate_board order), so project.json keeps the amendment.
+    expect(calls[1]).toMatchObject({
+      command: "update_board_brief",
+      args: {
+        projectId: "p1",
+        input: { brandBrief: "acme", styleBrief: "blue / serif / rounded | shot" },
+      },
+    });
     expect(images.calls.generate).toHaveLength(1);
     expect(images.calls.edit).toHaveLength(0);
     const [body] = images.calls.generate[0] as [Record<string, unknown>];
@@ -204,7 +215,7 @@ describe("TauriApi", () => {
     expect(prompt).toContain("- canvas-locked: compose for exactly 1536x1024");
 
     // Persistence: the b64 item rides imageBase64 into record_generated_image.
-    expect(calls[1].args).toMatchObject({
+    expect(calls[2].args).toMatchObject({
       input: {
         projectId: "p1",
         kind: "board",
@@ -216,7 +227,7 @@ describe("TauriApi", () => {
         model: "gpt-image-2",
       },
     });
-    expect(calls[1].args).not.toHaveProperty("input.imageUrl");
+    expect(calls[2].args).not.toHaveProperty("input.imageUrl");
 
     // Canvas refresh payload mapping + brief overlay for the session.
     expect(result.candidates[0].url).toContain("0003.png");
@@ -224,6 +235,26 @@ describe("TauriApi", () => {
     expect(result.project.id).toBe("p1");
     expect(result.project.brandBrief).toBe("acme");
     expect(result.project.styleBrief).toBe("blue / serif / rounded | shot");
+  });
+
+  it("persists a standalone brief amendment via update_board_brief", async () => {
+    const { calls, invokeFn } = makeInvoke({ update_board_brief: projectDto() });
+    const api = new TauriApi(invokeFn, toUrl);
+
+    const detail = await api.updateBoardBrief("p1", {
+      brandBrief: " 新品牌 ",
+      styleBrief: " 新风格 ",
+    });
+
+    expect(calls[0]).toMatchObject({
+      command: "update_board_brief",
+      args: {
+        projectId: "p1",
+        input: { brandBrief: " 新品牌 ", styleBrief: " 新风格 " },
+      },
+    });
+    expect(detail.brandBrief).toBe("brand");
+    expect(detail.pages).toHaveLength(1);
   });
 
   it("ramps onProgress toward 0.9 while the SDK job runs (edits, anchor first)", async () => {

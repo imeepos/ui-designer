@@ -19,6 +19,7 @@ pub fn run() {
             commands::get_project,
             commands::get_lineage,
             commands::generate_board,
+            commands::update_board_brief,
             commands::pick_anchor,
             commands::add_page,
             commands::generate_page,

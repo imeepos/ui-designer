@@ -419,6 +419,49 @@ pub async fn generate_board(
     run_generation(&app, &project_id, "board", "", Target::Board, options).await
 }
 
+/// Board brief amendment (SDK-direct path): `Some` fields replace the stored
+/// value (trimmed — the exact merge the old `generate_board` performed
+/// before generating), `None` leaves the stored value untouched. The
+/// frontend calls this before an SDK board generation so `project.json`
+/// keeps the amendment across restarts (C2-FE 偏差①).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateBoardBriefInput {
+    #[serde(default)]
+    pub brand_brief: Option<String>,
+    #[serde(default)]
+    pub style_brief: Option<String>,
+}
+
+/// Persist the board brief amendment and return the refreshed detail view.
+/// `Some` values are trimmed and written (exactly the old `generate_board`
+/// merge — an empty string clears the field, matching the unvalidated old
+/// inputs); `None` leaves the stored value untouched; both `None` is the
+/// same "nothing to update" argument error `rudder project update` reports.
+/// The write goes through the project store's atomic tempfile+rename.
+#[tauri::command]
+pub async fn update_board_brief(
+    project_id: String,
+    input: UpdateBoardBriefInput,
+) -> Result<ProjectDetailDto, CommandError> {
+    let (root, mut project) = resolve_project(&project_id)?;
+    let brand = input.brand_brief.as_deref().map(str::trim);
+    let style = input.style_brief.as_deref().map(str::trim);
+    if brand.is_none() && style.is_none() {
+        return Err(CommandError::from_core(&RudderError::InvalidArg {
+            detail: "nothing to update: pass brandBrief and/or styleBrief".into(),
+        }));
+    }
+    if let Some(brief) = brand {
+        project.brand_brief = brief.to_string();
+    }
+    if let Some(brief) = style {
+        project.style_brief = brief.to_string();
+    }
+    store::save_project(&root, &project).map_err(into_command)?;
+    detail_view(&root)
+}
+
 #[tauri::command]
 pub async fn pick_anchor(
     project_id: String,
@@ -1400,6 +1443,79 @@ mod tests {
             reference: "dribbble shot".into(),
         };
         assert_eq!(style_brief_from(&brief), "deep blue / rounded | dribbble shot");
+    }
+
+    // -- update_board_brief (SDK-direct brief persistence, C2-FE 偏差①) ----
+
+    /// A real catalog project under the shared hermetic test home.
+    fn catalog_project(tag: &str) -> (std::path::PathBuf, Project) {
+        projects::ensure_test_home();
+        let dir = projects::new_project_dir().unwrap();
+        let project = Project::new(
+            &format!("简报探针-{tag}"),
+            CanvasSize::new(1536, 1024, None),
+            "旧品牌",
+            "旧风格",
+        );
+        store::create_project(&dir, &project).unwrap();
+        (dir, project)
+    }
+
+    #[test]
+    fn update_board_brief_persists_briefs_and_returns_the_detail() {
+        let (dir, project) = catalog_project("persist");
+        let detail = tauri::async_runtime::block_on(update_board_brief(
+            project.id.clone(),
+            UpdateBoardBriefInput {
+                brand_brief: Some("  新品牌  ".into()),
+                style_brief: Some(" 新风格 ".into()),
+            },
+        ))
+        .unwrap();
+        assert_eq!(detail.brand_brief, "新品牌", "trimmed like the old merge");
+        assert_eq!(detail.style_brief, "新风格");
+
+        // 落盘重读:project.json carries the amendment (a successful parse +
+        // load of the atomic temp-file+rename write — no half-written file).
+        let reloaded = store::load_project(&projects::find_project_root(&project.id).unwrap())
+            .expect("project.json parses after the update");
+        assert_eq!(reloaded.brand_brief, "新品牌");
+        assert_eq!(reloaded.style_brief, "新风格");
+        let _ = dir;
+    }
+
+    #[test]
+    fn update_board_brief_some_replaces_and_none_preserves() {
+        let (_dir, project) = catalog_project("partial");
+        let detail = tauri::async_runtime::block_on(update_board_brief(
+            project.id.clone(),
+            UpdateBoardBriefInput { brand_brief: Some(" 只改品牌 ".into()), style_brief: None },
+        ))
+        .unwrap();
+        assert_eq!(detail.brand_brief, "只改品牌");
+        assert_eq!(detail.style_brief, "旧风格", "None must not touch the stored value");
+    }
+
+    #[test]
+    fn update_board_brief_rejects_unknown_project_and_empty_input() {
+        let input = |brand: Option<&str>, style: Option<&str>| UpdateBoardBriefInput {
+            brand_brief: brand.map(str::to_string),
+            style_brief: style.map(str::to_string),
+        };
+        let missing = tauri::async_runtime::block_on(update_board_brief(
+            "nope".into(),
+            input(Some("x"), None),
+        ))
+        .unwrap_err();
+        assert_eq!(missing.code, codes::NOT_FOUND);
+
+        let (_dir, project) = catalog_project("empty");
+        let nothing = tauri::async_runtime::block_on(update_board_brief(
+            project.id.clone(),
+            input(None, None),
+        ))
+        .unwrap_err();
+        assert_eq!(nothing.code, codes::VALIDATION_ERROR, "nothing to update");
     }
 
     #[test]

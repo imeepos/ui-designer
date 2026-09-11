@@ -147,24 +147,25 @@ pub fn scan_export_files(out_dir: &Path) -> CoreResult<Vec<ExportFileDto>> {
     Ok(files)
 }
 
+/// Test-only home redirect (compile out of release builds). Shared by every
+/// test module in this binary — exactly ONE `RUDDER_HOME` setter per
+/// process (a second setter would recreate the env race FLAKE-1 fixed in
+/// rudder-core).
+#[cfg(test)]
+pub(crate) fn ensure_test_home() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let dir = std::env::temp_dir().join(format!("rudder-tauri-home-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("create test home");
+        // Safety: single-threaded init via Once; other tests only read the
+        // override after it is set.
+        std::env::set_var("RUDDER_HOME", &dir);
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Once;
-
-    /// Redirect `~/Rudder` resolution into a per-run temp directory so the
-    /// catalog tests never touch the developer's real home.
-    fn ensure_test_home() {
-        static ONCE: Once = Once::new();
-        ONCE.call_once(|| {
-            let dir =
-                std::env::temp_dir().join(format!("rudder-tauri-home-{}", uuid::Uuid::new_v4()));
-            std::fs::create_dir_all(&dir).expect("create test home");
-            // Safety: single-threaded init via Once; other tests only read
-            // the override after it is set.
-            std::env::set_var("RUDDER_HOME", &dir);
-        });
-    }
 
     fn sample_project(name: &str, dir: &Path) -> Project {
         let project = Project::new(name, rudder_core::canvas::CanvasSize::new(1536, 1024, None), "", "");

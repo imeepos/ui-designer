@@ -4,6 +4,7 @@ import {
   ApiError,
   type ApiAdapter,
   type BoardBrief,
+  type BoardBriefUpdate,
   type CallOptions,
   type Candidate,
   type CreateProjectInput,
@@ -491,6 +492,16 @@ export class TauriApi implements ApiAdapter {
     return mapProject(this.toUrl, dto);
   }
 
+  /** Persist a board brief amendment (`update_board_brief`), return the refreshed detail. */
+  async updateBoardBrief(
+    projectId: string,
+    input: BoardBriefUpdate,
+    _options?: CallOptions,
+  ): Promise<ProjectDetail> {
+    const dto = await this.call<ProjectDetailDto>("update_board_brief", { projectId, input });
+    return mapProject(this.toUrl, dto);
+  }
+
   async generateBoard(
     projectId: string,
     brief: BoardBrief,
@@ -498,10 +509,7 @@ export class TauriApi implements ApiAdapter {
   ): Promise<GenerateResult> {
     const project = await this.getProject(projectId);
     // Mirror the old generate_board's brief merge (style_brief_from) so the
-    // composed prompt sees exactly what the drawer typed. The stored project
-    // record is refreshed by the batch payload; the merged briefs are also
-    // overlaid onto the returned project so the UI keeps them this session
-    // (a dedicated project-update command remains future work).
+    // composed prompt sees exactly what the drawer typed.
     const merged = {
       brandBrief: brief.brandKeywords.trim(),
       styleBrief: [
@@ -517,6 +525,10 @@ export class TauriApi implements ApiAdapter {
         ? `${merged.styleBrief} | ${brief.reference.trim()}`
         : brief.reference.trim();
     }
+    // C2-FE 偏差①: persist the amendment BEFORE the SDK call — the old
+    // generate_board wrote project.json first, then generated. Without this
+    // the amendment only lived in session state and was lost on restart.
+    await this.updateBoardBrief(projectId, merged, options);
     const prompt = composeBoardPrompt({
       ...TauriApi.promptProject(project),
       brandBrief: merged.brandBrief,

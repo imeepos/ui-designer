@@ -8,6 +8,31 @@ describe("MockApi four-step flow", () => {
   // Compressed delays so the whole flow fits the default test timeout.
   const api = new MockApi({ min: 5, max: 15 });
 
+  test("updateBoardBrief persists the amendment and preserves untouched fields", async () => {
+    // A dedicated instance: the describe-level `api` store is shared by the
+    // smoke flow's list-length assertions.
+    const isolated = new MockApi({ min: 5, max: 15 });
+    const project = await isolated.createProject({
+      name: "Brief",
+      size: { w: 1536, h: 1024, preset: "web" },
+      brandBrief: "old brand",
+      styleBrief: "old style",
+    });
+    const updated = await isolated.updateBoardBrief(project.id, {
+      brandBrief: "  new brand  ",
+    });
+    expect(updated.brandBrief).toBe("new brand");
+    expect(updated.styleBrief).toBe("old style");
+    const reread = await isolated.getProject(project.id);
+    expect(reread.brandBrief).toBe("new brand");
+    await expect(isolated.updateBoardBrief(project.id, {})).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
+    await expect(
+      isolated.updateBoardBrief("missing", { brandBrief: "x" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
   test("create -> board -> anchor -> page -> component -> export", async () => {
     const project = await api.createProject({
       name: "Smoke",
