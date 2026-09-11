@@ -11,6 +11,11 @@ const SKIP_FILE = (name) =>
   name.endsWith(".test.ts") || name.endsWith(".test.tsx") || name.endsWith(".d.ts");
 const EXTENSIONS = new Set([".ts", ".tsx"]);
 
+// Prompt-engine constants are model-facing text mirrored from
+// rudder-core (crates/rudder-core/src/prompt.rs), not UI copy. Each entry
+// is an explicit `file:line-prefix` — never a general escape hatch.
+const ALLOWED_PREFIXES = ["lib/generation/prompt.ts: export const ANCHOR_REFERENCE"];
+
 function collect(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
@@ -24,11 +29,13 @@ function collect(dir, out = []) {
 
 const violations = [];
 for (const file of collect(SRC_ROOT)) {
+  const rel = relative(SRC_ROOT, file);
   const lines = readFileSync(file, "utf8").split("\n");
   lines.forEach((line, i) => {
-    if (CJK.test(line)) {
-      violations.push(`${relative(SRC_ROOT, file)}:${i + 1}: ${line.trim()}`);
-    }
+    if (!CJK.test(line)) return;
+    const entry = `${rel}: ${line.trim()}`;
+    if (ALLOWED_PREFIXES.some((prefix) => entry.startsWith(prefix))) return;
+    violations.push(`${rel}:${i + 1}: ${line.trim()}`);
   });
 }
 

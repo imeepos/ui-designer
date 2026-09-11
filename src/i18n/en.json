@@ -380,6 +380,10 @@
       "message": "The image service call failed.",
       "hint": "Retry later; if it persists check the environment configuration."
     },
+    "QUOTA_EXCEEDED": {
+      "message": "Not enough points; this generation was not completed.",
+      "hint": "Each image costs points. Top up in Settings · Account and retry, or contact the administrator."
+    },
     "NOT_IMPLEMENTED": {
       "message": "This capability is not wired to the core yet.",
       "hint": "This is the mock preview; the Tauri bridge lands in a later phase."
