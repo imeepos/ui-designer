@@ -38,8 +38,8 @@ pub fn run() {
             commands::auth_login,
             commands::auth_register,
             commands::auth_me,
-            commands::get_session_status,
-            commands::clear_session_token,
+            commands::auth_status,
+            commands::auth_logout,
         ])
         .run(tauri::generate_context!())
         .expect("error while running rudder desktop shell");

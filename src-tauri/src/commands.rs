@@ -14,7 +14,7 @@ use rudder_core::config::{
 };
 use rudder_core::image::ImageClient;
 use rudder_core::ops::{self, GenerateOptions, Target};
-use rudder_core::server_auth::{self, AuthSession, AuthUser};
+use rudder_core::cms_auth::{self, CmsAccount, CmsSession, CmsUser};
 use rudder_core::store::{self, Project};
 use rudder_core::{export, RudderError};
 use serde::{Deserialize, Serialize};
@@ -742,7 +742,7 @@ pub struct CredentialStatusDto {
 }
 
 fn credential_status() -> CredentialStatusDto {
-    credential_status_from(resolve_base_url(), resolve_model(), &credential::resolve_api_key())
+    credential_status_from(resolve_base_url(), resolve_model(), &credential::resolve_image_api_key())
 }
 
 /// Pure shaping of the status DTO (unit-testable without a keychain).
@@ -865,7 +865,7 @@ pub async fn test_connection(
     let model = resolve_model();
     let key = match input.api_key.map(|key| key.trim().to_string()).filter(|key| !key.is_empty()) {
         Some(key) => key,
-        None => credential::resolve_api_key().key.ok_or_else(|| {
+        None => credential::resolve_image_api_key().key.ok_or_else(|| {
             CommandError::new(
                 codes::NO_CREDENTIALS,
                 "no API key configured",
@@ -886,168 +886,109 @@ pub async fn test_connection(
 }
 
 // ---------------------------------------------------------------------------
-// Server account auth (rudder-server; the session token lives ONLY in the
-// OS keychain — never in plain files, logs or stdout)
+// cms account auth (rudder-core `cms_auth`; the session cookie and the image
+// key live ONLY in the OS keychain — never in plain files, logs or stdout)
 // ---------------------------------------------------------------------------
 
-/// Login/register payload from the Settings account form.
+/// Login/register payload from the Settings account form (the cms contract
+/// has no username: accounts are email + password; registering adds a name).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthInput {
-    pub username: String,
+    pub email: String,
     pub password: String,
-    /// Optional on register; ignored by login.
+    /// Register only; ignored by login.
     #[serde(default)]
-    pub email: Option<String>,
+    pub name: Option<String>,
 }
 
-/// Public view of the signed-in user. Never carries the session token.
+/// Shell-level sign-in snapshot. `logged_in == false` carries no account.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UserDto {
-    pub id: String,
-    pub username: String,
-    pub email: Option<String>,
-    /// `user` | `admin`.
-    pub role: String,
-    /// `active` | …
-    pub status: String,
-    /// Pay-per-image balance (admin accounts bill 0).
-    pub credits: i64,
-    pub created_at: String,
+pub struct AuthStatusDto {
+    pub logged_in: bool,
+    pub account: Option<CmsAccount>,
 }
 
-impl From<AuthUser> for UserDto {
-    fn from(user: AuthUser) -> Self {
-        UserDto {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            role: user.role,
-            status: user.status,
-            credits: user.credits,
-            created_at: user.created_at,
-        }
+/// Map a cms account error onto the frontend vocabulary:
+/// `CredentialMissing` → "not signed in"; cms code 1003 (stored cookie
+/// expired/invalid) → the distinguishable `SESSION_EXPIRED` code so the UI
+/// can guide a re-login; everything else keeps the default mapping.
+fn account_error(err: RudderError) -> CommandError {
+    if cms_auth::is_session_expired(&err) {
+        return CommandError::new(
+            codes::SESSION_EXPIRED,
+            err.to_string(),
+            "sign in again from Settings",
+        );
+    }
+    match err {
+        RudderError::CredentialMissing => CommandError::new(
+            codes::NO_SESSION,
+            "not signed in",
+            "sign in from Settings first",
+        ),
+        other => into_command(other),
     }
 }
 
-/// Login/register reply. The token is handed to the frontend once for its
-/// in-memory session and persisted (keychain-side) right after; the stored
-/// copy is the source of truth for later `auth_me` calls. `Debug` is
-/// hand-written and redacted (mirrors core `AuthSession`): an accidental
-/// `{:?}` log line can never leak the session token.
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AuthSessionDto {
-    pub token: String,
-    pub user: UserDto,
-}
-
-impl std::fmt::Debug for AuthSessionDto {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AuthSessionDto")
-            .field("token", &"<redacted; set>")
-            .field("user", &self.user)
-            .finish()
-    }
-}
-
-fn session_dto(session: AuthSession) -> AuthSessionDto {
-    AuthSessionDto {
-        token: session.token,
-        user: UserDto::from(session.user),
-    }
-}
-
-/// Shell-level session status: whether a session token is available. Never
-/// carries the token itself.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionStatusDto {
-    pub has_token: bool,
-}
-
-fn session_status() -> SessionStatusDto {
-    SessionStatusDto {
-        has_token: credential::resolve_session_token().key.is_some(),
-    }
-}
-
-async fn auth_login_or_register(
-    input: AuthInput,
-    register: bool,
-) -> Result<AuthSessionDto, CommandError> {
+/// Sign in against cms: `cms_auth::login` rotates the dedicated image key
+/// and persists session cookie + key in the OS keychain. The answer carries
+/// profile + balance only — never a secret.
+#[tauri::command]
+pub async fn auth_login(input: AuthInput) -> Result<CmsSession, CommandError> {
     let base = resolve_server_base_url();
-    let username = input.username.trim().to_string();
-    let email = input
-        .email
-        .as_deref()
-        .map(str::trim)
-        .filter(|email| !email.is_empty())
-        .map(str::to_string);
-    let session = if register {
-        server_auth::register(&base, &username, &input.password, email.as_deref())
-    } else {
-        server_auth::login(&base, &username, &input.password)
-    }
-    .await
-    .map_err(into_command)?;
-    // Persist the token in the OS keychain (blocking pool); a keychain
-    // failure fails the login so the UI does not show a session that will
-    // not survive a restart.
-    let token = session.token.clone();
-    blocking("keychain", "retry the sign-in", move || {
-        credential::store_session_token(&token).map_err(into_command)
-    })
-    .await?;
-    Ok(session_dto(session))
-}
-
-/// Sign in against the configured rudder-server; stores the token.
-#[tauri::command]
-pub async fn auth_login(input: AuthInput) -> Result<AuthSessionDto, CommandError> {
-    auth_login_or_register(input, false).await
-}
-
-/// Register a new account (and sign in); stores the token.
-#[tauri::command]
-pub async fn auth_register(input: AuthInput) -> Result<AuthSessionDto, CommandError> {
-    auth_login_or_register(input, true).await
-}
-
-/// Current user profile via the stored session token.
-#[tauri::command]
-pub async fn auth_me() -> Result<UserDto, CommandError> {
-    let token = blocking("keychain", "retry", || {
-        credential::resolve_session_token()
-            .key
-            .ok_or_else(|| {
-                CommandError::new(
-                    codes::NO_SESSION,
-                    "no session token stored",
-                    "sign in from Settings first",
-                )
-            })
-    })
-    .await?;
-    let base = resolve_server_base_url();
-    server_auth::me(&base, &token)
+    cms_auth::login(&base, &input.email, &input.password)
         .await
-        .map(UserDto::from)
-        .map_err(into_command)
+        .map_err(account_error)
 }
 
-/// Whether a session token exists (login view vs. account view).
+/// Register a cms account. cms creates no session on register; the UI signs
+/// in right after with the same credentials.
 #[tauri::command]
-pub async fn get_session_status() -> Result<SessionStatusDto, CommandError> {
-    blocking("keychain", "retry", || Ok(session_status())).await
+pub async fn auth_register(input: AuthInput) -> Result<CmsUser, CommandError> {
+    let base = resolve_server_base_url();
+    let name = input.name.unwrap_or_default();
+    cms_auth::register(&base, &input.email, &input.password, &name)
+        .await
+        .map_err(account_error)
 }
 
-/// Sign out: remove the stored session token (idempotent).
+/// Current account snapshot (profile + points balance) via the stored
+/// session cookie.
 #[tauri::command]
-pub async fn clear_session_token() -> Result<(), CommandError> {
-    blocking("keychain", "retry the sign-out", move || {
-        credential::clear_session_token().map_err(into_command)
+pub async fn auth_me() -> Result<CmsAccount, CommandError> {
+    let base = resolve_server_base_url();
+    cms_auth::account_status(&base).await.map_err(account_error)
+}
+
+/// Shell-level sign-in state for the Settings account view: logged in with
+/// the account snapshot, or signed out (nothing stored — a normal state,
+/// not an error). A stored-but-expired cookie stays a `SESSION_EXPIRED`
+/// error so the UI can trigger its re-login guidance.
+#[tauri::command]
+pub async fn auth_status() -> Result<AuthStatusDto, CommandError> {
+    let base = resolve_server_base_url();
+    match cms_auth::account_status(&base).await {
+        Ok(account) => Ok(AuthStatusDto { logged_in: true, account: Some(account) }),
+        Err(RudderError::CredentialMissing) => {
+            Ok(AuthStatusDto { logged_in: false, account: None })
+        }
+        Err(err) => Err(account_error(err)),
+    }
+}
+
+/// Sign out: best-effort `POST /v1/users/logout`, then drop both cms
+/// keychain accounts (image key + session cookie). Idempotent.
+#[tauri::command]
+pub async fn auth_logout() -> Result<(), CommandError> {
+    let base = resolve_server_base_url();
+    // Server-side invalidation is best effort — the keychain cleanup below
+    // is what actually ends the local session.
+    cms_auth::logout(&base).await;
+    blocking("keychain", "retry the sign-out", || {
+        credential::clear_cms_api_key().map_err(into_command)?;
+        credential::clear_cms_session().map_err(into_command)
     })
     .await
 }
@@ -1330,58 +1271,67 @@ mod tests {
     }
 
     #[test]
-    fn auth_input_deserializes_camel_case_with_optional_email() {
+    fn auth_input_deserializes_email_password_and_optional_name() {
         let parsed: AuthInput = serde_json::from_str(
-            r#"{"username":"helmsman","password":"secret-1","email":"u@example.com"}"#,
+            r#"{"email":"fan@example.com","password":"secret-1","name":"舵手"}"#,
         )
         .unwrap();
-        assert_eq!(parsed.username, "helmsman");
+        assert_eq!(parsed.email, "fan@example.com");
         assert_eq!(parsed.password, "secret-1");
-        assert_eq!(parsed.email.as_deref(), Some("u@example.com"));
+        assert_eq!(parsed.name.as_deref(), Some("舵手"));
+        // Login posts no name at all; the field must stay optional.
         let bare: AuthInput =
-            serde_json::from_str(r#"{"username":"helmsman","password":"secret-1"}"#).unwrap();
-        assert!(bare.email.is_none());
+            serde_json::from_str(r#"{"email":"fan@example.com","password":"secret-1"}"#).unwrap();
+        assert!(bare.name.is_none());
     }
 
     #[test]
-    fn user_dto_serializes_camel_case_and_never_carries_the_token() {
-        let user = UserDto {
-            id: "u-1".into(),
-            username: "helmsman".into(),
-            email: None,
-            role: "user".into(),
-            status: "active".into(),
-            credits: 90,
-            created_at: "2026-09-10T00:00:00Z".into(),
+    fn auth_status_dto_serializes_camel_case_without_secrets() {
+        let signed_out = AuthStatusDto { logged_in: false, account: None };
+        let json = serde_json::to_value(&signed_out).unwrap();
+        assert_eq!(json["loggedIn"], false);
+        assert!(json["account"].is_null());
+
+        let account = CmsAccount {
+            user: CmsUser {
+                id: 11,
+                email: "fan@example.com".into(),
+                name: "舵手".into(),
+                disabled: false,
+                created_at: 1_700_000_000,
+            },
+            balance: 4200,
         };
-        let json = serde_json::to_value(&user).unwrap();
-        assert_eq!(json["id"], "u-1");
-        assert_eq!(json["username"], "helmsman");
-        assert_eq!(json["role"], "user");
-        assert_eq!(json["status"], "active");
-        assert_eq!(json["credits"], 90);
-        assert_eq!(json["createdAt"], "2026-09-10T00:00:00Z");
-        assert!(json.get("created_at").is_none());
-        assert!(json.to_string().to_lowercase().contains("token") == false);
-
-        let session = AuthSessionDto { token: "jwt-secret".into(), user };
-        let session_json = serde_json::to_value(&session).unwrap();
-        assert_eq!(session_json["token"], "jwt-secret");
-        assert!(session_json["user"].get("token").is_none());
-        // Debug is redacted: the token must not survive a `{:?}`.
-        let debugged = format!("{session:?}");
-        assert!(!debugged.contains("jwt-secret"), "Debug leaked the token: {debugged}");
-        assert!(debugged.contains("redacted"));
+        let signed_in = AuthStatusDto { logged_in: true, account: Some(account) };
+        let json = serde_json::to_value(&signed_in).unwrap();
+        assert_eq!(json["loggedIn"], true);
+        assert_eq!(json["account"]["user"]["email"], "fan@example.com");
+        assert_eq!(json["account"]["user"]["createdAt"], 1_700_000_000);
+        assert_eq!(json["account"]["balance"], 4200);
+        // Profile + balance only: no cookie/key field may ever appear.
+        let rendered = json.to_string().to_lowercase();
+        assert!(!rendered.contains("cookie"));
+        assert!(!rendered.contains("token"));
     }
 
     #[test]
-    fn session_status_serializes_has_token_only() {
-        // Pure shaping: build the flag directly instead of touching the
-        // real keychain. Exactly one camelCase field, never a token value.
-        let status = SessionStatusDto { has_token: true };
-        let json = serde_json::to_value(&status).unwrap();
-        let obj = json.as_object().unwrap();
-        assert_eq!(obj.len(), 1, "unexpected fields: {obj:?}");
-        assert_eq!(obj["hasToken"], true);
+    fn account_error_maps_missing_and_expired_onto_distinct_codes() {
+        // Nothing stored → "not signed in".
+        let missing = account_error(RudderError::CredentialMissing);
+        assert_eq!(missing.code, codes::NO_SESSION);
+
+        // cms code 1003 → the re-login guidance code.
+        let expired = account_error(RudderError::ApiError {
+            status: 401,
+            body_summary: "1003: authentication required".into(),
+        });
+        assert_eq!(expired.code, codes::SESSION_EXPIRED);
+
+        // Other cms failures keep the default API_ERROR mapping.
+        let other = account_error(RudderError::ApiError {
+            status: 409,
+            body_summary: "1000: 邮箱已被注册".into(),
+        });
+        assert_eq!(other.code, codes::API_ERROR);
     }
 }

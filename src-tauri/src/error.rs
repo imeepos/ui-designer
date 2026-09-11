@@ -16,8 +16,11 @@ pub mod codes {
     pub const DUPLICATE_SLUG: &str = "DUPLICATE_SLUG";
     pub const DUPLICATE_NAME: &str = "DUPLICATE_NAME";
     pub const NO_CREDENTIALS: &str = "NO_CREDENTIALS";
-    /// No stored server session token (account sign-in required).
+    /// Nothing stored: account sign-in required.
     pub const NO_SESSION: &str = "NO_SESSION";
+    /// A cms session cookie exists but was rejected (cms code 1003):
+    /// the UI must guide a re-login.
+    pub const SESSION_EXPIRED: &str = "SESSION_EXPIRED";
     pub const KEYCHAIN_ACCESS: &str = "KEYCHAIN_ACCESS";
     pub const EXPORT_FAILED: &str = "EXPORT_FAILED";
     pub const API_ERROR: &str = "API_ERROR";
