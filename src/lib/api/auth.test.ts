@@ -4,13 +4,14 @@ import { invoke } from "@tauri-apps/api/core";
 
 import { ApiError } from "@/lib/api/types";
 import {
-  fetchMe,
-  fetchSessionStatus,
+  fetchAccount,
+  fetchAuthStatus,
+  isSessionExpiredError,
   login,
   logout,
   register,
-  type RudderSession,
-  type RudderUser,
+  type CmsSession,
+  type CmsUser,
 } from "@/lib/api/auth";
 
 // auth.ts calls the real `invoke`; the desktop shell is absent in vitest, so
@@ -21,17 +22,18 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 const invokeMock = vi.mocked(invoke);
 
-function sessionDto(): RudderSession {
-  const user: RudderUser = {
-    id: "u-1",
-    username: "helmsman",
-    email: null,
-    role: "user",
-    status: "active",
-    credits: 90,
-    createdAt: "2026-09-10T00:00:00Z",
+function cmsUser(): CmsUser {
+  return {
+    id: 11,
+    email: "fan@example.com",
+    name: "舵手",
+    disabled: false,
+    created_at: 1_700_000_000,
   };
-  return { token: "jwt-token-value", user };
+}
+
+function sessionDto(): CmsSession {
+  return { user: cmsUser(), balance: 4200 };
 }
 
 /** No `window` in the node test env → the browser (mock preview) branch. */
@@ -52,23 +54,23 @@ describe("auth api (browser preview degradation)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("reports no session without invoking the bridge", async () => {
+  it("reports signed out without invoking the bridge", async () => {
     stubDesktop(false);
-    await expect(fetchSessionStatus()).resolves.toEqual({ hasToken: false });
+    await expect(fetchAuthStatus()).resolves.toEqual({ loggedIn: false, account: null });
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  it.each(["login", "register", "fetchMe", "logout"] as const)(
+  it.each(["login", "register", "fetchAccount", "logout"] as const)(
     "rejects %s with NOT_IMPLEMENTED outside the desktop shell",
     async (fn) => {
       stubDesktop(false);
       const call =
         fn === "login"
-          ? login("helmsman", "secret-1")
+          ? login("fan@example.com", "secret-1")
           : fn === "register"
-            ? register("helmsman", "secret-1")
-            : fn === "fetchMe"
-              ? fetchMe()
+            ? register("fan@example.com", "secret-1", "舵手")
+            : fn === "fetchAccount"
+              ? fetchAccount()
               : logout();
       await expect(call).rejects.toMatchObject({
         code: "NOT_IMPLEMENTED",
@@ -88,55 +90,60 @@ describe("auth api (desktop bridge)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("login invokes auth_login with the credentials input", async () => {
+  it("login invokes auth_login with the cms credentials input", async () => {
     invokeMock.mockResolvedValue(sessionDto());
-    const session = await login("helmsman", "secret-1");
+    const session = await login("fan@example.com", "secret-1");
     expect(invokeMock).toHaveBeenCalledWith("auth_login", {
-      input: { username: "helmsman", password: "secret-1" },
+      input: { email: "fan@example.com", password: "secret-1" },
     });
-    expect(session.user.username).toBe("helmsman");
-    expect(session.user.credits).toBe(90);
+    expect(session.user.email).toBe("fan@example.com");
+    expect(session.user.name).toBe("舵手");
+    expect(session.balance).toBe(4200);
   });
 
-  it("register passes the optional email (null when absent)", async () => {
-    invokeMock.mockResolvedValue(sessionDto());
-    await register("helmsman", "secret-1", "u@example.com");
+  it("register invokes auth_register with the cms shape (no username)", async () => {
+    invokeMock.mockResolvedValue(cmsUser());
+    const user = await register("fan@example.com", "secret-1", "舵手");
     expect(invokeMock).toHaveBeenCalledWith("auth_register", {
-      input: { username: "helmsman", password: "secret-1", email: "u@example.com" },
+      input: { email: "fan@example.com", password: "secret-1", name: "舵手" },
     });
-    await register("helmsman", "secret-1");
-    expect(invokeMock).toHaveBeenLastCalledWith("auth_register", {
-      input: { username: "helmsman", password: "secret-1", email: null },
-    });
+    expect(user.id).toBe(11);
   });
 
-  it("fetchMe and logout hit auth_me / clear_session_token", async () => {
-    invokeMock.mockResolvedValue(sessionDto().user);
-    const user = await fetchMe();
+  it("fetchAccount and logout hit auth_me / auth_logout", async () => {
+    invokeMock.mockResolvedValue({ user: cmsUser(), balance: 4200 });
+    const account = await fetchAccount();
     expect(invokeMock).toHaveBeenCalledWith("auth_me");
-    expect(user.id).toBe("u-1");
+    expect(account.balance).toBe(4200);
 
     invokeMock.mockResolvedValue(undefined);
     await expect(logout()).resolves.toBeUndefined();
-    expect(invokeMock).toHaveBeenCalledWith("clear_session_token");
+    expect(invokeMock).toHaveBeenCalledWith("auth_logout");
   });
 
-  it("fetchSessionStatus reads the shell answer", async () => {
-    invokeMock.mockResolvedValue({ hasToken: true });
-    await expect(fetchSessionStatus()).resolves.toEqual({ hasToken: true });
-    expect(invokeMock).toHaveBeenCalledWith("get_session_status");
+  it("fetchAuthStatus reads the shell answer", async () => {
+    invokeMock.mockResolvedValue({ loggedIn: true, account: { user: cmsUser(), balance: 1 } });
+    await expect(fetchAuthStatus()).resolves.toMatchObject({ loggedIn: true });
+    expect(invokeMock).toHaveBeenCalledWith("auth_status");
   });
 
   it("maps rust error envelopes into ApiError", async () => {
     invokeMock.mockRejectedValue({
-      code: "VALIDATION_ERROR",
-      message: "username taken",
-      hint: "pick another",
+      code: "API_ERROR",
+      message: "1001: 邮箱或密码错误",
+      hint: "check the credentials",
     });
-    await expect(login("helmsman", "secret-1")).rejects.toMatchObject({
-      code: "VALIDATION_ERROR",
-      message: "username taken",
-      hint: "pick another",
+    await expect(login("fan@example.com", "wrong")).rejects.toMatchObject({
+      code: "API_ERROR",
+      message: "1001: 邮箱或密码错误",
+      hint: "check the credentials",
     } satisfies Partial<ApiError>);
+  });
+
+  it("flags session-expired envelopes for the re-login guidance", async () => {
+    const expired = new ApiError("SESSION_EXPIRED", "1003: authentication required");
+    expect(isSessionExpiredError(expired)).toBe(true);
+    expect(isSessionExpiredError(new ApiError("API_ERROR", "1000: 邮箱已被注册"))).toBe(false);
+    expect(isSessionExpiredError(new Error("plain"))).toBe(false);
   });
 });

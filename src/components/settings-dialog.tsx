@@ -7,12 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import {
-  fetchMe,
-  fetchSessionStatus,
+  fetchAccount,
+  fetchAuthStatus,
+  isSessionExpiredError,
   login,
   logout,
   register,
-  type RudderUser,
+  type CmsAccount,
 } from "@/lib/api/auth";
 import { testConnection } from "@/lib/api/credentials";
 import { isApiError } from "@/lib/api/types";
@@ -31,20 +32,23 @@ type TestOutcome =
 
 type AccountMode = "login" | "register";
 type BusyKind = "login" | "register" | "logout" | "refresh" | "test";
-type SessionState = { hasToken: boolean } | null;
+/**
+ * Account view state machine: `checking` reads the stored cms session;
+ * `signedIn` shows the account card; `signedOut` shows the form; `expired`
+ * means the stored cookie was rejected → re-login guidance above the form.
+ */
+type AccountPhase = "checking" | "signedOut" | "signedIn" | "expired";
 
 /**
- * Settings dialog: the top "Account" section signs in against the configured
- * rudder-server (the session token lives only in the OS keychain); the
- * "Connection" section keeps the free /models probe. The legacy manual
- * baseUrl / API key / model inputs are gone — the desktop shell is
- * zero-config.
+ * Settings dialog: the top "Account" section signs in against the cms
+ * service (session cookie + image key live only in the OS keychain); the
+ * "Connection" section keeps the free /models probe.
  */
 export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const { t } = useTranslation();
   const toast = useToast();
 
-  /** Localized copy for a server/auth error (inline form feedback). */
+  /** Localized copy for a cms/auth error (inline form feedback). */
   const describeError = (error: unknown): string => {
     if (isApiError(error)) {
       return t([`errors.${error.code}.message`, "errors.UNKNOWN.message"], {
@@ -55,46 +59,44 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     return error instanceof Error ? error.message : String(error);
   };
 
-  const [session, setSession] = useState<SessionState>(null);
-  const [user, setUser] = useState<RudderUser | null>(null);
+  const [phase, setPhase] = useState<AccountPhase>("checking");
+  const [account, setAccount] = useState<CmsAccount | null>(null);
   const [mode, setMode] = useState<AccountMode>("login");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState<BusyKind | null>(null);
   const [testOutcome, setTestOutcome] = useState<TestOutcome>(null);
 
-  // (Re)load the session state each time the dialog opens.
+  // (Re)load the sign-in state each time the dialog opens.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setPassword("");
     setEmail("");
+    setName("");
     setFormError(null);
     setTestOutcome(null);
-    setUser(null);
-    setSession(null);
-    fetchSessionStatus()
-      .then(async (status) => {
+    setAccount(null);
+    setPhase("checking");
+    fetchAuthStatus()
+      .then((status) => {
         if (cancelled) return;
-        setSession(status);
-        if (status.hasToken) {
-          try {
-            const me = await fetchMe();
-            if (!cancelled) setUser(me);
-          } catch (error) {
-            if (!cancelled) {
-              // Stale token (expired/revoked) → back to the sign-in form.
-              setSession({ hasToken: false });
-              toast.error(error);
-            }
-          }
+        if (status.loggedIn && status.account) {
+          setAccount(status.account);
+          setPhase("signedIn");
+        } else {
+          setPhase("signedOut");
         }
       })
       .catch((error) => {
-        if (!cancelled) {
-          setSession({ hasToken: false });
+        if (cancelled) return;
+        if (isSessionExpiredError(error)) {
+          // Stored cookie rejected → re-login guidance, not a raw error.
+          setPhase("expired");
+        } else {
+          setPhase("signedOut");
           toast.error(error);
         }
       });
@@ -103,20 +105,48 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     };
   }, [open, toast]);
 
+  const applySession = (session: CmsAccount) => {
+    setAccount(session);
+    setPhase("signedIn");
+    setPassword("");
+    setEmail("");
+    setName("");
+  };
+
   const handleAuth = async (kind: Extract<AccountMode, "login" | "register">) => {
+    // Client-side validation first: the cms contract has no username, so the
+    // form is email (+name on register) + password.
+    const trimmedEmail = email.trim();
+    const trimmedName = name.trim();
+    if (!trimmedEmail) {
+      setFormError(t("settings.account.errorEmailRequired"));
+      return;
+    }
+    if (kind === "register" && !trimmedName) {
+      setFormError(t("settings.account.errorNameRequired"));
+      return;
+    }
+    if (!password) {
+      setFormError(t("settings.account.errorPasswordRequired"));
+      return;
+    }
+
     setBusy(kind);
     setFormError(null);
     try {
-      const next =
-        kind === "login"
-          ? await login(username.trim(), password)
-          : await register(username.trim(), password, email.trim() || undefined);
-      setSession({ hasToken: true });
-      setUser(next.user);
-      setPassword("");
-      setEmail("");
+      if (kind === "login") {
+        const session = await login(trimmedEmail, password);
+        applySession(session);
+      } else {
+        // cms register creates no session — sign in right after with the
+        // same credentials (this also mints the image key).
+        await register(trimmedEmail, password, trimmedName);
+        const session = await login(trimmedEmail, password);
+        applySession(session);
+      }
       toast.success(t(kind === "login" ? "settings.account.loginOk" : "settings.account.registerOk"));
     } catch (error) {
+      if (isSessionExpiredError(error)) setPhase("expired");
       setFormError(describeError(error));
     } finally {
       setBusy(null);
@@ -127,8 +157,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     setBusy("logout");
     try {
       await logout();
-      setSession({ hasToken: false });
-      setUser(null);
+      setAccount(null);
+      setPhase("signedOut");
       setMode("login");
       toast.success(t("settings.account.logoutOk"));
     } catch (error) {
@@ -141,10 +171,16 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const handleRefresh = async () => {
     setBusy("refresh");
     try {
-      const me = await fetchMe();
-      setUser(me);
+      const fresh = await fetchAccount();
+      setAccount(fresh);
+      setPhase("signedIn");
       toast.success(t("settings.account.refreshOk"));
     } catch (error) {
+      if (isSessionExpiredError(error)) {
+        // Cookie died mid-session → back to the sign-in form with guidance.
+        setAccount(null);
+        setPhase("expired");
+      }
       toast.error(error);
     } finally {
       setBusy(null);
@@ -166,20 +202,38 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const authInputs = (
     <>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="settings-username">{t("settings.account.username")}</Label>
+        <Label htmlFor="settings-email">{t("settings.account.email")}</Label>
         <Input
-          id="settings-username"
-          data-testid="settings-username"
-          value={username}
+          id="settings-email"
+          data-testid="settings-email"
+          type="email"
+          value={email}
           onChange={(event) => {
-            setUsername(event.target.value);
+            setEmail(event.target.value);
             setFormError(null);
           }}
-          placeholder={t("settings.account.usernamePlaceholder")}
+          placeholder={t("settings.account.emailPlaceholder")}
           autoComplete="off"
           spellCheck={false}
         />
       </div>
+      {mode === "register" && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="settings-name">{t("settings.account.name")}</Label>
+          <Input
+            id="settings-name"
+            data-testid="settings-name"
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+              setFormError(null);
+            }}
+            placeholder={t("settings.account.namePlaceholder")}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </div>
+      )}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="settings-password">{t("settings.account.password")}</Label>
         <Input
@@ -210,27 +264,25 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         <section className="flex flex-col gap-2.5" data-testid="settings-account">
           <h3 className="text-sm font-medium text-foreground">{t("settings.account.title")}</h3>
 
-          {session === null && (
+          {phase === "checking" && (
             <p className="text-xs text-muted-foreground" data-testid="settings-account-checking">
               {t("settings.account.statusChecking")}
             </p>
           )}
 
-          {session !== null && session.hasToken && user && (
+          {phase === "signedIn" && account && (
             <div
               className="flex flex-col gap-3 rounded-md border bg-muted/40 p-3.5"
               data-testid="settings-account-user"
             >
               <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate text-sm font-medium" data-testid="settings-account-username">
-                    {user.username}
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-medium" data-testid="settings-account-name">
+                    {account.user.name}
                   </span>
-                  <Badge variant={user.role === "admin" ? "default" : "secondary"} data-testid="settings-account-role">
-                    {user.role === "admin"
-                      ? t("settings.account.roleAdmin")
-                      : t("settings.account.roleUser")}
-                  </Badge>
+                  <span className="truncate text-xs text-muted-foreground" data-testid="settings-account-email">
+                    {account.user.email}
+                  </span>
                 </div>
                 <Button
                   variant="ghost"
@@ -245,10 +297,10 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
 
               <div className="flex items-end justify-between gap-2">
                 <div>
-                  <p className="text-3xl font-semibold tabular-nums leading-none" data-testid="settings-account-credits">
-                    {user.credits}
+                  <p className="text-3xl font-semibold tabular-nums leading-none" data-testid="settings-account-balance">
+                    {account.balance}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">{t("settings.account.credits")}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("settings.account.balance")}</p>
                 </div>
                 <Button
                   variant="outline"
@@ -263,14 +315,24 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
 
               <p className="text-[11px] text-muted-foreground">
                 {t("settings.account.memberSince", {
-                  date: new Date(user.createdAt).toLocaleDateString(),
+                  date: new Date(account.user.created_at * 1000).toLocaleDateString(),
                 })}
               </p>
             </div>
           )}
 
-          {session !== null && !session.hasToken && (
+          {(phase === "signedOut" || phase === "expired") && (
             <div className="flex flex-col gap-2.5" data-testid="settings-account-form">
+              {phase === "expired" && (
+                <p
+                  className="rounded-md border border-destructive/40 bg-destructive/5 px-2.5 py-2 text-xs text-destructive"
+                  data-testid="settings-session-expired"
+                  role="alert"
+                >
+                  {t("settings.account.sessionExpired")}
+                </p>
+              )}
+
               {/* Segmented login/register toggle (no Tabs dependency). */}
               <div className="inline-flex w-fit rounded-md border p-0.5" role="tablist">
                 {(["login", "register"] as const).map((tab) => (
@@ -301,24 +363,6 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                 }}
               >
                 {authInputs}
-                {mode === "register" && (
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="settings-email">{t("settings.account.email")}</Label>
-                    <Input
-                      id="settings-email"
-                      data-testid="settings-email"
-                      type="email"
-                      value={email}
-                      onChange={(event) => {
-                        setEmail(event.target.value);
-                        setFormError(null);
-                      }}
-                      placeholder={t("settings.account.emailPlaceholder")}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                  </div>
-                )}
 
                 {formError && (
                   <p className="text-xs text-destructive" data-testid="settings-account-error" role="alert">
@@ -331,7 +375,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                   size="sm"
                   className="w-fit"
                   data-testid={mode === "login" ? "settings-login" : "settings-register"}
-                  disabled={busy !== null || !username.trim() || password.length === 0}
+                  disabled={busy !== null}
                 >
                   {busy === "login"
                     ? t("settings.account.loginBusy")
