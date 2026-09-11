@@ -795,3 +795,179 @@ async fn engine_real_run_persists_engine_lineage() {
     assert!(record.prompt.contains("Constraints:"));
     std::fs::remove_dir_all(&root).ok();
 }
+
+// ---------------------------------------------------------------------------
+// record_generated (C2: 前端 SDK 生图 → Rust 只负责落盘)
+// ---------------------------------------------------------------------------
+
+/// The record-only stage must leave exactly the same on-disk state as the
+/// full `generate` flow (candidates, lineage, prompt log) — the desktop
+/// frontend calls upstream itself, Rust only persists the result.
+#[tokio::test]
+async fn record_generated_persists_the_same_state_as_full_generate() {
+    use crate::test_support::{b64_response, MockServer};
+
+    ensure_test_home();
+    const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 7, 7, 7, 7];
+    let server = MockServer::start(move |_req, _i| (200, b64_response(&[PNG])));
+    let client = ImageClient::new(
+        server.url(),
+        Some("k".into()),
+        false,
+        Duration::from_millis(1),
+        Duration::from_secs(5),
+    )
+    .unwrap();
+
+    // Full flow (CLI path) on project A.
+    let root_full = seeded_project("rec-parity-full");
+    let full = generate(
+        &root_full,
+        &Target::Board,
+        GenerateOptions { n: Some(1), quality: Some("low".into()), ..Default::default() },
+        &client,
+    )
+    .await
+    .unwrap();
+    assert!(!full.dry_run);
+
+    // Record-only path (desktop SDK path) on project B with the same
+    // metadata, copied from the full-flow report.
+    let root_rec = seeded_project("rec-parity-only");
+    let batch = GeneratedBatch {
+        target: Target::Board,
+        endpoint: full.plan.endpoint.clone(),
+        prompt: full.prompt.clone(),
+        source: full.source.clone(),
+        template_id: full.template_id.clone(),
+        model: full.plan.params["model"].as_str().unwrap().to_string(),
+        size: full.plan.params["size"].as_str().unwrap().to_string(),
+        quality: full.plan.params["quality"].as_str().unwrap().to_string(),
+        n: u32::try_from(full.plan.params["n"].as_u64().unwrap()).unwrap(),
+        seed: Some(full.plan.params["seed"].as_u64().unwrap()),
+        thinking: full.plan.params["thinking"].as_str().map(str::to_string),
+        images: vec![PNG.to_vec()],
+        plan: None,
+    };
+    let recorded = record_generated(&root_rec, batch).unwrap();
+
+    // Same report shape and identical candidates (plan params carry the
+    // same request description; only the URL provenance differs).
+    assert!(!recorded.dry_run);
+    assert_eq!(recorded.kind, full.kind);
+    assert_eq!(recorded.target, full.target);
+    assert_eq!(recorded.prompt, full.prompt);
+    assert_eq!(recorded.source, full.source);
+    assert_eq!(recorded.template_id, full.template_id);
+    assert_eq!(recorded.candidates, full.candidates);
+    assert_eq!(recorded.plan.endpoint, full.plan.endpoint);
+    assert_eq!(recorded.plan.params, full.plan.params);
+
+    // Identical project.json state (timestamps excluded).
+    let mut a = load_project(&root_full).unwrap();
+    let mut b = load_project(&root_rec).unwrap();
+    for record in a.board_generations.iter_mut().chain(b.board_generations.iter_mut()) {
+        record.at.clear();
+    }
+    assert_eq!(a.board_generations, b.board_generations);
+    for entry in a.prompt_log.iter_mut().chain(b.prompt_log.iter_mut()) {
+        entry.at.clear();
+    }
+    assert_eq!(a.prompt_log, b.prompt_log);
+
+    // Identical bytes on disk.
+    assert_eq!(
+        std::fs::read(root_full.join("board/candidates/0001.png")).unwrap(),
+        std::fs::read(root_rec.join("board/candidates/0001.png")).unwrap()
+    );
+    assert_eq!(store::count_candidates(&root_rec.join("board")).unwrap(), 1);
+
+    std::fs::remove_dir_all(&root_full).ok();
+    std::fs::remove_dir_all(&root_rec).ok();
+}
+
+/// Page targets: the record stage must update prompt/seed/updated_at and
+/// append both the GenRecord and the prompt-log entry, like a real run.
+#[test]
+fn record_generated_updates_page_lineage_fields() {
+    let root = seeded_project("rec-page");
+    page_add(&root, "dashboard", "四张 KPI 卡").unwrap();
+    let batch = GeneratedBatch {
+        target: Target::Page("dashboard".into()),
+        endpoint: "edits".into(),
+        prompt: "代理写好的最终提示词".into(),
+        source: prompt::SOURCE_AGENT_FILE.into(),
+        template_id: Some("page-ui-standard".into()),
+        model: "gpt-image-2".into(),
+        size: "1536x1024".into(),
+        quality: "low".into(),
+        n: 1,
+        seed: Some(7),
+        thinking: Some("low".into()),
+        images: vec![b"img".to_vec()],
+        plan: None,
+    };
+    let report = record_generated(&root, batch).unwrap();
+    assert!(!report.dry_run);
+    assert_eq!(report.candidates.len(), 1);
+    assert_eq!(report.candidates[0].file, "pages/dashboard/candidates/0001.png");
+    assert_eq!(report.candidates[0].seed, Some(7));
+    assert!(root.join("pages/dashboard/candidates/0001.png").is_file());
+
+    let project = load_project(&root).unwrap();
+    let page = project.page("dashboard").unwrap();
+    assert_eq!(page.prompt.as_deref(), Some("代理写好的最终提示词"));
+    assert_eq!(page.seed, Some(7));
+    assert_eq!(page.generations.len(), 1);
+    let record = &page.generations[0];
+    assert_eq!(record.endpoint, "edits");
+    assert_eq!(record.prompt, "代理写好的最终提示词");
+    assert_eq!(record.candidate_ids, vec!["0001".to_string()]);
+    assert_eq!(record.source.as_deref(), Some("agent-file"));
+    assert_eq!(record.template_id.as_deref(), Some("page-ui-standard"));
+    assert_eq!(record.params.model, "gpt-image-2");
+    assert_eq!(record.params.seed, Some(7));
+    assert_eq!(record.params.thinking.as_deref(), Some("low"));
+
+    let log = project.prompt_log.last().unwrap();
+    assert_eq!(log.kind, "page");
+    assert_eq!(log.target, "dashboard");
+    assert_eq!(log.endpoint, "edits");
+    assert_eq!(log.candidate_ids, vec!["0001".to_string()]);
+    assert_eq!(log.source.as_deref(), Some("agent-file"));
+    assert_eq!(log.template_id.as_deref(), Some("page-ui-standard"));
+    std::fs::remove_dir_all(&root).ok();
+}
+
+/// Rejected batches (unknown endpoint, no images) must persist nothing.
+#[test]
+fn record_generated_rejects_unknown_endpoint_and_empty_images() {
+    let root = seeded_project("rec-bad");
+    let batch = |endpoint: &str, images: Vec<Vec<u8>>| GeneratedBatch {
+        target: Target::Board,
+        endpoint: endpoint.into(),
+        prompt: "p".into(),
+        source: "engine".into(),
+        template_id: None,
+        model: "gpt-image-2".into(),
+        size: "1536x1024".into(),
+        quality: "low".into(),
+        n: 1,
+        seed: Some(1),
+        thinking: None,
+        images,
+        plan: None,
+    };
+
+    let err = record_generated(&root, batch("chat", vec![b"img".to_vec()])).unwrap_err();
+    assert_eq!(err.code(), "INVALID_ARG");
+    let err = record_generated(&root, batch("generations", Vec::new())).unwrap_err();
+    assert_eq!(err.code(), "INVALID_ARG");
+
+    // Nothing was persisted by the rejected calls.
+    let project = load_project(&root).unwrap();
+    assert!(project.board_generations.is_empty());
+    assert!(project.prompt_log.is_empty());
+    assert_eq!(store::count_candidates(&root.join("board")).unwrap(), 0);
+    std::fs::remove_dir_all(&root).ok();
+}

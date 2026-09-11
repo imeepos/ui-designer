@@ -744,7 +744,8 @@ pub fn read_prompt_file(path: &Path) -> Result<String> {
     Ok(trimmed.to_string())
 }
 
-/// Unified generate for board / page / component.
+/// Unified generate for board / page / component: call upstream, then hand
+/// the decoded bytes to [`record_generated`] for persistence.
 pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, client: &ImageClient) -> Result<GenerateReport> {
     let config = Config::load();
     let project = load_project(root)?;
@@ -783,13 +784,138 @@ pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, clien
         .ok_or_else(|| RudderError::BadResponse { detail: "no images decoded".into() })?;
 
     // Real run: persist candidates, lineage and the prompt log atomically.
-    let target_dir = match target {
+    record_generated(root, GeneratedBatch {
+        target: target.clone(),
+        endpoint: plan.endpoint.clone(),
+        prompt: prompt.clone(),
+        source: source.to_string(),
+        template_id: template_id.clone(),
+        model: client.model().to_string(),
+        size: params.size.clone(),
+        quality: params.quality.clone(),
+        n: params.n,
+        seed: params.seed,
+        thinking: params.thinking.clone(),
+        images,
+        plan: Some(plan),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// record stage (shared by the CLI full flow and the desktop record command)
+// ---------------------------------------------------------------------------
+
+/// Metadata + bytes of one finished upstream generation batch, ready for
+/// [`record_generated`]. Stage split for the desktop flow: the frontend
+/// calls upstream itself (openai SDK, C2 裁决) and hands the result here;
+/// the CLI's [`generate`] builds the same batch from its own run output.
+#[derive(Debug, Clone)]
+pub struct GeneratedBatch {
+    /// Which entity this batch belongs to (board / page / component).
+    pub target: Target,
+    /// Upstream endpoint that produced the images: `generations` | `edits`.
+    pub endpoint: String,
+    /// The exact prompt that was sent.
+    pub prompt: String,
+    /// Prompt provenance: `engine` | `agent-file`.
+    pub source: String,
+    /// Template skeleton (assembled, or the declared lineage reference).
+    pub template_id: Option<String>,
+    /// Effective model name recorded in the lineage (`GenParams.model`).
+    pub model: String,
+    /// `"1536x1024"` form.
+    pub size: String,
+    pub quality: String,
+    /// Requested batch size as recorded in the lineage.
+    pub n: u32,
+    /// Recorded seed; `None` → a fresh random seed (same as an omitted
+    /// `--seed`) so the batch stays reproducible.
+    pub seed: Option<u64>,
+    pub thinking: Option<String>,
+    /// One raw image per candidate, in order.
+    pub images: Vec<Vec<u8>>,
+    /// The real request plan from the upstream call (CLI path). `None` → a
+    /// plan is synthesized from this metadata (desktop SDK path, where the
+    /// request was made by the frontend).
+    pub plan: Option<RequestPlan>,
+}
+
+/// Validate the recorded endpoint vocabulary.
+fn record_endpoint(endpoint: &str) -> Result<&str> {
+    match endpoint {
+        "generations" | "edits" => Ok(endpoint),
+        other => Err(RudderError::InvalidArg {
+            detail: format!("endpoint must be `generations` or `edits`, got `{other}`"),
+        }),
+    }
+}
+
+/// The plan shape for a desktop-recorded batch: describes the logical
+/// request the frontend already made (`auth_header_present` is always true —
+/// recording only happens after an authenticated upstream success).
+fn synthetic_plan(batch: &GeneratedBatch, seed: u64) -> RequestPlan {
+    let mut params = serde_json::json!({
+        "model": batch.model,
+        "prompt": batch.prompt,
+        "size": batch.size,
+        "quality": batch.quality,
+        "n": batch.n,
+        "seed": seed,
+    });
+    if let Some(thinking) = &batch.thinking {
+        params["thinking"] = serde_json::json!(thinking);
+    }
+    RequestPlan {
+        endpoint: batch.endpoint.clone(),
+        method: "POST".into(),
+        url: format!(
+            "{}/v1/images/{}",
+            crate::config::resolve_base_url(),
+            batch.endpoint
+        ),
+        auth_header_present: true,
+        params,
+        images: Vec::new(),
+    }
+}
+
+/// Stage 2 of [`generate`]: persist already-fetched image bytes — candidate
+/// files, lineage `GenRecord`, prompt-log entry — atomically, and return the
+/// same report a real `generate` run returns (so the desktop command can
+/// reuse the canvas refresh payload unchanged).
+pub fn record_generated(root: &Path, batch: GeneratedBatch) -> Result<GenerateReport> {
+    let endpoint = record_endpoint(&batch.endpoint)?.to_string();
+    if batch.images.is_empty() {
+        return Err(RudderError::InvalidArg {
+            detail: "no images to record: the batch must carry at least one image".into(),
+        });
+    }
+    // Same rule as the CLI path: an omitted seed is recorded as a fresh
+    // random one so every batch stays reproducible. Resolved once so the
+    // synthesized plan and the lineage record agree.
+    let seed = batch.seed.unwrap_or_else(random_seed);
+    let plan = batch
+        .plan
+        .clone()
+        .unwrap_or_else(|| synthetic_plan(&batch, seed));
+    let images = batch.images;
+    let params = GenerateParams {
+        prompt: batch.prompt.clone(),
+        size: batch.size.clone(),
+        quality: batch.quality.clone(),
+        n: batch.n,
+        seed: Some(seed),
+        thinking: batch.thinking.clone(),
+    };
+
+    // Persist candidates, lineage and the prompt log atomically.
+    let target_dir = match &batch.target {
         Target::Board => root.join("board"),
-        Target::Page(slug) => project
+        Target::Page(slug) => load_project(root)?
             .page(slug)
             .ok_or_else(|| RudderError::NotFound { what: format!("page `{slug}`") })?
             .dir(root),
-        Target::Component(name) => project
+        Target::Component(name) => load_project(root)?
             .component(name)
             .ok_or_else(|| RudderError::NotFound { what: format!("component `{name}`") })?
             .dir(root),
@@ -804,10 +930,10 @@ pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, clien
 
     let record = GenRecord {
         at: store::now_rfc3339(),
-        endpoint: plan.endpoint.clone(),
-        prompt: prompt.clone(),
+        endpoint: endpoint.clone(),
+        prompt: batch.prompt.clone(),
         params: GenParams {
-            model: client.model().to_string(),
+            model: batch.model.clone(),
             size: params.size.clone(),
             quality: params.quality.clone(),
             n: params.n,
@@ -815,18 +941,18 @@ pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, clien
             thinking: params.thinking.clone(),
         },
         candidate_ids: ids.clone(),
-        source: Some(source.to_string()),
-        template_id: template_id.clone(),
+        source: Some(batch.source.clone()),
+        template_id: batch.template_id.clone(),
     };
 
     let mut project = load_project(root)?;
-    match target {
+    match &batch.target {
         Target::Board => {
             project.board_generations.push(record.clone());
         }
         Target::Page(slug) => {
             if let Some(page) = project.pages.iter_mut().find(|p| p.slug == *slug) {
-                page.prompt = Some(prompt.clone());
+                page.prompt = Some(batch.prompt.clone());
                 page.seed = params.seed;
                 page.updated_at = store::now_rfc3339();
                 page.generations.push(record.clone());
@@ -834,7 +960,7 @@ pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, clien
         }
         Target::Component(name) => {
             if let Some(component) = project.components.iter_mut().find(|c| c.name == *name) {
-                component.prompt = Some(prompt.clone());
+                component.prompt = Some(batch.prompt.clone());
                 component.seed = params.seed;
                 component.updated_at = store::now_rfc3339();
                 component.generations.push(record.clone());
@@ -842,19 +968,19 @@ pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, clien
         }
     }
     project.prompt_log.push(prompt::log_entry(
-        target.kind(),
-        &target.target_name(),
-        &plan.endpoint,
-        &prompt,
+        batch.target.kind(),
+        &batch.target.target_name(),
+        &endpoint,
+        &batch.prompt,
         &record.params,
         &ids,
         false,
-        source,
-        template_id.as_deref(),
+        &batch.source,
+        batch.template_id.as_deref(),
     ));
     save_project(root, &project)?;
 
-    let file_base = match target {
+    let file_base = match &batch.target {
         Target::Board => "board".to_string(),
         Target::Page(slug) => format!("pages/{slug}"),
         Target::Component(name) => format!("components/{name}"),
@@ -864,7 +990,7 @@ pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, clien
         .map(|(id, _path)| CandidateReport {
             file: format!("{file_base}/candidates/{id}.png"),
             id,
-            prompt: prompt.clone(),
+            prompt: batch.prompt.clone(),
             seed: params.seed,
             size: params.size.clone(),
             quality: params.quality.clone(),
@@ -873,12 +999,12 @@ pub async fn generate(root: &Path, target: &Target, opts: GenerateOptions, clien
 
     Ok(GenerateReport {
         dry_run: false,
-        kind: target.kind().to_string(),
-        target: target.target_name(),
-        prompt,
+        kind: batch.target.kind().to_string(),
+        target: batch.target.target_name(),
+        prompt: batch.prompt,
         plan,
-        source: source.to_string(),
-        template_id,
+        source: batch.source,
+        template_id: batch.template_id,
         candidates,
     })
 }
