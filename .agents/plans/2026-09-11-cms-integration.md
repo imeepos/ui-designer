@@ -18,8 +18,11 @@ cms T25 CORS 合并主干并部署生效，探针全部通过才算开闸：
 - C4（删 server/ + 文档）：C2-FE 合并后。
 - T24 部署（cms→138+nginx 切换+rudder-server 下线）：等 cms T24 扣点 + T25 CORS 合并后派发，G1 探针随部署一起做。
 
-## cms 侧状态快照（2026-09-11 12:49）
-- T21 generations：已并主干。T23 edits：已并主干（8d66fa4 等）。T24 扣点：feat/t24-image-billing 在途。T25 CORS：已立项（d988dbe），实现未落地。t19-alipay：他人并行任务。
+## cms 侧状态快照（2026-09-11 13:30）
+- T21 generations：已并主干。T23 edits：已并主干（8d66fa4 等）。T24 扣点：feat/t24-image-billing 在途。T25 CORS：已立项（d988dbe），实现未落地。t19-alipay/payment：他人并行任务，活跃。
+- **T22 三态 Bearer 已并主干**（29794fa/2414ff6）：中间件 Cookie → API Key → JWT；换发端点 `POST /v1/auth/jwt`；**Cookie 向后兼容**。
+- Ruling（2026-09-11 13:30）：用户通报 cms 支持 JWT 后核对——**方案零结构性修改**（C1/C3/C2-FE/C2-RS/C4/T24 全部不受影响，依据：三态中间件 Cookie 首态兼容 + 生图走 API Key Bearer）。C1b（登录换发 JWT、`cms-session` 改存 JWT、account_status 改 Bearer，预算小）列为**待细化区可选项**，触发条件：用户拍板要切 JWT，或 cms 宣布废弃 Cookie 会话——错了的代价：若 cms 后续废 Cookie 而未做 C1b，客户端登录链整体失效，届时 C1b 升级为紧急任务。
+- 2026-09-11 13:33 用户裁决：C1b **待细化区搁置**（采纳推荐）。JWT 切换维持触发条件制：cms 废弃 Cookie 或出现无状态校验的具体需求时再升锁定区。
 
 ## 波次（v1 记录，归档备查）
 - 锁定区（本波）：cms T22/T23 已由用户派发外部会话执行；uisd C1 已派发。
