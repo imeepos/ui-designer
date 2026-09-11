@@ -23,3 +23,15 @@ export function requestTreeAdd(kind: TreeAddKind): void {
     window.dispatchEvent(new CustomEvent(OPEN_TREE_ADD_EVENT, { detail: { kind } }));
   }
 }
+
+/**
+ * A finished generation deducted points: the account section re-reads
+ * `auth_status` so the balance display stays current without reopening.
+ */
+export const BALANCE_REFRESH_EVENT = "rudder:balance-refresh";
+
+export function requestBalanceRefresh(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(BALANCE_REFRESH_EVENT));
+  }
+}

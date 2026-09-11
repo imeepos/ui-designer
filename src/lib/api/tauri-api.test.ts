@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ImageClient } from "@/lib/generation/client";
 import { ApiError } from "@/lib/api/types";
 import { TauriApi, type GeneratePayloadDto, type InvokeFn, type ProjectDetailDto } from "@/lib/api/tauri-api";
+import type OpenAI from "openai";
 
 function projectDto(): ProjectDetailDto {
   return {
@@ -35,6 +37,71 @@ function projectDto(): ProjectDetailDto {
   };
 }
 
+/** Board variant before its anchor exists → the SDK `generations` endpoint. */
+function projectDtoNoAnchor(): ProjectDetailDto {
+  return { ...projectDto(), anchor: null };
+}
+
+/** Double for the openai client capturing images.* calls. */
+function fakeImagesClient() {
+  const calls: { generate: unknown[][]; edit: unknown[][] } = { generate: [], edit: [] };
+  let generateReply: unknown = { created: 1, data: [{ b64_json: "AAAA" }] };
+  let editReply: unknown = { created: 1, data: [{ b64_json: "QQ==" }] };
+  const client = {
+    images: {
+      generate: async (...args: unknown[]) => {
+        calls.generate.push(args);
+        if (generateReply instanceof Error) throw generateReply;
+        return generateReply;
+      },
+      edit: async (...args: unknown[]) => {
+        calls.edit.push(args);
+        if (editReply instanceof Error) throw editReply;
+        return editReply;
+      },
+    },
+  };
+  return {
+    calls,
+    client: client as unknown as OpenAI,
+    setGenerateReply: (reply: unknown) => {
+      generateReply = reply;
+    },
+    setEditReply: (reply: unknown) => {
+      editReply = reply;
+    },
+    pendingEdit(): { release: (value: unknown) => void } {
+      let resolveEdit: (value: unknown) => void = () => {};
+      client.images.edit = async (...args: unknown[]) => {
+        calls.edit.push(args);
+        return new Promise((resolve) => {
+          resolveEdit = resolve;
+        }) as never;
+      };
+      return {
+        // Late-bound: the resolver only exists once edit() has been called.
+        release: (value: unknown) => resolveEdit(value),
+      };
+    },
+  };
+}
+
+function fakeImageClientFactory(client: OpenAI): (invokeFn: InvokeFn) => Promise<ImageClient> {
+  return async () => ({
+    client,
+    config: { baseUrl: "https://veren.top/api", model: "gpt-image-2" },
+  });
+}
+
+/** Answer the asset-protocol fetch the reference loader performs. */
+function stubAnchorFetch() {
+  const fetchMock = vi.fn(async () =>
+    new Response(new Blob([new Uint8Array([0x89, 0x50])], { type: "image/png" }), { status: 200 }),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 function generateDto(): GeneratePayloadDto {
   return {
     candidates: [{ id: "0003", path: "/tmp/0003.png", createdAt: 95, seed: 8 }],
@@ -64,6 +131,7 @@ describe("TauriApi", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it("maps create_project DTO paths into asset urls", async () => {
@@ -94,9 +162,16 @@ describe("TauriApi", () => {
     expect(project.pages[0].history[0].ts).toBe(80);
   });
 
-  it("invokes generate_board with a jobId and maps the payload", async () => {
-    const { calls, invokeFn } = makeInvoke({ generate_board: generateDto() });
-    const api = new TauriApi(invokeFn, toUrl);
+  it("generates the board via the SDK and records one image per item", async () => {
+    stubAnchorFetch();
+    const images = fakeImagesClient();
+    const { calls, invokeFn } = makeInvoke({
+      get_project: projectDtoNoAnchor(),
+      get_cms_api_key: "sk-cms-test-dummy",
+      get_generation_config: { baseUrl: "https://veren.top/api", model: "gpt-image-2" },
+      record_generated_image: generateDto(),
+    });
+    const api = new TauriApi(invokeFn, toUrl, fakeImageClientFactory(images.client));
 
     const result = await api.generateBoard(
       "p1",
@@ -110,39 +185,93 @@ describe("TauriApi", () => {
       { count: 3 },
     );
 
-    expect(calls[0].command).toBe("generate_board");
-    expect(calls[0].args).toMatchObject({
-      projectId: "p1",
-      brief: { brandKeywords: "acme", reference: "shot" },
-      options: { count: 3, jobId: expect.any(String) },
+    // SDK call: generations (no anchor yet), merged briefs, engine prompt.
+    // (The injected client factory owns key/config reads; those are covered
+    // in client.test.ts against the real factory.)
+    expect(calls.map((c) => c.command)).toEqual([
+      "get_project",
+      "record_generated_image",
+    ]);
+    expect(images.calls.generate).toHaveLength(1);
+    expect(images.calls.edit).toHaveLength(0);
+    const [body] = images.calls.generate[0] as [Record<string, unknown>];
+    expect(body).toMatchObject({ model: "gpt-image-2", n: 3, size: "1536x1024", quality: "low" });
+    const prompt = String(body.prompt);
+    expect(prompt).toContain('the product "Demo"');
+    expect(prompt).toContain("Brand brief: acme");
+    expect(prompt).toContain("Style brief: blue / serif / rounded | shot");
+    expect(prompt).toContain("Constraints:");
+    expect(prompt).toContain("- canvas-locked: compose for exactly 1536x1024");
+
+    // Persistence: the b64 item rides imageBase64 into record_generated_image.
+    expect(calls[1].args).toMatchObject({
+      input: {
+        projectId: "p1",
+        kind: "board",
+        target: "",
+        endpoint: "generations",
+        imageBase64: "AAAA",
+        size: "1536x1024",
+        quality: "low",
+        model: "gpt-image-2",
+      },
     });
+    expect(calls[1].args).not.toHaveProperty("input.imageUrl");
+
+    // Canvas refresh payload mapping + brief overlay for the session.
     expect(result.candidates[0].url).toContain("0003.png");
     expect(result.candidates[0].seed).toBe(8);
     expect(result.project.id).toBe("p1");
+    expect(result.project.brandBrief).toBe("acme");
+    expect(result.project.styleBrief).toBe("blue / serif / rounded | shot");
   });
 
-  it("ramps onProgress toward 0.9 while the job runs", async () => {
-    let release!: (value: GeneratePayloadDto) => void;
-    const invokeFn = vi.fn(
-      (_command: string, _args?: Record<string, unknown>) =>
-        new Promise<GeneratePayloadDto>((resolve) => {
-          release = resolve;
-        }),
-    ) as unknown as InvokeFn;
-    const api = new TauriApi(invokeFn, toUrl);
+  it("ramps onProgress toward 0.9 while the SDK job runs (edits, anchor first)", async () => {
+    const fetchMock = stubAnchorFetch();
+    const images = fakeImagesClient();
+    const { release } = images.pendingEdit();
+    let released = false;
+    const invokeFn = (async (command: string) => {
+      if (command === "get_project") return projectDto();
+      if (command === "get_cms_api_key") return "sk-cms-test-dummy";
+      if (command === "get_generation_config") {
+        return { baseUrl: "https://veren.top/api", model: "gpt-image-2" };
+      }
+      if (command === "record_generated_image") {
+        if (!released) throw new Error("record ran before the SDK call finished");
+        return generateDto();
+      }
+      throw new Error(`unexpected command ${command}`);
+    }) as unknown as InvokeFn;
+    const api = new TauriApi(invokeFn, toUrl, fakeImageClientFactory(images.client));
     const progress: number[] = [];
 
     const pending = api.generatePage("p1", "dashboard", {
       count: 2,
       onProgress: (value) => progress.push(value),
     });
-    await vi.advanceTimersByTimeAsync(24_000);
+    // The ramp starts only after the project/reference awaits settle, so
+    // advance in slices (each slice flushes the pending microtask chain).
+    for (let slice = 0; slice < 12; slice += 1) {
+      await vi.advanceTimersByTimeAsync(2_000);
+    }
     expect(progress.length).toBeGreaterThan(0);
     expect(progress.every((value) => value > 0 && value <= 0.9)).toBe(true);
 
-    release(generateDto());
+    // The anchor rides as reference image 1 (anchor-first edits flow).
+    const [body, options] = images.calls.edit[0] as [Record<string, unknown>, { signal?: AbortSignal }];
+    const refs = body.image as File[];
+    expect(refs).toHaveLength(1);
+    expect(refs[0].name).toBe("anchor.png");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(body).toMatchObject({ model: "gpt-image-2", prompt: expect.any(String), n: 2 });
+    expect(options.signal).toBeUndefined();
+
+    released = true;
+    release({ created: 1, data: [{ b64_json: "QQ==" }] });
     const result = await pending;
     expect(result.project.pages[0].slug).toBe("dashboard");
+    expect(progress.at(-1)).toBe(1);
   });
 
   it("passes delete targets through and maps errors to ApiError", async () => {

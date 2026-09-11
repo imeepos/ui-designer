@@ -16,6 +16,7 @@ import {
 } from "@/lib/api/auth";
 import { testConnection } from "@/lib/api/credentials";
 import { isApiError } from "@/lib/api/types";
+import { BALANCE_REFRESH_EVENT } from "@/lib/events";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/state/toast";
 
@@ -111,6 +112,25 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     setEmail("");
     setName("");
   };
+
+  // A finished generation deducted points: re-read `auth_status` so the
+  // balance display in the open account card stays current (C2-FE).
+  useEffect(() => {
+    if (!open) return;
+    const refreshBalance = () => {
+      fetchAuthStatus()
+        .then((status) => {
+          if (status.loggedIn && status.account) {
+            setAccount(status.account);
+          }
+        })
+        .catch(() => {
+          // Transient balance refresh is best-effort; errors stay silent.
+        });
+    };
+    window.addEventListener(BALANCE_REFRESH_EVENT, refreshBalance);
+    return () => window.removeEventListener(BALANCE_REFRESH_EVENT, refreshBalance);
+  }, [open]);
 
   const handleAuth = async (kind: Extract<AccountMode, "login" | "register">) => {
     // Client-side validation first: the cms contract has no username, so the

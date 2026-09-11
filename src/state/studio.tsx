@@ -24,6 +24,7 @@ import type {
   ProjectSummary,
 } from "@/lib/api/types";
 import { DEFAULT_QUALITY, type QualityLevel } from "@/lib/form-schema";
+import { requestBalanceRefresh } from "@/lib/events";
 import { useToast } from "@/state/toast";
 
 export type JobKind = "board" | "page" | "component" | "export";
@@ -213,6 +214,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       if (!result) return;
       setProject(result.project);
       void refreshProjects();
+      requestBalanceRefresh();
       toast.success(t("toast.success.board", { count: result.candidates.length }));
     },
     [api, project, refreshProjects, runJob, t, toast],
@@ -273,6 +275,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       );
       if (!result) return;
       setProject(result.project);
+      requestBalanceRefresh();
       toast.success(t("toast.success.page", { slug, count: result.candidates.length }));
     },
     [api, project, runJob, t, toast],
@@ -332,6 +335,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       );
       if (!result) return;
       setProject(result.project);
+      requestBalanceRefresh();
       toast.success(t("toast.success.component", { name, count: result.candidates.length }));
     },
     [api, project, runJob, t, toast],

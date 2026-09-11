@@ -16,6 +16,20 @@ import {
   type ProjectDetail,
   type ProjectSummary,
 } from "@/lib/api/types";
+import {
+  composeBoardPrompt,
+  composeComponentPrompt,
+  composePagePrompt,
+  type PromptProject,
+} from "@/lib/generation/prompt";
+import {
+  fetchReferenceFile,
+  runImageBatch,
+  type GenEndpoint,
+  type GenKind,
+} from "@/lib/generation/service";
+import { createImageClient, type ImageClient } from "@/lib/generation/client";
+import { formatSize } from "@/lib/size";
 
 /**
  * Tauri-backed adapter: invokes the Rust commands that wrap rudder-core::ops
@@ -192,6 +206,7 @@ const KNOWN_CODES = new Set([
   "CANCELLED",
   "EXPORT_FAILED",
   "API_ERROR",
+  "QUOTA_EXCEEDED",
   "NOT_IMPLEMENTED",
   "UNKNOWN",
 ]);
@@ -221,7 +236,8 @@ function newJobId(): string {
   return `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function mapCandidate(toUrl: (path: string) => string, dto: CandidateDto): Candidate {
+/** DTO → domain mapping, shared with the SDK generation service. */
+export function mapCandidate(toUrl: (path: string) => string, dto: CandidateDto): Candidate {
   return {
     seed: dto.seed,
     id: dto.id,
@@ -230,7 +246,8 @@ function mapCandidate(toUrl: (path: string) => string, dto: CandidateDto): Candi
   };
 }
 
-function mapProject(toUrl: (path: string) => string, dto: ProjectDetailDto): ProjectDetail {
+/** DTO → domain mapping, shared with the SDK generation service. */
+export function mapProject(toUrl: (path: string) => string, dto: ProjectDetailDto): ProjectDetail {
   return {
     id: dto.id,
     name: dto.name,
@@ -280,6 +297,7 @@ export class TauriApi implements ApiAdapter {
   constructor(
     private readonly invokeFn: InvokeFn = invoke,
     private readonly toUrl: (path: string) => string = (path) => convertFileSrc(path),
+    private readonly clientFactory: (invokeFn: InvokeFn) => Promise<ImageClient> = createImageClient,
   ) {}
 
   private async call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -359,28 +377,87 @@ export class TauriApi implements ApiAdapter {
     return stop;
   }
 
-  private async runGenerate(
-    command: string,
-    args: Record<string, unknown>,
+  /**
+   * Ramp-only progress for the SDK-direct path: no `rudder://job` events cross
+   * the bridge for frontend-driven generation, so the same 0→0.9 ramp runs
+   * client-side and snaps to 1 when the batch resolves.
+   */
+  private trackRamp(options?: GenerateOptions): () => void {
+    const onProgress = options?.onProgress;
+    if (!onProgress) return () => {};
+
+    let stopped = false;
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (stopped) return;
+      const elapsed = Date.now() - startedAt;
+      onProgress(Math.min(RAMP_CAP, (elapsed / EXPECTED_GENERATION_MS) * RAMP_CAP));
+    }, RAMP_TICK_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      onProgress(1);
+    };
+  }
+
+  /**
+   * One SDK-direct generation batch (C2-FE): compose → upstream → per-image
+   * `record_generated_image` → canvas payload. The anchor rides as the first
+   * reference image whenever it exists (ops.rs semantics), which switches
+   * the endpoint to `edits`; board before its anchor stays `generations`.
+   */
+  private async sdkGenerate(
+    projectId: string,
+    kind: GenKind,
+    target: string,
+    prompt: string,
+    project: ProjectDetail,
     options?: GenerateOptions,
   ): Promise<GenerateResult> {
-    const jobId = newJobId();
-    const stopJob = this.trackJob(jobId, options);
+    const references: File[] = [];
+    if (project.anchor) {
+      references.push(await fetchReferenceFile(project.anchor.url, "anchor.png"));
+    } else if (kind !== "board") {
+      throw new ApiError(
+        "ANCHOR_REQUIRED",
+        `${kind} \`${target}\` needs the board anchor`,
+      );
+    }
+    const endpoint: GenEndpoint = references.length > 0 ? "edits" : "generations";
+    const stopRamp = this.trackRamp(options);
     try {
-      const dto = await this.withAbort(
-        this.call<GeneratePayloadDto>(command, {
-          ...args,
-          options: { count: options?.count, quality: options?.quality, jobId },
-        }),
+      return await this.withAbort(
+        runImageBatch(
+          {
+            projectId,
+            kind,
+            target,
+            endpoint,
+            prompt,
+            count: options?.count ?? 1,
+            size: formatSize(project.size),
+            quality: options?.quality ?? "low",
+            references,
+            signal: options?.signal,
+          },
+          { invokeFn: this.invokeFn, toUrl: this.toUrl, clientFactory: this.clientFactory },
+        ),
         options?.signal,
       );
-      return {
-        candidates: dto.candidates.map((candidate) => mapCandidate(this.toUrl, candidate)),
-        project: mapProject(this.toUrl, dto.project),
-      };
     } finally {
-      stopJob();
+      stopRamp();
     }
+  }
+
+  /** Prompt-engine project data for a stored project detail. */
+  private static promptProject(project: ProjectDetail): PromptProject {
+    return {
+      name: project.name,
+      brandBrief: project.brandBrief,
+      styleBrief: project.styleBrief,
+      canvasW: project.size.w,
+      canvasH: project.size.h,
+    };
   }
 
   async createProject(input: CreateProjectInput, _options?: CallOptions): Promise<ProjectDetail> {
@@ -419,14 +496,41 @@ export class TauriApi implements ApiAdapter {
     brief: BoardBrief,
     options?: GenerateOptions,
   ): Promise<GenerateResult> {
-    const briefDto: BoardBriefDto = {
-      brandKeywords: brief.brandKeywords,
-      colorDirection: brief.colorDirection,
-      fontMood: brief.fontMood,
-      radiusDensity: brief.radiusDensity,
-      reference: brief.reference,
+    const project = await this.getProject(projectId);
+    // Mirror the old generate_board's brief merge (style_brief_from) so the
+    // composed prompt sees exactly what the drawer typed. The stored project
+    // record is refreshed by the batch payload; the merged briefs are also
+    // overlaid onto the returned project so the UI keeps them this session
+    // (a dedicated project-update command remains future work).
+    const merged = {
+      brandBrief: brief.brandKeywords.trim(),
+      styleBrief: [
+        brief.colorDirection.trim(),
+        brief.fontMood.trim(),
+        brief.radiusDensity.trim(),
+      ]
+        .filter(Boolean)
+        .join(" / "),
     };
-    return this.runGenerate("generate_board", { projectId, brief: briefDto }, options);
+    if (brief.reference.trim()) {
+      merged.styleBrief = merged.styleBrief
+        ? `${merged.styleBrief} | ${brief.reference.trim()}`
+        : brief.reference.trim();
+    }
+    const prompt = composeBoardPrompt({
+      ...TauriApi.promptProject(project),
+      brandBrief: merged.brandBrief,
+      styleBrief: merged.styleBrief,
+    });
+    const result = await this.sdkGenerate(projectId, "board", "", prompt, project, options);
+    return {
+      ...result,
+      project: {
+        ...result.project,
+        brandBrief: merged.brandBrief,
+        styleBrief: merged.styleBrief,
+      },
+    };
   }
 
   async pickAnchor(
@@ -452,7 +556,13 @@ export class TauriApi implements ApiAdapter {
     slug: string,
     options?: GenerateOptions,
   ): Promise<GenerateResult> {
-    return this.runGenerate("generate_page", { projectId, slug }, options);
+    const project = await this.getProject(projectId);
+    const page = project.pages.find((item) => item.slug === slug);
+    if (!page) {
+      throw new ApiError("NOT_FOUND", `page \`${slug}\` not found`);
+    }
+    const prompt = composePagePrompt(TauriApi.promptProject(project), page);
+    return this.sdkGenerate(projectId, "page", slug, prompt, project, options);
   }
 
   async pickPage(
@@ -479,7 +589,17 @@ export class TauriApi implements ApiAdapter {
     name: string,
     options?: GenerateOptions,
   ): Promise<GenerateResult> {
-    return this.runGenerate("generate_component", { projectId, name }, options);
+    const project = await this.getProject(projectId);
+    const component = project.components.find((item) => item.name === name);
+    if (!component) {
+      throw new ApiError("NOT_FOUND", `component \`${name}\` not found`);
+    }
+    const prompt = composeComponentPrompt(TauriApi.promptProject(project), {
+      name: component.name,
+      kind: component.type,
+      brief: component.brief,
+    });
+    return this.sdkGenerate(projectId, "component", name, prompt, project, options);
   }
 
   async pickComponent(
