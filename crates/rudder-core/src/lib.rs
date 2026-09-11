@@ -9,6 +9,8 @@
 //!   `/v1/models` connectivity probe
 //! - [`server_auth`] — self-hosted backend auth client (register / login /
 //!   me; 0-配置 mode: session token in the keychain, no user-side baseUrl)
+//! - [`cms_auth`] — cms account client (register / login / self-service API
+//!   key rotation / balance; session cookie + image key in the keychain)
 //! - [`registry`] — `~/Rudder/registry.json` shared project catalog
 //!   (CLI-created projects outside `~/Rudder/projects` register here)
 //! - [`prompt`] — three-part prompt engine for board/page/component
@@ -19,6 +21,7 @@
 //! - [`ops`]    — high-level flows shared by CLI and desktop shell
 
 pub mod canvas;
+pub mod cms_auth;
 pub mod config;
 pub mod error;
 pub mod registry;
