@@ -194,6 +194,8 @@ export type ApiErrorCode =
   | "CANCELLED"
   | "EXPORT_FAILED"
   | "API_ERROR"
+  /** cms billing: quota/402-shaped upstream errors get dedicated copy. */
+  | "QUOTA_EXCEEDED"
   | "NOT_IMPLEMENTED"
   | "UNKNOWN";
 
