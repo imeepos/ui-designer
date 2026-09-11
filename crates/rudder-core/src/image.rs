@@ -4,7 +4,9 @@
 //!   `{base}/v1/images/edits` (multipart, `image[]` accepts several
 //!   reference images — anchor first).
 //! - Auth: `Authorization: Bearer <api key>`; key resolution is
-//!   `OPENAI_API_KEY` env → OS keychain → none (`config::credential`), base
+//!   `OPENAI_API_KEY` env → OS keychain `cms-api-key` → OS keychain
+//!   `openai-api-key` (legacy BYO fallback) → none
+//!   (`config::credential::resolve_image_api_key`), base
 //!   resolution is `OPENAI_BASE_URL` env → `config.json` → default. Secrets
 //!   are never stored in files, logged, or printed.
 //! - Response: `b64_json`, decoded to raw bytes.
@@ -155,12 +157,13 @@ impl ImageClient {
     }
 
     /// Resolve credentials/base/model through the standard chain
-    /// (env → keychain / config → defaults, see [`crate::config`]). Never
-    /// fails in dry-run: a missing key only makes `auth_header_present=false`
-    /// in the plan.
+    /// (env → keychain / config → defaults, see [`crate::config`]). The key
+    /// chain prefers the cms-minted `cms-api-key` over the legacy BYO key
+    /// (`credential::resolve_image_api_key`). Never fails in dry-run: a
+    /// missing key only makes `auth_header_present=false` in the plan.
     pub fn from_config(dry_run: bool) -> Result<ImageClient> {
         let base = crate::config::resolve_base_url();
-        let resolution = crate::config::credential::resolve_api_key();
+        let resolution = crate::config::credential::resolve_image_api_key();
         let mut client = Self::new(base, resolution.key, dry_run, DEFAULT_BACKOFF, DEFAULT_TIMEOUT)?;
         client.model = crate::config::resolve_model();
         Ok(client)
