@@ -17,7 +17,7 @@ import pageTemplateJson from "../../../templates/page-ui-standard.json";
 // Template JSON shape (templates.rs `Template`, only what filling needs)
 // ---------------------------------------------------------------------------
 
-interface TemplateJson {
+export interface TemplateJson {
   id: string;
   appliesTo: string;
   skeleton: string;
