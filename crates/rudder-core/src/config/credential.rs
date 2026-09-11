@@ -32,6 +32,12 @@ pub const KEYCHAIN_SERVICE: &str = "rudder";
 pub const KEYCHAIN_ACCOUNT: &str = "openai-api-key";
 /// Keychain account holding the Rudder backend session token (0-配置 chain).
 pub const KEYCHAIN_SESSION_ACCOUNT: &str = "session-token";
+/// Keychain account holding the cms image API key (`cms-api-key`; minted by
+/// the cms account client, used as the image-generation Bearer credential).
+pub const KEYCHAIN_CMS_API_KEY_ACCOUNT: &str = "cms-api-key";
+/// Keychain account holding the cms session cookie value (`cms-session`;
+/// sent back as the `cms_session` cookie on cms account requests).
+pub const KEYCHAIN_CMS_SESSION_ACCOUNT: &str = "cms-session";
 /// Environment override for the backend session token (wins over keychain).
 pub const SESSION_TOKEN_ENV: &str = "RUDDER_SESSION_TOKEN";
 /// The models probe is a cheap GET, not a generation — short timeout.
@@ -170,6 +176,60 @@ impl SecretStore for SessionKeyringStore {
         }
     }
 }
+
+/// OS keychain entry bound to one explicit account under
+/// [`KEYCHAIN_SERVICE`]. Carries the cms accounts (`cms-api-key`,
+/// `cms-session`) so each keeps a distinct [`SecretStore`] like
+/// [`KeyringStore`] and [`SessionKeyringStore`]; entries never collide.
+pub struct AccountKeyringStore {
+    account: &'static str,
+}
+
+impl AccountKeyringStore {
+    pub const fn new(account: &'static str) -> AccountKeyringStore {
+        AccountKeyringStore { account }
+    }
+
+    fn entry(&self) -> Result<keyring::Entry> {
+        keyring::Entry::new(KEYCHAIN_SERVICE, self.account)
+            .map_err(|err| RudderError::KeychainAccess { detail: err.to_string() })
+    }
+
+    fn into_error(err: keyring::Error) -> RudderError {
+        RudderError::KeychainAccess { detail: err.to_string() }
+    }
+}
+
+impl SecretStore for AccountKeyringStore {
+    fn get_password(&self) -> Result<Option<String>> {
+        match self.entry()?.get_password() {
+            Ok(password) => Ok(Some(password)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(err) => Err(Self::into_error(err)),
+        }
+    }
+
+    fn set_password(&self, key: &str) -> Result<()> {
+        self.entry()?.set_password(key).map_err(Self::into_error)
+    }
+
+    fn delete_password(&self) -> Result<()> {
+        match self.entry()?.delete_credential() {
+            Ok(()) => Ok(()),
+            Err(keyring::Error::NoEntry) => Ok(()),
+            Err(err) => Err(Self::into_error(err)),
+        }
+    }
+}
+
+/// The real OS keychain entry for the cms image API key (account
+/// [`KEYCHAIN_CMS_API_KEY_ACCOUNT`]).
+pub const CMS_API_KEY_STORE: AccountKeyringStore =
+    AccountKeyringStore::new(KEYCHAIN_CMS_API_KEY_ACCOUNT);
+/// The real OS keychain entry for the cms session cookie value (account
+/// [`KEYCHAIN_CMS_SESSION_ACCOUNT`]).
+pub const CMS_SESSION_STORE: AccountKeyringStore =
+    AccountKeyringStore::new(KEYCHAIN_CMS_SESSION_ACCOUNT);
 
 /// In-memory [`SecretStore`] for tests and previews. `Debug` is redacted.
 #[derive(Default)]
@@ -381,6 +441,140 @@ pub fn clear_session_token() -> Result<()> {
 /// [`clear_session_token`] against an explicit store (hermetic tests).
 pub fn clear_session_token_in(store: &dyn SecretStore) -> Result<()> {
     store.delete_password()
+}
+
+// ---------------------------------------------------------------------------
+// cms accounts (cms-api-key / cms-session; cms migration chain)
+// ---------------------------------------------------------------------------
+
+/// Store the cms image API key (account `cms-api-key`) in `store`.
+pub fn store_cms_api_key_in(store: &dyn SecretStore, key: &str) -> Result<()> {
+    let key = key.trim();
+    if key.is_empty() {
+        return Err(RudderError::InvalidArg {
+            detail: "cms api key must not be empty".into(),
+        });
+    }
+    store.set_password(key)
+}
+
+/// Load the cms image API key from `store` (trimmed; blank reads as absent).
+pub fn load_cms_api_key_in(store: &dyn SecretStore) -> Result<Option<String>> {
+    Ok(store
+        .get_password()?
+        .map(|key| key.trim().to_string())
+        .filter(|key| !key.is_empty()))
+}
+
+/// Remove the stored cms image API key (idempotent; absent key is a no-op).
+pub fn clear_cms_api_key_in(store: &dyn SecretStore) -> Result<()> {
+    store.delete_password()
+}
+
+/// Store the cms session cookie value (account `cms-session`) in `store`.
+pub fn store_cms_session_in(store: &dyn SecretStore, cookie: &str) -> Result<()> {
+    let cookie = cookie.trim();
+    if cookie.is_empty() {
+        return Err(RudderError::InvalidArg {
+            detail: "cms session cookie must not be empty".into(),
+        });
+    }
+    store.set_password(cookie)
+}
+
+/// Load the cms session cookie value from `store` (trimmed; blank = absent).
+pub fn load_cms_session_in(store: &dyn SecretStore) -> Result<Option<String>> {
+    Ok(store
+        .get_password()?
+        .map(|cookie| cookie.trim().to_string())
+        .filter(|cookie| !cookie.is_empty()))
+}
+
+/// Remove the stored cms session cookie value (idempotent; absent is a no-op).
+pub fn clear_cms_session_in(store: &dyn SecretStore) -> Result<()> {
+    store.delete_password()
+}
+
+/// [`store_cms_api_key_in`] against the real OS keychain.
+pub fn store_cms_api_key(key: &str) -> Result<()> {
+    if keychain_disabled() {
+        return Err(RudderError::InvalidArg {
+            detail: "RUDDER_KEYCHAIN is disabled; cms login cannot persist credentials".into(),
+        });
+    }
+    store_cms_api_key_in(&CMS_API_KEY_STORE, key)
+}
+
+/// [`load_cms_api_key_in`] against the real OS keychain.
+pub fn load_cms_api_key() -> Result<Option<String>> {
+    if keychain_disabled() {
+        return Ok(None);
+    }
+    load_cms_api_key_in(&CMS_API_KEY_STORE)
+}
+
+/// [`clear_cms_api_key_in`] against the real OS keychain.
+pub fn clear_cms_api_key() -> Result<()> {
+    if keychain_disabled() {
+        return Ok(());
+    }
+    clear_cms_api_key_in(&CMS_API_KEY_STORE)
+}
+
+/// [`store_cms_session_in`] against the real OS keychain.
+pub fn store_cms_session(cookie: &str) -> Result<()> {
+    if keychain_disabled() {
+        return Err(RudderError::InvalidArg {
+            detail: "RUDDER_KEYCHAIN is disabled; cms login cannot persist credentials".into(),
+        });
+    }
+    store_cms_session_in(&CMS_SESSION_STORE, cookie)
+}
+
+/// [`load_cms_session_in`] against the real OS keychain.
+pub fn load_cms_session() -> Result<Option<String>> {
+    if keychain_disabled() {
+        return Ok(None);
+    }
+    load_cms_session_in(&CMS_SESSION_STORE)
+}
+
+/// [`clear_cms_session_in`] against the real OS keychain.
+pub fn clear_cms_session() -> Result<()> {
+    if keychain_disabled() {
+        return Ok(());
+    }
+    clear_cms_session_in(&CMS_SESSION_STORE)
+}
+
+/// Resolve the image-generation bearer credential (cms migration order):
+/// `OPENAI_API_KEY` env → OS keychain `cms-api-key` → OS keychain
+/// `openai-api-key` (legacy BYO fallback) → none. With `RUDDER_KEYCHAIN`
+/// disabled only the env leg is consulted.
+pub fn resolve_image_api_key() -> ApiKeyResolution {
+    resolve_image_api_key_in(&CMS_API_KEY_STORE, &KeyringStore)
+}
+
+/// [`resolve_image_api_key`] against explicit stores (hermetic tests).
+pub fn resolve_image_api_key_in(
+    cms_store: &dyn SecretStore,
+    legacy_store: &dyn SecretStore,
+) -> ApiKeyResolution {
+    if let Some(key) = non_empty_env("OPENAI_API_KEY") {
+        return ApiKeyResolution { key: Some(key), source: KeySource::Env };
+    }
+    if keychain_disabled() {
+        return ApiKeyResolution { key: None, source: KeySource::None };
+    }
+    if let Some(key) = load_cms_api_key_in(cms_store).ok().flatten() {
+        return ApiKeyResolution { key: Some(key), source: KeySource::Keychain };
+    }
+    // Env already missed above, so this reads the legacy keychain leg only.
+    let legacy = resolve_api_key_in(legacy_store);
+    if legacy.key.is_some() {
+        return legacy;
+    }
+    ApiKeyResolution { key: None, source: KeySource::None }
 }
 
 /// Last ≤4 characters of a key — the only sanctioned masked display.
@@ -781,6 +975,82 @@ mod tests {
         let resolved = resolve_api_key_in(&store);
         assert_eq!(resolved.source, KeySource::Keychain);
         assert_eq!(resolved.key.as_deref(), Some("chain-key-9999"));
+    }
+
+    // -- cms accounts (cms-api-key / cms-session) ----------------------------
+
+    #[test]
+    fn cms_store_roundtrip_on_memory_store() {
+        let key_store = MemoryStore::new();
+        let session_store = MemoryStore::new();
+        store_cms_api_key_in(&key_store, " round-cms-key-9 ").unwrap();
+        assert_eq!(load_cms_api_key_in(&key_store).unwrap().as_deref(), Some("round-cms-key-9"));
+        store_cms_session_in(&session_store, " round-cookie-9 ").unwrap();
+        assert_eq!(
+            load_cms_session_in(&session_store).unwrap().as_deref(),
+            Some("round-cookie-9")
+        );
+
+        clear_cms_api_key_in(&key_store).unwrap();
+        clear_cms_session_in(&session_store).unwrap();
+        assert_eq!(load_cms_api_key_in(&key_store).unwrap(), None);
+        assert_eq!(load_cms_session_in(&session_store).unwrap(), None);
+    }
+
+    #[test]
+    fn cms_store_clear_is_idempotent_and_blank_values_rejected() {
+        let store = MemoryStore::new();
+        clear_cms_api_key_in(&store).unwrap(); // absent: no-op
+        clear_cms_session_in(&store).unwrap();
+        assert_eq!(store_cms_api_key_in(&store, "   ").unwrap_err().code(), "INVALID_ARG");
+        assert_eq!(store_cms_session_in(&store, "").unwrap_err().code(), "INVALID_ARG");
+    }
+
+    #[test]
+    fn image_chain_env_wins_over_both_cms_and_legacy_stores() {
+        let guard = EnvGuard::clear();
+        EnvGuard::set("OPENAI_API_KEY", "env-key-0000");
+        let cms = MemoryStore::with_key("cms-key-1111");
+        let legacy = MemoryStore::with_key("legacy-key-2222");
+        let resolved = resolve_image_api_key_in(&cms, &legacy);
+        assert_eq!(resolved.source, KeySource::Env);
+        assert_eq!(resolved.key.as_deref(), Some("env-key-0000"));
+        drop(guard);
+    }
+
+    #[test]
+    fn image_chain_cms_key_precedes_legacy_key() {
+        let _guard = EnvGuard::clear();
+        let cms = MemoryStore::with_key("cms-key-1111");
+        let legacy = MemoryStore::with_key("legacy-key-2222");
+        let resolved = resolve_image_api_key_in(&cms, &legacy);
+        assert_eq!(resolved.source, KeySource::Keychain);
+        assert_eq!(resolved.key.as_deref(), Some("cms-key-1111"));
+
+        // Without a cms key the legacy BYO keychain entry stays the fallback.
+        let resolved = resolve_image_api_key_in(&MemoryStore::new(), &legacy);
+        assert_eq!(resolved.source, KeySource::Keychain);
+        assert_eq!(resolved.key.as_deref(), Some("legacy-key-2222"));
+    }
+
+    #[test]
+    fn image_chain_missing_everywhere_reports_none() {
+        let _guard = EnvGuard::clear();
+        let resolved = resolve_image_api_key_in(&MemoryStore::new(), &MemoryStore::new());
+        assert_eq!(resolved.source, KeySource::None);
+        assert!(resolved.key.is_none());
+    }
+
+    #[test]
+    fn image_chain_kill_switch_consults_env_only() {
+        let guard = EnvGuard::clear();
+        EnvGuard::set("RUDDER_KEYCHAIN", "0");
+        let resolved = resolve_image_api_key();
+        assert_eq!(resolved.source, KeySource::None, "real keychain must be skipped");
+        EnvGuard::set("OPENAI_API_KEY", "env-key-0000");
+        let resolved = resolve_image_api_key();
+        assert_eq!(resolved.source, KeySource::Env);
+        drop(guard);
     }
 
     // -- connectivity probe (mock HTTP) --------------------------------------
