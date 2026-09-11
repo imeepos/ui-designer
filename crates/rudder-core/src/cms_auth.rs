@@ -438,7 +438,7 @@ mod tests {
     use super::*;
     use crate::config::credential::{load_cms_api_key_in, load_cms_session_in, MemoryStore};
     use crate::test_support::MockServer;
-    use std::sync::Mutex;
+    use std::sync::MutexGuard;
 
     // Fake-but-realistic fixtures; no real credentials in tests.
     const KEY_PLAINTEXT: &str = "cms-minted-plain-key-4242";
@@ -917,17 +917,19 @@ mod tests {
 
     // -- env hygiene ---------------------------------------------------------
 
-    /// Serializes the env-mutating test; restores the prior value on drop.
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-
     struct KillSwitch {
         saved: Option<String>,
-        _lock: std::sync::MutexGuard<'static, ()>,
+        _lock: MutexGuard<'static, ()>,
     }
 
     impl KillSwitch {
         fn enable() -> KillSwitch {
-            let lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            // Process-wide lock (see `test_support::ENV_LOCK`): the
+            // kill-switch window below must never observe a concurrently
+            // mutated `RUDDER_KEYCHAIN` (FLAKE-1 root cause).
+            let lock = crate::test_support::ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             let saved = std::env::var("RUDDER_KEYCHAIN").ok();
             std::env::set_var("RUDDER_KEYCHAIN", "0");
             KillSwitch { saved, _lock: lock }

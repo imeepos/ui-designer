@@ -8,7 +8,11 @@ use std::sync::Once;
 use std::time::Duration;
 
 /// Redirect `~/Rudder/config.json` writes into a per-run temp directory so
-/// tests never touch the developer's real config.
+/// tests never touch the developer's real config. This is the ONLY writer
+/// of `RUDDER_HOME` in the test process and it never clears the variable —
+/// every other module reads it lock-free, so the value must stay set-once
+/// stable (see `test_support::ENV_LOCK`; config tests inject the config leg
+/// via `resolve_*_with` instead of pointing `RUDDER_HOME` at fixtures).
 fn ensure_test_home() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {

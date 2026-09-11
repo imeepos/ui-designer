@@ -10,6 +10,18 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+/// Process-wide serialization for every test that mutates the process
+/// environment (`RUDDER_KEYCHAIN`, `OPENAI_*`, …).
+///
+/// Env is a shared process global: two tests holding *module-local* locks
+/// can still interleave `set_var`/`remove_var` with each other's reads —
+/// that race produced FLAKE-1 (`cms_auth` kill-switch window observed a
+/// concurrently removed `RUDDER_KEYCHAIN`). Every env-mutating guard must
+/// hold THIS lock for its whole test body; `RUDDER_HOME` additionally stays
+/// set-once (see `ops::tests::ensure_test_home`) and is never cleared in
+/// tests, so reads without the lock remain stable.
+pub(crate) static ENV_LOCK: Mutex<()> = Mutex::new(());
+
 #[derive(Clone)]
 pub(crate) struct RecordedRequest {
     pub method: String,

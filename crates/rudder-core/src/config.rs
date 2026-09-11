@@ -214,11 +214,19 @@ impl Config {
 /// → default image endpoint (`image::DEFAULT_BASE_URL`, the self-hosted
 /// Rudder backend; docs/ARCHITECTURE.md §4). Trailing slashes stripped.
 pub fn resolve_base_url() -> String {
+    resolve_base_url_with(&Config::load())
+}
+
+/// [`resolve_base_url`] against an explicit config (hermetic tests: the
+/// config leg is injected, so tests never touch `RUDDER_HOME` — a process
+/// global other test modules rely on staying set-once stable).
+pub fn resolve_base_url_with(config: &Config) -> String {
     if let Some(env_base) = credential::env_trimmed("OPENAI_BASE_URL") {
         return env_base.trim_end_matches('/').to_string();
     }
-    if let Some(config_base) = Config::load()
+    if let Some(config_base) = config
         .base_url
+        .as_deref()
         .map(|base| base.trim().trim_end_matches('/').to_string())
         .filter(|base| !base.is_empty())
     {
@@ -233,11 +241,18 @@ pub fn resolve_base_url() -> String {
 /// level fall through to the next one. Mirrors [`resolve_base_url`] so the
 /// cms account client and `config get` can all agree.
 pub fn resolve_server_base_url() -> String {
+    resolve_server_base_url_with(&Config::load())
+}
+
+/// [`resolve_server_base_url`] against an explicit config (hermetic tests,
+/// mirrors [`resolve_base_url_with`]).
+pub fn resolve_server_base_url_with(config: &Config) -> String {
     if let Some(env_server) = credential::env_trimmed("RUDDER_SERVER_URL") {
         return env_server.trim_end_matches('/').to_string();
     }
-    if let Some(config_server) = Config::load()
+    if let Some(config_server) = config
         .server_url
+        .as_deref()
         .map(|base| base.trim().trim_end_matches('/').to_string())
         .filter(|base| !base.is_empty())
     {
@@ -250,11 +265,18 @@ pub fn resolve_server_base_url() -> String {
 /// → `image::MODEL` default (`gpt-image-2`). Mirrors [`resolve_base_url`]
 /// so the client, the lineage records and `config test` all agree.
 pub fn resolve_model() -> String {
+    resolve_model_with(&Config::load())
+}
+
+/// [`resolve_model`] against an explicit config (hermetic tests, mirrors
+/// [`resolve_base_url_with`]).
+pub fn resolve_model_with(config: &Config) -> String {
     if let Some(env_model) = credential::env_trimmed("OPENAI_MODEL") {
         return env_model;
     }
-    if let Some(config_model) = Config::load()
+    if let Some(config_model) = config
         .model
+        .as_deref()
         .map(|model| model.trim().to_string())
         .filter(|model| !model.is_empty())
     {
@@ -338,21 +360,24 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// Restores OPENAI_BASE_URL / OPENAI_MODEL / RUDDER_SERVER_URL /
-    /// RUDDER_HOME on drop. All config env tests share one lock: they mutate
-    /// the same `RUDDER_HOME` key and must not run in parallel.
+    /// Restores OPENAI_BASE_URL / OPENAI_MODEL / RUDDER_SERVER_URL on drop.
+    /// The lock is the process-wide [`crate::test_support::ENV_LOCK`] shared
+    /// with every other env-mutating module (FLAKE-1). `RUDDER_HOME` is
+    /// deliberately NOT managed here: it must stay set-once stable for the
+    /// whole test process (`ops::tests::ensure_test_home`), so tests inject
+    /// the config leg via `resolve_*_with(&Config::load_from(...))` instead.
     struct BaseUrlEnvGuard {
         saved: Vec<(String, Option<String>)>,
         _lock: std::sync::MutexGuard<'static, ()>,
     }
 
-    static CONFIG_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
     impl BaseUrlEnvGuard {
         fn clear() -> BaseUrlEnvGuard {
-            let lock = CONFIG_ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let lock = crate::test_support::ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             let mut saved = Vec::new();
-            for name in ["OPENAI_BASE_URL", "OPENAI_MODEL", "RUDDER_SERVER_URL", "RUDDER_HOME"] {
+            for name in ["OPENAI_BASE_URL", "OPENAI_MODEL", "RUDDER_SERVER_URL"] {
                 saved.push((name.to_string(), std::env::var(name).ok()));
                 std::env::remove_var(name);
             }
@@ -362,6 +387,12 @@ mod tests {
         fn set(name: &str, value: &str) {
             std::env::set_var(name, value);
         }
+    }
+
+    /// A config leg loaded from a hermetic fixture dir (never the developer's
+    /// real `~/Rudder/config.json`, never the shared test home).
+    fn fixture_config(dir: &Path) -> Config {
+        Config::load_from(Some(&dir.join("config.json")))
     }
 
     impl Drop for BaseUrlEnvGuard {
@@ -379,26 +410,28 @@ mod tests {
     fn resolve_base_url_env_then_config_then_default() {
         let _guard = BaseUrlEnvGuard::clear();
 
-        // Hermetic home: neither env nor config → official endpoint.
-        // (Never read the developer's real ~/Rudder/config.json here.)
+        // Neither env nor config → official endpoint. The config leg is
+        // injected from an empty fixture dir (no RUDDER_HOME involved).
         let empty = std::env::temp_dir().join(format!("rudder-cfg-empty-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&empty).unwrap();
-        BaseUrlEnvGuard::set("RUDDER_HOME", &empty.display().to_string());
-        assert_eq!(resolve_base_url(), crate::image::DEFAULT_BASE_URL);
+        assert_eq!(
+            resolve_base_url_with(&fixture_config(&empty)),
+            crate::image::DEFAULT_BASE_URL
+        );
 
         // config.json override applies when env is absent/empty.
         let dir = std::env::temp_dir().join(format!("rudder-cfg-res-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("config.json"), r#"{"base_url":"https://proxy.example.com"}"#)
             .unwrap();
-        BaseUrlEnvGuard::set("RUDDER_HOME", &dir.display().to_string());
-        assert_eq!(resolve_base_url(), "https://proxy.example.com");
+        let config = fixture_config(&dir);
+        assert_eq!(resolve_base_url_with(&config), "https://proxy.example.com");
 
         // Env wins over config; trailing slashes are stripped.
         BaseUrlEnvGuard::set("OPENAI_BASE_URL", "https://env.example.com///");
-        assert_eq!(resolve_base_url(), "https://env.example.com");
+        assert_eq!(resolve_base_url_with(&config), "https://env.example.com");
         BaseUrlEnvGuard::set("OPENAI_BASE_URL", "   ");
-        assert_eq!(resolve_base_url(), "https://proxy.example.com");
+        assert_eq!(resolve_base_url_with(&config), "https://proxy.example.com");
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -452,24 +485,24 @@ mod tests {
     fn resolve_model_env_then_config_then_default() {
         let _guard = BaseUrlEnvGuard::clear();
 
-        // Hermetic home: neither env nor config → the documented default.
+        // Neither env nor config → the documented default (injected config
+        // leg from an empty fixture dir).
         let empty = std::env::temp_dir().join(format!("rudder-cfg-mempty-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&empty).unwrap();
-        BaseUrlEnvGuard::set("RUDDER_HOME", &empty.display().to_string());
-        assert_eq!(resolve_model(), crate::image::MODEL);
+        assert_eq!(resolve_model_with(&fixture_config(&empty)), crate::image::MODEL);
 
         // config.json override applies when env is absent/empty.
         let dir = std::env::temp_dir().join(format!("rudder-cfg-mres-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("config.json"), r#"{"model":"config-model-1"}"#).unwrap();
-        BaseUrlEnvGuard::set("RUDDER_HOME", &dir.display().to_string());
-        assert_eq!(resolve_model(), "config-model-1");
+        let config = fixture_config(&dir);
+        assert_eq!(resolve_model_with(&config), "config-model-1");
 
         // Env wins over config; a blank env falls back to config.
         BaseUrlEnvGuard::set("OPENAI_MODEL", "  env-model-9  ");
-        assert_eq!(resolve_model(), "env-model-9", "env value is trimmed");
+        assert_eq!(resolve_model_with(&config), "env-model-9", "env value is trimmed");
         BaseUrlEnvGuard::set("OPENAI_MODEL", "   ");
-        assert_eq!(resolve_model(), "config-model-1");
+        assert_eq!(resolve_model_with(&config), "config-model-1");
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -486,26 +519,28 @@ mod tests {
     fn resolve_server_base_url_env_then_config_then_default() {
         let _guard = BaseUrlEnvGuard::clear();
 
-        // Hermetic home: neither env nor config → the cms default base.
-        // (Never read the developer's real ~/Rudder/config.json here.)
+        // Neither env nor config → the cms default base (injected config
+        // leg from an empty fixture dir).
         let empty = std::env::temp_dir().join(format!("rudder-srv-empty-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&empty).unwrap();
-        BaseUrlEnvGuard::set("RUDDER_HOME", &empty.display().to_string());
-        assert_eq!(resolve_server_base_url(), crate::cms_auth::DEFAULT_CMS_BASE_URL);
+        assert_eq!(
+            resolve_server_base_url_with(&fixture_config(&empty)),
+            crate::cms_auth::DEFAULT_CMS_BASE_URL
+        );
 
         // config.json override applies when env is absent/empty.
         let dir = std::env::temp_dir().join(format!("rudder-srv-res-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("config.json"), r#"{"server_url":"https://server.example.com"}"#)
             .unwrap();
-        BaseUrlEnvGuard::set("RUDDER_HOME", &dir.display().to_string());
-        assert_eq!(resolve_server_base_url(), "https://server.example.com");
+        let config = fixture_config(&dir);
+        assert_eq!(resolve_server_base_url_with(&config), "https://server.example.com");
 
         // Env wins over config; trailing slashes are stripped.
         BaseUrlEnvGuard::set("RUDDER_SERVER_URL", "https://env-server.example.com///");
-        assert_eq!(resolve_server_base_url(), "https://env-server.example.com");
+        assert_eq!(resolve_server_base_url_with(&config), "https://env-server.example.com");
         BaseUrlEnvGuard::set("RUDDER_SERVER_URL", "   ");
-        assert_eq!(resolve_server_base_url(), "https://server.example.com");
+        assert_eq!(resolve_server_base_url_with(&config), "https://server.example.com");
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -518,11 +553,13 @@ mod tests {
         // Blank/whitespace server_url in config.json must fall through to the
         // default, and old configs without the field must keep parsing.
         std::fs::write(dir.join("config.json"), r#"{"server_url":"   ","quality":"low"}"#).unwrap();
-        BaseUrlEnvGuard::set("RUDDER_HOME", &dir.display().to_string());
-        let cfg = Config::load();
+        let cfg = fixture_config(&dir);
         assert_eq!(cfg.quality.as_deref(), Some("low"), "legacy fields still load");
         assert_eq!(cfg.server_url.as_deref(), Some("   "));
-        assert_eq!(resolve_server_base_url(), crate::cms_auth::DEFAULT_CMS_BASE_URL);
+        assert_eq!(
+            resolve_server_base_url_with(&cfg),
+            crate::cms_auth::DEFAULT_CMS_BASE_URL
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

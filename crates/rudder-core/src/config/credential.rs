@@ -576,9 +576,6 @@ mod tests {
 
     // -- env hygiene --------------------------------------------------------
 
-    /// Serializes env-mutating tests; restores prior values on drop.
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-
     struct EnvGuard {
         saved: Vec<(String, Option<String>)>,
         _lock: std::sync::MutexGuard<'static, ()>,
@@ -586,8 +583,13 @@ mod tests {
 
     impl EnvGuard {
         /// Clears the credential env keys; callers set what they need after.
+        /// The lock is the process-wide [`crate::test_support::ENV_LOCK`] —
+        /// module-local locks cannot stop cross-module env interleaving
+        /// (FLAKE-1 root cause).
         fn clear() -> EnvGuard {
-            let lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let lock = crate::test_support::ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             let mut saved = Vec::new();
             for name in ["OPENAI_API_KEY", "RUDDER_KEYCHAIN"] {
                 saved.push((name.to_string(), std::env::var(name).ok()));
