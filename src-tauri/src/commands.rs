@@ -12,8 +12,9 @@
 use rudder_core::config::{
     credential, resolve_base_url, resolve_model, resolve_server_base_url, Config,
 };
+use base64::Engine as _;
 use rudder_core::image::ImageClient;
-use rudder_core::ops::{self, GenerateOptions, Target};
+use rudder_core::ops::{self, GeneratedBatch, GenerateOptions, Target};
 use rudder_core::cms_auth::{self, CmsAccount, CmsSession, CmsUser};
 use rudder_core::store::{self, Project};
 use rudder_core::{export, RudderError};
@@ -533,6 +534,165 @@ pub async fn update_component(
 }
 
 // ---------------------------------------------------------------------------
+// Record a frontend-generated image (openai SDK 直连, C2 裁决: Rust 只落盘)
+// ---------------------------------------------------------------------------
+
+/// One finished upstream call made by the frontend SDK: the image bytes plus
+/// the metadata the lineage record needs. Field names mirror the existing
+/// generate command inputs (`projectId` / `kind`+`target` unify the
+/// per-command `slug` / `name` parameters). `n` is always recorded as 1 —
+/// one command call persists exactly one image.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordImageInput {
+    pub project_id: String,
+    /// `board` | `page` | `component`.
+    pub kind: String,
+    /// Page slug / component name; ignored for board.
+    #[serde(default)]
+    pub target: String,
+    /// Raw image bytes, standard base64 (the SDK `data[i].b64_json` value).
+    pub image_base64: String,
+    /// Upstream endpoint the frontend called: `generations` | `edits`.
+    pub endpoint: String,
+    /// The exact prompt that was sent.
+    pub prompt: String,
+    /// Prompt provenance: `engine` | `agent-file` (default `engine`).
+    #[serde(default)]
+    pub source: Option<String>,
+    /// Template skeleton (lineage reference alongside an agent prompt).
+    #[serde(default)]
+    pub template_id: Option<String>,
+    /// `"1536x1024"` form (default: the project canvas size).
+    #[serde(default)]
+    pub size: Option<String>,
+    /// Quality tier (default: the config default).
+    #[serde(default)]
+    pub quality: Option<String>,
+    /// Recorded seed (default: a fresh random seed, same as an omitted
+    /// `--seed`, so the batch stays reproducible).
+    #[serde(default)]
+    pub seed: Option<u64>,
+    /// Optional passthrough (default: the config default).
+    #[serde(default)]
+    pub thinking: Option<String>,
+    /// Model name for the lineage record (default: the resolved model).
+    #[serde(default)]
+    pub model: Option<String>,
+}
+
+/// Decode the frontend's base64 image payload (rejected calls persist
+/// nothing — decoding happens before any project access).
+fn decode_image_base64(image_base64: &str) -> Result<Vec<u8>, RudderError> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(image_base64.trim())
+        .map_err(|e| RudderError::InvalidArg {
+            detail: format!("imageBase64 is not valid base64: {e}"),
+        })?;
+    if bytes.is_empty() {
+        return Err(RudderError::InvalidArg {
+            detail: "imageBase64 decodes to zero bytes; send the SDK `b64_json` value".into(),
+        });
+    }
+    Ok(bytes)
+}
+
+/// Map `(kind, target)` onto the generate target, validating existence so
+/// unknown pages/components keep the same `NOT_FOUND` vocabulary as the
+/// generate commands.
+fn record_target(project: &Project, kind: &str, target: &str) -> Result<Target, RudderError> {
+    match kind {
+        "board" => Ok(Target::Board),
+        "page" => {
+            if project.page(target).is_some() {
+                Ok(Target::Page(target.to_string()))
+            } else {
+                Err(RudderError::NotFound { what: format!("page `{target}`") })
+            }
+        }
+        "component" => {
+            if project.component(target).is_some() {
+                Ok(Target::Component(target.to_string()))
+            } else {
+                Err(RudderError::NotFound { what: format!("component `{target}`") })
+            }
+        }
+        other => Err(RudderError::InvalidArg {
+            detail: format!("kind must be `board`, `page` or `component`, got `{other}`"),
+        }),
+    }
+}
+
+/// Validate the prompt provenance (`engine` default, `agent-file` explicit).
+fn record_source(source: Option<&str>) -> Result<String, RudderError> {
+    const ENGINE: &str = rudder_core::prompt::SOURCE_ENGINE;
+    const AGENT_FILE: &str = rudder_core::prompt::SOURCE_AGENT_FILE;
+    match source.map(str::trim).filter(|s| !s.is_empty()) {
+        None => Ok(ENGINE.to_string()),
+        Some(s) if s == ENGINE || s == AGENT_FILE => Ok(s.to_string()),
+        Some(other) => Err(RudderError::InvalidArg {
+            detail: format!("source must be `{ENGINE}` or `{AGENT_FILE}`, got `{other}`"),
+        }),
+    }
+}
+
+/// The record seam the command runs on the blocking pool (hermetic for
+/// tests: takes the project root, not a project id).
+fn record_image_into_payload(
+    root: &Path,
+    input: &RecordImageInput,
+) -> Result<GeneratePayloadDto, CommandError> {
+    let bytes = decode_image_base64(&input.image_base64).map_err(into_command)?;
+    let prompt = input.prompt.trim().to_string();
+    if prompt.is_empty() {
+        return Err(CommandError::from_core(&RudderError::InvalidArg {
+            detail: "prompt must not be empty".into(),
+        }));
+    }
+    let project = store::load_project(root).map_err(into_command)?;
+    let target = record_target(&project, input.kind.trim(), input.target.trim())
+        .map_err(into_command)?;
+    let batch = GeneratedBatch {
+        target,
+        endpoint: input.endpoint.trim().to_string(),
+        prompt,
+        source: record_source(input.source.as_deref()).map_err(into_command)?,
+        template_id: input.template_id.clone(),
+        model: input.model.clone().unwrap_or_else(resolve_model),
+        size: input
+            .size
+            .clone()
+            .unwrap_or_else(|| project.canvas_size.to_api_string()),
+        quality: input
+            .quality
+            .clone()
+            .unwrap_or_else(|| Config::load().effective_quality().to_string()),
+        // One command call records exactly one image.
+        n: 1,
+        seed: input.seed,
+        thinking: input.thinking.clone(),
+        images: vec![bytes],
+        plan: None,
+    };
+    let report = ops::record_generated(root, batch).map_err(into_command)?;
+    generate_payload(root, report)
+}
+
+/// Persist one image the frontend generated itself. Reuses the same
+/// persistence stage as the CLI's full `generate` flow and returns the same
+/// payload shape, so the canvas refresh path is unchanged.
+#[tauri::command]
+pub async fn record_generated_image(
+    input: RecordImageInput,
+) -> Result<GeneratePayloadDto, CommandError> {
+    let root = projects::find_project_root(&input.project_id).map_err(into_command)?;
+    blocking("record", "retry the save", move || {
+        record_image_into_payload(&root, &input)
+    })
+    .await
+}
+
+// ---------------------------------------------------------------------------
 // Export / delete
 // ---------------------------------------------------------------------------
 
@@ -993,6 +1153,27 @@ pub async fn auth_logout() -> Result<(), CommandError> {
     .await
 }
 
+/// Keychain read behind `get_cms_api_key`, parameterized on the store so
+/// tests stay hermetic (never touch the developer's OS keychain).
+#[cfg(test)]
+fn cms_api_key_from_store(
+    store: &dyn credential::SecretStore,
+) -> Result<Option<String>, CommandError> {
+    credential::load_cms_api_key_in(store).map_err(into_command)
+}
+
+/// Plain cms image API key for the frontend SDK (generations/edits 直连).
+/// 路线 A 裁决的明文例外: the ONLY command that returns a secret. The key
+/// lives in webview memory only — the Rust side never logs, echoes or
+/// persists it (AGENTS.md 密钥纪律); `None` means not signed in.
+#[tauri::command]
+pub async fn get_cms_api_key() -> Result<Option<String>, CommandError> {
+    blocking("keychain", "retry the lookup", || {
+        credential::load_cms_api_key().map_err(into_command)
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1333,5 +1514,263 @@ mod tests {
             body_summary: "1000: 邮箱已被注册".into(),
         });
         assert_eq!(other.code, codes::API_ERROR);
+    }
+
+    // -----------------------------------------------------------------------
+    // C2: record_generated_image (前端 SDK 直连生图 → Rust 落盘)
+    // -----------------------------------------------------------------------
+
+    use rudder_core::config::credential::{self, MemoryStore, SecretStore};
+
+    const FAKE_PNG: &[u8] = b"desktop-fake-png-bytes";
+
+    fn b64(bytes: &[u8]) -> String {
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    }
+
+    /// Project with one page, ready to receive a recorded candidate.
+    fn page_project(tag: &str) -> PathBuf {
+        let root = tmp_root(tag);
+        let mut project = sample_project();
+        store::create_project(&root, &project).unwrap();
+        project
+            .pages
+            .push(rudder_core::store::Page::new("dashboard".into(), "b".into()));
+        store::save_project(&root, &project).unwrap();
+        root
+    }
+
+    fn record_input() -> RecordImageInput {
+        serde_json::from_value(serde_json::json!({
+            "projectId": "unused-by-the-inner-seam",
+            "kind": "page",
+            "target": "dashboard",
+            "imageBase64": b64(FAKE_PNG),
+            "endpoint": "edits",
+            "prompt": "桌面前端 SDK 生成的页面图",
+            "source": "agent-file",
+            "templateId": "page-ui-standard",
+            "size": "1536x1024",
+            "quality": "low",
+            "seed": 42,
+            "thinking": "low",
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn record_image_input_deserializes_camel_case_metadata() {
+        let input: RecordImageInput = serde_json::from_str(
+            r#"{"projectId":"p1","kind":"board","target":"","imageBase64":"aGk=",
+                "endpoint":"generations","prompt":"板"}"#,
+        )
+        .unwrap();
+        assert_eq!(input.project_id, "p1");
+        assert_eq!(input.kind, "board");
+        assert_eq!(input.target, "");
+        assert_eq!(input.image_base64, "aGk=");
+        assert_eq!(input.endpoint, "generations");
+        assert_eq!(input.prompt, "板");
+        assert!(input.source.is_none());
+        assert!(input.template_id.is_none());
+        assert!(input.size.is_none() && input.quality.is_none());
+        assert!(input.seed.is_none() && input.thinking.is_none() && input.model.is_none());
+    }
+
+    #[test]
+    fn record_generated_image_persists_candidate_lineage_and_payload() {
+        let root = page_project("record-ok");
+        let input = record_input();
+        let payload = record_image_into_payload(&root, &input).unwrap();
+
+        // Decoded bytes land in the project storage exactly as sent.
+        let candidate_file = root.join("pages/dashboard/candidates/0001.png");
+        assert_eq!(std::fs::read(&candidate_file).unwrap(), FAKE_PNG);
+
+        // Same payload shape as the generate commands (canvas refresh path).
+        assert_eq!(payload.candidates.len(), 1);
+        assert_eq!(payload.candidates[0].id, "0001");
+        assert_eq!(payload.candidates[0].path, candidate_file.display().to_string());
+        assert_eq!(payload.candidates[0].seed, Some(42));
+
+        // Lineage state matches the full-generate persistence contract.
+        let stored = store::load_project(&root).unwrap();
+        let page = stored.page("dashboard").unwrap();
+        assert_eq!(page.prompt.as_deref(), Some("桌面前端 SDK 生成的页面图"));
+        assert_eq!(page.seed, Some(42));
+        assert_eq!(page.generations.len(), 1);
+        let record = &page.generations[0];
+        assert_eq!(record.endpoint, "edits");
+        assert_eq!(record.candidate_ids, vec!["0001".to_string()]);
+        assert_eq!(record.source.as_deref(), Some("agent-file"));
+        assert_eq!(record.template_id.as_deref(), Some("page-ui-standard"));
+        assert_eq!(record.params.model, resolve_model());
+        assert_eq!(record.params.size, "1536x1024");
+        assert_eq!(record.params.quality, "low");
+        assert_eq!(record.params.n, 1);
+        assert_eq!(record.params.seed, Some(42));
+        assert_eq!(record.params.thinking.as_deref(), Some("low"));
+        assert_eq!(stored.prompt_log.len(), 1);
+
+        // The payload detail mirrors the persisted project.
+        assert_eq!(payload.project.id, stored.id);
+        assert_eq!(payload.project.pages.len(), 1);
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn record_generated_image_rejects_invalid_base64_without_persisting() {
+        let root = page_project("record-badb64");
+
+        let mut input = record_input();
+        input.image_base64 = "!!! not base64 !!!".into();
+        let err = record_image_into_payload(&root, &input).unwrap_err();
+        assert_eq!(err.code, codes::VALIDATION_ERROR);
+        assert!(err.message.contains("base64"), "{}", err.message);
+
+        // An empty payload decodes to no image — rejected too.
+        let mut input = record_input();
+        input.image_base64 = String::new();
+        let err = record_image_into_payload(&root, &input).unwrap_err();
+        assert_eq!(err.code, codes::VALIDATION_ERROR);
+
+        // Nothing was persisted by the rejected calls.
+        let stored = store::load_project(&root).unwrap();
+        assert!(stored.page("dashboard").unwrap().generations.is_empty());
+        assert_eq!(store::count_candidates(&root.join("pages/dashboard")).unwrap(), 0);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn record_generated_image_validates_kind_endpoint_source_and_prompt() {
+        let root = page_project("record-validate");
+
+        let mut input = record_input();
+        input.kind = "banner".into();
+        assert_eq!(
+            record_image_into_payload(&root, &input).unwrap_err().code,
+            codes::VALIDATION_ERROR
+        );
+
+        let mut input = record_input();
+        input.endpoint = "chat".into();
+        assert_eq!(
+            record_image_into_payload(&root, &input).unwrap_err().code,
+            codes::VALIDATION_ERROR
+        );
+
+        let mut input = record_input();
+        input.source = Some("magic".into());
+        assert_eq!(
+            record_image_into_payload(&root, &input).unwrap_err().code,
+            codes::VALIDATION_ERROR
+        );
+
+        let mut input = record_input();
+        input.prompt = "   ".into();
+        assert_eq!(
+            record_image_into_payload(&root, &input).unwrap_err().code,
+            codes::VALIDATION_ERROR
+        );
+
+        // Unknown page → NOT_FOUND (same vocabulary as generate_page).
+        let mut input = record_input();
+        input.target = "nope".into();
+        assert_eq!(
+            record_image_into_payload(&root, &input).unwrap_err().code,
+            codes::NOT_FOUND
+        );
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    // -----------------------------------------------------------------------
+    // C2: get_cms_api_key (路线 A 裁决的明文例外;密钥纪律仍全程生效)
+    // -----------------------------------------------------------------------
+
+    /// A keychain store whose reads fail (locked keychain etc.) while still
+    /// "holding" a secret — proves the secret never leaks through the error.
+    struct LockedStore {
+        _secret: &'static str,
+    }
+    impl SecretStore for LockedStore {
+        fn get_password(&self) -> rudder_core::error::Result<Option<String>> {
+            Err(RudderError::KeychainAccess { detail: "keychain is locked".into() })
+        }
+        fn set_password(&self, _key: &str) -> rudder_core::error::Result<()> {
+            Err(RudderError::KeychainAccess { detail: "keychain is locked".into() })
+        }
+        fn delete_password(&self) -> rudder_core::error::Result<()> {
+            Err(RudderError::KeychainAccess { detail: "keychain is locked".into() })
+        }
+    }
+
+    #[test]
+    fn get_cms_api_key_returns_plaintext_only_to_the_caller() {
+        // Present key: plaintext goes to the caller (the adjudicated
+        // exception — the frontend SDK needs it in memory).
+        let store = MemoryStore::with_key("sk-cms-test-9527");
+        let key = cms_api_key_from_store(&store).unwrap().expect("key present");
+        assert_eq!(key, "sk-cms-test-9527");
+
+        // What could reach a log line (the store's Debug) stays redacted.
+        assert!(format!("{store:?}").contains("redacted"), "{}", format!("{store:?}"));
+
+        // Missing key → None: a normal signed-out state, not an error.
+        assert!(cms_api_key_from_store(&MemoryStore::new()).unwrap().is_none());
+
+        // A failing read maps onto KEYCHAIN_ACCESS and never carries the
+        // secret it could not read.
+        let locked = LockedStore { _secret: "sk-cms-test-9527" };
+        let err = cms_api_key_from_store(&locked).unwrap_err();
+        assert_eq!(err.code, codes::KEYCHAIN_ACCESS);
+        let rendered = format!(
+            "{err:?} {}",
+            serde_json::to_string(&err).unwrap()
+        );
+        assert!(
+            !rendered.contains("sk-cms-test-9527"),
+            "error path leaked a secret: {rendered}"
+        );
+    }
+
+    #[test]
+    fn get_cms_api_key_reply_serializes_null_when_absent() {
+        let absent = cms_api_key_from_store(&MemoryStore::new()).unwrap();
+        assert!(serde_json::to_value(&absent).unwrap().is_null());
+        let present = cms_api_key_from_store(&MemoryStore::with_key("sk-cms-test-9527")).unwrap();
+        assert_eq!(
+            serde_json::to_value(&present).unwrap(),
+            serde_json::json!("sk-cms-test-9527")
+        );
+    }
+
+    /// `get_credential_status` semantics must keep covering the cms key: a
+    /// stored `cms-api-key` counts as a configured credential and the status
+    /// stays masked (never carries the plaintext).
+    #[test]
+    fn credential_status_covers_cms_key_presence() {
+        let cms_only = credential::resolve_image_api_key_in(
+            &MemoryStore::with_key("sk-cms-only-9527"),
+            &MemoryStore::new(),
+        );
+        let status = credential_status_from(
+            "https://veren.top/api".into(),
+            "gpt-image-2".into(),
+            &cms_only,
+        );
+        assert!(
+            status.key_tail.is_some(),
+            "a stored cms key must count as a configured credential"
+        );
+        // Without an env key shadowing the chain, the cms keychain leg is
+        // the reported source.
+        if std::env::var("OPENAI_API_KEY").is_err() {
+            assert_eq!(status.key_source, "keychain");
+        }
+        // And the status stays masked even when the cms chain supplied it.
+        let rendered = serde_json::to_value(&status).unwrap().to_string();
+        assert!(!rendered.contains("sk-cms-only-9527"), "status leaked the key: {rendered}");
     }
 }

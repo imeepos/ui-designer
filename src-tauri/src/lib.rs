@@ -28,6 +28,8 @@ pub fn run() {
             commands::generate_component,
             commands::pick_component,
             commands::update_component,
+            commands::record_generated_image,
+            commands::get_cms_api_key,
             commands::export_project,
             commands::delete_artifact,
             commands::get_credential_status,

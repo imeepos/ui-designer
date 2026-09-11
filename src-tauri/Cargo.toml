@@ -19,3 +19,4 @@ rudder-core = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
 uuid = { workspace = true }
+base64 = { workspace = true }
