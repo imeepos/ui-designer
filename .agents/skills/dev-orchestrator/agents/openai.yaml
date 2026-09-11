@@ -1,0 +1,4 @@
+interface:
+  display_name: "开发节奏编排器"
+  short_description: "协调多会话开发节奏：定计划、拆任务、派发验收与汇总"
+  default_prompt: "使用 $dev-orchestrator 以项目负责人身份接管本项目：读取 TODO.md 与 AGENTS.md 制定开发计划，拆分任务派发给子会话，主分支汇总验收并归档会话。"

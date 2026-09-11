@@ -1306,7 +1306,7 @@ mod tests {
         let json = serde_json::to_value(&signed_in).unwrap();
         assert_eq!(json["loggedIn"], true);
         assert_eq!(json["account"]["user"]["email"], "fan@example.com");
-        assert_eq!(json["account"]["user"]["createdAt"], 1_700_000_000);
+        assert_eq!(json["account"]["user"]["created_at"], 1_700_000_000);
         assert_eq!(json["account"]["balance"], 4200);
         // Profile + balance only: no cookie/key field may ever appear.
         let rendered = json.to_string().to_lowercase();
