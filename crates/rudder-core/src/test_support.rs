@@ -41,6 +41,20 @@ impl MockServer {
     pub(crate) fn start(
         responder: impl Fn(&RecordedRequest, usize) -> (u16, Vec<u8>) + Send + Sync + 'static,
     ) -> MockServer {
+        Self::start_with_headers(move |req, index| {
+            let (status, body) = responder(req, index);
+            (status, Vec::new(), body)
+        })
+    }
+
+    /// Like [`MockServer::start`] but the responder also emits extra response
+    /// headers (e.g. `Set-Cookie`) — `(status, headers, body)`.
+    pub(crate) fn start_with_headers(
+        responder: impl Fn(&RecordedRequest, usize) -> (u16, Vec<(String, String)>, Vec<u8>)
+            + Send
+            + Sync
+            + 'static,
+    ) -> MockServer {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
         let addr = listener.local_addr().expect("local addr");
         let requests: Arc<Mutex<Vec<RecordedRequest>>> = Arc::new(Mutex::new(Vec::new()));
@@ -59,8 +73,8 @@ impl MockServer {
                             guard.push(req.clone());
                             guard.len() - 1
                         };
-                        let (status, body) = responder(&req, index);
-                        let _ = respond(&mut stream, status, &body);
+                        let (status, headers, body) = responder(&req, index);
+                        let _ = respond(&mut stream, status, &headers, &body);
                     });
                 }
             });
@@ -125,7 +139,12 @@ fn read_request(stream: &mut TcpStream) -> std::io::Result<Option<RecordedReques
     Ok(Some(RecordedRequest { method, path, headers, body }))
 }
 
-fn respond(stream: &mut TcpStream, status: u16, body: &[u8]) -> std::io::Result<()> {
+fn respond(
+    stream: &mut TcpStream,
+    status: u16,
+    headers: &[(String, String)],
+    body: &[u8],
+) -> std::io::Result<()> {
     let reason = match status {
         200 => "OK",
         400 => "Bad Request",
@@ -133,10 +152,17 @@ fn respond(stream: &mut TcpStream, status: u16, body: &[u8]) -> std::io::Result<
         500 => "Internal Server Error",
         _ => "Unknown",
     };
-    let head = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+    let mut head = format!(
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",
         body.len()
     );
+    for (name, value) in headers {
+        head.push_str(name);
+        head.push_str(": ");
+        head.push_str(value);
+        head.push_str("\r\n");
+    }
+    head.push_str("Connection: close\r\n\r\n");
     stream.write_all(head.as_bytes())?;
     stream.write_all(body)?;
     stream.flush()
