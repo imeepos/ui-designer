@@ -1341,6 +1341,30 @@ pub async fn get_cms_api_key() -> Result<Option<String>, CommandError> {
     .await
 }
 
+/// Server base URL + default image model for the frontend SDK client
+/// (C2-FE 预授权的薄只读例外). Both fields forward the existing resolvers
+/// verbatim — no new resolution logic, and no secrets here (the key travels
+/// exclusively through `get_cms_api_key`).
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerationConfigDto {
+    /// `resolve_server_base_url()` — e.g. `https://veren.top/api`; the
+    /// webview appends `/v1` to form the openai SDK `baseURL`.
+    pub base_url: String,
+    /// `resolve_model()` — the effective default image model.
+    pub model: String,
+}
+
+/// Thin read-only mirror of the generation endpoint config. Sync: both
+/// resolvers are plain config/env reads (no keychain, no network).
+#[tauri::command]
+pub fn get_generation_config() -> GenerationConfigDto {
+    GenerationConfigDto {
+        base_url: resolve_server_base_url(),
+        model: resolve_model(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2061,6 +2085,30 @@ mod tests {
             serde_json::to_value(&present).unwrap(),
             serde_json::json!("sk-cms-test-9527")
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // C2: get_generation_config (前端 SDK 直连的薄只读镜像)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn get_generation_config_forwards_the_existing_resolvers() {
+        // Pure forwarding: the DTO must echo the resolvers verbatim under
+        // whatever env/config the test host has (no resolution drift, no
+        // secret, hermetic without env mutation).
+        let config = get_generation_config();
+        assert_eq!(config.base_url, resolve_server_base_url());
+        assert_eq!(config.model, resolve_model());
+        assert!(!config.base_url.is_empty());
+        assert!(!config.model.is_empty());
+
+        // Wire shape the webview depends on: camelCase `baseUrl`/`model`
+        // and no key material of any kind.
+        let json = serde_json::to_value(&config).unwrap();
+        assert_eq!(json, serde_json::json!({
+            "baseUrl": resolve_server_base_url(),
+            "model": resolve_model(),
+        }));
     }
 
     /// `get_credential_status` semantics must keep covering the cms key: a
