@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+### 收官：删除自建服务端，文档对齐 cms 对接口径
+
+- 删除自建 Go 服务端目录 `server/`（Go 源码、systemd 单元、`deploy.sh`、adminui、`bin/` 二进制）：生产入口已切换 cms（138:8800），旧 rudder-server 停用。
+- ARCHITECTURE §11 改写为「cms 服务对接」：基址与路由映射（veren.top `/api/` → cms `/v1/...`）、凭证链（注册/登录 → 自助 API Key → 生图 Bearer；会话 Cookie 存钥匙串 `cms-session`）、cms points 域按次扣点、上游配置走 cms 管理面（sensitive 加密）。
+- PRD 边界同步：不自建服务端，账号与按次计费由外部 cms 服务承载。
+
 ### 服务端上线：用户系统 + 按次计费 + 客户端 0 配置
 
 - 新增 Go 后端 `server/`（rudder-server）：用户注册/登录（JWT）、按次积分计费（默认每图 10 积分，可配）、gpt-image-2 上游代理、管理 API 与内置 Web 管理台（`/api/v1/admin/console`）。

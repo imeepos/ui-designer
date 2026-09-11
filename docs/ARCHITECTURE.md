@@ -122,12 +122,11 @@ rudder config test                        # 输出 base、key 来源 env/keychai
 - `pnpm tauri build`（@tauri-apps/cli 为 devDependency；cargo install tauri-cli 本机编译失败已弃用）出 macOS .app/.dmg（aarch64）。
 - CLI 单独 `cargo build --release`，随包附 `install.md`。
 
-## 11. 服务端（server/ · rudder-server）
-Go 后端，让客户端**0 配置**：不再自备 baseUrl/apiKey/model，注册登录即用，按次计费。
+## 11. cms 服务对接（外部服务端，本仓库不自建）
+服务端能力全部由外部 **cms** 服务承载（独立仓库，本仓库只读对接；原自建 Go 服务端 `server/` 已删除）：账号注册/登录、API Key 自助签发、按次计费、gpt-image-2 上游代理。客户端注册登录即用，0 配置。
 
-- 技术栈：Go 1.22+ 标准库路由 + `pgx`（Postgres）+ `golang-jwt` + `bcrypt`；无 Web 框架。
-- 部署形态：nginx（veren.top，TLS）`location /api/v1/` → `127.0.0.1:8799` rudder-server → 上游 gpt-image-2 服务；Postgres 复用服务器 docker 实例（库 `rudder`）；systemd 单元 `rudder-server`（env 文件 `/etc/rudder-server.env`）。
-- API（前缀 `/api/v1`）：`auth/register|login|me|change-password`；`images/generations|edits`（OpenAI 兼容，`model` 服务端注入，Bearer=用户 JWT）；`models`（免费探测）；`usage`（余额+流水）；admin：`users` 列表/patch/充值/重置密码、`settings`（积分单价/注册开关/上游地址与密钥——只回尾 4 位）、`stats`、`generations`、`console`（内置 Web 管理台）。
-- 计费：每图 `credits_per_image` 积分（默认 10，admin 可配）；预扣（事务+行锁）→ 上游失败全额退款；admin 角色免计费；注册赠送可配。
-- 凭证纪律：上游密钥只存 Postgres `settings` 表；API/控制台仅显示尾 4 位；绝不写日志。
+- 基址与路由映射：默认基址 `https://veren.top/api`；nginx 统一入口 `veren.top /api/` → cms `/v1/...`——生图走 OpenAI 兼容 `/v1/images/generations|edits`（前端 openai SDK 直连），账户/Key/用量走 cms 自有 `/v1/...` 路由。
+- 凭证链：注册/登录 → 自助签发 API Key → 生图 `Bearer <API Key>`。
+- 计费：cms points 域按次扣点；余额与流水经 cms 接口查询，生成后刷新；积分不足有专属文案与四态呈现。
+- 上游配置：上游 Base URL / 模型 / API Key 全部在 cms 管理面维护（sensitive 字段加密存储，仅回尾 4 位）；本仓库不保存任何上游密钥。
 - 客户端映射：桌面端/CLI `base` 默认 `https://veren.top/api`（cms 服务）；账户链走 cms 会话 Cookie（登录后存钥匙串 account `cms-session`，登出即清），生图 Bearer 用钥匙串 account `cms-api-key`（登录时自动轮换 mint）；旧 BYO 链（`OPENAI_API_KEY`/钥匙串 `openai-api-key`）保留为 fallback。
