@@ -1,0 +1,19 @@
+Purpose: a brand identity board (品牌身份板) for "学术写作台".
+Brand keywords come first — the whole sheet must express: 论文写作工作流
+Canvas: 1024x1364, pure white background (for clean cut-out). ONE labeled sheet, keyword-led:
+1. LOGO — one primary logo direction, centered, generous clear space; a small row shows the same logo at large / medium / icon sizes to prove it stays readable.
+2. KEYWORDS — the brand keywords printed verbatim as a short label row under the logo.
+3. COLOR — primary / accent / neutral swatch chips, each with its exact hex code printed as a label.
+4. TYPE — one headline specimen plus one body specimen, labeled with the intended mood (no real font names required).
+5. NEVER DO — exactly 3 forbidden-usage rules, printed as short labeled rows, each starting with "never".
+Composition reads like a top design agency proposal page: tidy but not rigid; the logo stays the single hero.
+Constraints:
+- text-hardcode: every visible label is real UI text spelled exactly as briefed; CJK glyphs must be correct — no lorem ipsum, no gibberish glyphs, no placeholder boxes
+- explicit-negatives: forbidden: watermarks, invented brand logos, random decorative icons, gibberish text; additionally forbidden per project: 不要通用放大镜图标; no dark mode
+- canvas-locked: compose for exactly 1024x1364 and keep every element inside the canvas
+- explicit-counts: every repeated element (nav items, cards, buttons, icons, sections) appears exactly as many times as the brief states — never invent or drop items
+- board-cohesion: all sections share one palette and one type system; the sheet reads as a single spec page, not a collage
+- flat-ui: flat vector UI mockup, high fidelity, crisp edges, generous whitespace; no photorealistic scenes, no 3D perspective, no device frames beyond the canvas
+- single-output: render exactly ONE finished sheet — no moodboard, no multiple alternative concepts, no process or comparison shots
+- style-feature-not-name: interpret style references through their features (palette, stroke, mood); never reproduce a named artwork's composition
+- small-size-legibility: labels stay legible at small sizes; prefer short labels over dense micro-copy

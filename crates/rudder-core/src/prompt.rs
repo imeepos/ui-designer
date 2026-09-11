@@ -686,3 +686,120 @@ mod tests {
         assert!(json.get("templateId").is_none(), "absent template must not serialize");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Golden parity harness (C6): the Rust engine is the source of truth for the
+// checked-in goldens under `src/lib/generation/__goldens__/`; the vitest
+// suite (`src/lib/generation/prompt.golden.test.ts`) asserts the TS port
+// reproduces them byte-for-byte, so CLI/desktop prompt drift fails a test.
+//
+// One command regenerates the goldens after an INTENDED engine/template
+// change (then update the TS side in the same commit):
+//
+//     RUDDER_UPDATE_GOLDENS=1 cargo test -p rudder-core --lib goldens
+//
+// Without the env var this test re-asserts the Rust output against the
+// checked-in files.
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod goldens {
+    use super::*;
+    use crate::canvas::CanvasSize;
+
+    /// `src/lib/generation/__goldens__/` next to the TS port under test.
+    fn goldens_dir() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../src/lib/generation/__goldens__")
+    }
+
+    /// Fixture A: the representative full spec — real briefs, web canvas, no
+    /// negative hints, no verbatim labels.
+    fn fixture_a() -> (Project, Page, Component) {
+        (
+            Project::new(
+                "远洋航运 SaaS",
+                CanvasSize::new(1536, 1024, None),
+                "远洋航运行业，专业克制",
+                "海军蓝 + 黄铜点缀，圆角 8px，紧凑密度",
+            ),
+            Page::new("dashboard".into(), "顶部指标卡x4，中部折线图区".into()),
+            Component::new("button-set".into(), "buttons".into(), "主/次/幽灵按钮三态".into()),
+        )
+    }
+
+    /// Fixture B: the edge paths — untrimmed name (trim), EMPTY style brief
+    /// (invariants lose the mood line, empty-slot line drop), project
+    /// negative hints (explicit-negatives extension), a custom portrait
+    /// canvas (canvas-locked substitution) and verbatim `Labels:` in both
+    /// target briefs.
+    fn fixture_b() -> (Project, Page, Component) {
+        let mut project = Project::new(
+            "  学术写作台  ",
+            CanvasSize::new(1024, 1364, None),
+            "论文写作工作流",
+            "",
+        );
+        project.negative_hints = vec!["不要通用放大镜图标".into(), "no dark mode".into()];
+        (
+            project,
+            Page::new(
+                "landing".into(),
+                "导航 4 项（产品/定价/客户/博客），hero 双按钮，3 特性段。Labels: 产品|定价|客户|博客".into(),
+            ),
+            Component::new(
+                "input-set".into(),
+                "inputs".into(),
+                "默认/禁用/错误三态。Labels: 常规|禁用|错误".into(),
+            ),
+        )
+    }
+
+    /// Every builtin template × fixture pair: 5 templates × 2 fixtures.
+    fn golden_cases() -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        for (tag, fixture) in [("a", fixture_a()), ("b", fixture_b())] {
+            let (project, page, component) = fixture;
+            for template_id in [
+                templates::BOARD_TEMPLATE_ID,
+                "brand-identity-lite",
+                templates::PAGE_TEMPLATE_ID,
+                "page-landing-sections",
+                templates::COMPONENT_TEMPLATE_ID,
+            ] {
+                let template = templates::load_builtin(template_id).expect("builtin template");
+                let text = match template.applies_to.as_str() {
+                    "board" => compose_board(&project, Some(&template)),
+                    "page" => compose_page(&project, &page, Some(&template)),
+                    _ => compose_component(&project, &component, Some(&template)),
+                }
+                .expect("golden case composes");
+                out.push((format!("{template_id}--{tag}.txt"), text));
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn goldens_match_the_checked_in_fixtures() {
+        let cases = golden_cases();
+        assert_eq!(cases.len(), 10, "every builtin template × fixture pair has a golden");
+        let update = std::env::var("RUDDER_UPDATE_GOLDENS").ok().as_deref() == Some("1");
+        let dir = goldens_dir();
+        std::fs::create_dir_all(&dir).expect("create goldens dir");
+        for (name, text) in cases {
+            let path = dir.join(&name);
+            if update {
+                std::fs::write(&path, &text).expect("write golden file");
+                continue;
+            }
+            let expected = std::fs::read_to_string(&path).unwrap_or_else(|e| {
+                panic!(
+                    "golden `{name}` unreadable ({e}); regenerate with \
+                     `RUDDER_UPDATE_GOLDENS=1 cargo test -p rudder-core --lib goldens`"
+                )
+            });
+            assert_eq!(text, expected, "Rust engine drifted from golden `{name}`");
+        }
+    }
+}

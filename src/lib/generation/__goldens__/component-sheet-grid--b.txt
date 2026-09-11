@@ -1,0 +1,27 @@
+Image 1 是本产品设计系统总板。严格沿用它的设计语言，为单个组件族出细节图。
+Task: a component detail sheet for the "inputs" family: 默认/禁用/错误三态。
+Sheet contract:
+- tidy grid: a fixed column count, equal cell sizes, consistent gutters; every cell labeled "variant · state".
+- cover every variant and state in the brief, at minimum default / hover / active / disabled / focus.
+- same-family identity lock: identical geometry, radius and styling across all cells; only the labeled state or variant changes between cells.
+- small-size legibility: all labels stay readable when the sheet is viewed at 50% zoom; short real labels, no decorative filler text.
+Invariants (do NOT change): strictly reuse Image 1's exact
+- color palette (same hex values for primary/background/text/accent),
+- typography family, sizes and weights,
+- corner radii and border treatment,
+- component styling (buttons, inputs, cards), icon style and stroke weight,
+- spacing rhythm and density.
+Only compose NEW layout/content; never redesign the system.
+Verbatim labels: the following must appear exactly as written, character-for-character, one per element — "常规" "禁用" "错误"; never translate, reword, add or drop them.
+Constraints:
+- text-hardcode: every visible label is real UI text spelled exactly as briefed; CJK glyphs must be correct — no lorem ipsum, no gibberish glyphs, no placeholder boxes
+- explicit-negatives: forbidden: watermarks, invented brand logos, random decorative icons, gibberish text; additionally forbidden per project: 不要通用放大镜图标; no dark mode
+- canvas-locked: compose for exactly 1024x1364 and keep every element inside the canvas
+- explicit-counts: every repeated element (nav items, cards, buttons, icons, sections) appears exactly as many times as the brief states — never invent or drop items
+- consistency-first: consistency beats novelty: reuse the anchor's palette, typography, corner radii, component styling and spacing before adding anything new
+- identity-lock: all cells show the same component family: identical geometry and styling; only the labeled state or variant changes between cells
+- flat-ui: flat vector UI mockup, high fidelity, crisp edges, generous whitespace; no photorealistic scenes, no 3D perspective, no device frames beyond the canvas
+- single-output: render exactly ONE finished sheet — no moodboard, no multiple alternative concepts, no process or comparison shots
+- brand-accent-only: brand color works as accents (lines, labels, icons, buttons), not full-bleed color fields
+- style-feature-not-name: interpret style references through their features (palette, stroke, mood); never reproduce a named artwork's composition
+- small-size-legibility: labels stay legible at small sizes; prefer short labels over dense micro-copy

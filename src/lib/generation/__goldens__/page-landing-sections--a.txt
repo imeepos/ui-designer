@@ -1,0 +1,28 @@
+Image 1 是本产品设计系统总板。严格沿用它的设计语言，只组合新的页面内容。
+Task: design the "dashboard" landing page as one high-fidelity UI mockup, composed section by section.
+Sections, top to bottom, from the brief: 顶部指标卡x4，中部折线图区
+Section contract:
+- header: logo left; nav items listed one by one exactly as the brief counts them; one primary CTA button on the right.
+- hero: one headline, one subheadline, two buttons (primary + secondary), three feature callouts with icons.
+- every middle section: one visual block plus one text block, with the element count stated in the brief.
+- social proof strip: a client logo wall plus 1-2 short testimonial cards.
+- closing CTA band: one-line pitch, one input field, one glowing primary button.
+Headlines and nav items are real text spelled exactly as briefed; all body copy renders as simulated text blocks.
+Invariants (do NOT change): strictly reuse Image 1's exact
+- color palette (same hex values for primary/background/text/accent),
+- typography family, sizes and weights,
+- corner radii and border treatment,
+- component styling (buttons, inputs, cards), icon style and stroke weight,
+- spacing rhythm and density.
+Overall mood stays: 海军蓝 + 黄铜点缀，圆角 8px，紧凑密度
+Only compose NEW layout/content; never redesign the system.
+Constraints:
+- text-hardcode: every visible label is real UI text spelled exactly as briefed; CJK glyphs must be correct — no lorem ipsum, no gibberish glyphs, no placeholder boxes
+- explicit-negatives: forbidden: watermarks, invented brand logos, random decorative icons, gibberish text
+- canvas-locked: compose for exactly 1536x1024 and keep every element inside the canvas
+- explicit-counts: every repeated element (nav items, cards, buttons, icons, sections) appears exactly as many times as the brief states — never invent or drop items
+- consistency-first: consistency beats novelty: reuse the anchor's palette, typography, corner radii, component styling and spacing before adding anything new
+- flat-ui: flat vector UI mockup, high fidelity, crisp edges, generous whitespace; no photorealistic scenes, no 3D perspective, no device frames beyond the canvas
+- single-output: render exactly ONE finished sheet — no moodboard, no multiple alternative concepts, no process or comparison shots
+- brand-accent-only: brand color works as accents (lines, labels, icons, buttons), not full-bleed color fields
+- style-feature-not-name: interpret style references through their features (palette, stroke, mood); never reproduce a named artwork's composition

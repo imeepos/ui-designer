@@ -1,0 +1,20 @@
+Purpose: a UI design system board (风格总板) for the product "远洋航运 SaaS".
+Brand brief: 远洋航运行业，专业克制
+Style brief: 海军蓝 + 黄铜点缀，圆角 8px，紧凑密度
+Canvas: 1536x1024. Lay out ONE labeled sheet with these sections:
+1. COLOR PALETTE — 5-8 swatch chips as rounded rectangles, each with its exact hex code printed as a label under or inside the chip.
+2. TYPOGRAPHY — type hierarchy specimen: display / heading / subheading / body / caption rows, each labeled with size and weight.
+3. COMPONENT SAMPLES — a row of buttons (primary, secondary, ghost; default/hover/disabled states), one text input, one select, one card, one toggle, one checkbox, labeled.
+4. ICON STYLE — a row of 6-8 sample icons showing stroke weight and corner treatment.
+5. SPACING & GRID RULES — a spacing scale diagram (4/8/16/24/32px) and corner-radius samples per element class.
+Sections separated by thin dividers, generous margins, engineering spec-sheet clarity.
+Constraints:
+- text-hardcode: every visible label is real UI text spelled exactly as briefed; CJK glyphs must be correct — no lorem ipsum, no gibberish glyphs, no placeholder boxes
+- explicit-negatives: forbidden: watermarks, invented brand logos, random decorative icons, gibberish text
+- canvas-locked: compose for exactly 1536x1024 and keep every element inside the canvas
+- explicit-counts: every repeated element (nav items, cards, buttons, icons, sections) appears exactly as many times as the brief states — never invent or drop items
+- board-cohesion: all sections share one palette and one type system; the sheet reads as a single spec page, not a collage
+- flat-ui: flat vector UI mockup, high fidelity, crisp edges, generous whitespace; no photorealistic scenes, no 3D perspective, no device frames beyond the canvas
+- single-output: render exactly ONE finished sheet — no moodboard, no multiple alternative concepts, no process or comparison shots
+- style-feature-not-name: interpret style references through their features (palette, stroke, mood); never reproduce a named artwork's composition
+- small-size-legibility: labels stay legible at small sizes; prefer short labels over dense micro-copy

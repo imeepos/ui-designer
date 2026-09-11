@@ -62,7 +62,11 @@ pnpm install && pnpm dev          # 浏览器预览（无 Tauri 壳）
 pnpm tauri dev                    # 桌面端开发模式
 pnpm build                        # 前端类型检查 + 产物构建
 cargo test --workspace            # Rust 单元与集成测试
+pnpm test                         # 前端测试（含 prompt 双引擎 golden 对拍）
 pnpm tauri build                  # 打包 macOS .app/.dmg
+RUDDER_UPDATE_GOLDENS=1 cargo test -p rudder-core --lib goldens
+                                  # prompt golden 再生成（改动引擎/模板后）；
+                                  # 见 src/lib/generation/__goldens__/README.md
 ```
 
 ## 文档索引

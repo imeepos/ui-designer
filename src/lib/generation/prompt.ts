@@ -256,8 +256,8 @@ function baseVars(project: PromptProject): Vars {
 }
 
 /** Compose the design-system board prompt (ARCHITECTURE §5.1). */
-export function composeBoardPrompt(project: PromptProject): string {
-  const prompt = fillTemplate(BOARD_TEMPLATE, baseVars(project));
+export function composeBoardPrompt(project: PromptProject, template?: TemplateJson): string {
+  const prompt = fillTemplate(template ?? BOARD_TEMPLATE, baseVars(project));
   return `${prompt}\n${renderConstraints("board", project)}`;
 }
 
@@ -267,7 +267,11 @@ export interface PromptPage {
 }
 
 /** Compose a page edit prompt: anchor reference + brief + invariants. */
-export function composePagePrompt(project: PromptProject, page: PromptPage): string {
+export function composePagePrompt(
+  project: PromptProject,
+  page: PromptPage,
+  template?: TemplateJson,
+): string {
   const { labels, kept } = extractVerbatimLabels(page.brief.trim());
   const vars: Vars = {
     ...baseVars(project),
@@ -275,7 +279,7 @@ export function composePagePrompt(project: PromptProject, page: PromptPage): str
     "page.brief": kept,
     "anchor.reference": ANCHOR_REFERENCE,
   };
-  let prompt = fillTemplate(PAGE_TEMPLATE, vars);
+  let prompt = fillTemplate(template ?? PAGE_TEMPLATE, vars);
   if (labels.length > 0) prompt += `\n${verbatimConstraint(labels)}`;
   return `${prompt}\n${renderConstraints("page", project)}`;
 }
@@ -291,6 +295,7 @@ export interface PromptComponent {
 export function composeComponentPrompt(
   project: PromptProject,
   component: PromptComponent,
+  template?: TemplateJson,
 ): string {
   const { labels, kept } = extractVerbatimLabels(component.brief.trim());
   const vars: Vars = {
@@ -300,7 +305,7 @@ export function composeComponentPrompt(
     "component.brief": kept,
     "anchor.reference": ANCHOR_REFERENCE,
   };
-  let prompt = fillTemplate(COMPONENT_TEMPLATE, vars);
+  let prompt = fillTemplate(template ?? COMPONENT_TEMPLATE, vars);
   if (labels.length > 0) prompt += `\n${verbatimConstraint(labels)}`;
   return `${prompt}\n${renderConstraints("component", project)}`;
 }

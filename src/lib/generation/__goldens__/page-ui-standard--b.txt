@@ -1,0 +1,23 @@
+Image 1 是本产品设计系统总板。严格沿用它的设计语言，只组合新的页面内容。
+Task: design the full "landing" page as one high-fidelity UI mockup.
+Layout brief: 导航 4 项（产品/定价/客户/博客），hero 双按钮，3 特性段。
+Structure the layout in five passes before detailing: (1) name every region top to bottom, (2) give each region its exact element counts from the brief, (3) fix the alignment grid and margins, (4) apply the anchor's style, (5) check that no text overflows its container.
+Real text only for headings, nav items, button labels and the labels the brief quotes; long body copy renders as simulated text blocks.
+Invariants (do NOT change): strictly reuse Image 1's exact
+- color palette (same hex values for primary/background/text/accent),
+- typography family, sizes and weights,
+- corner radii and border treatment,
+- component styling (buttons, inputs, cards), icon style and stroke weight,
+- spacing rhythm and density.
+Only compose NEW layout/content; never redesign the system.
+Verbatim labels: the following must appear exactly as written, character-for-character, one per element — "产品" "定价" "客户" "博客"; never translate, reword, add or drop them.
+Constraints:
+- text-hardcode: every visible label is real UI text spelled exactly as briefed; CJK glyphs must be correct — no lorem ipsum, no gibberish glyphs, no placeholder boxes
+- explicit-negatives: forbidden: watermarks, invented brand logos, random decorative icons, gibberish text; additionally forbidden per project: 不要通用放大镜图标; no dark mode
+- canvas-locked: compose for exactly 1024x1364 and keep every element inside the canvas
+- explicit-counts: every repeated element (nav items, cards, buttons, icons, sections) appears exactly as many times as the brief states — never invent or drop items
+- consistency-first: consistency beats novelty: reuse the anchor's palette, typography, corner radii, component styling and spacing before adding anything new
+- flat-ui: flat vector UI mockup, high fidelity, crisp edges, generous whitespace; no photorealistic scenes, no 3D perspective, no device frames beyond the canvas
+- single-output: render exactly ONE finished sheet — no moodboard, no multiple alternative concepts, no process or comparison shots
+- brand-accent-only: brand color works as accents (lines, labels, icons, buttons), not full-bleed color fields
+- style-feature-not-name: interpret style references through their features (palette, stroke, mood); never reproduce a named artwork's composition
