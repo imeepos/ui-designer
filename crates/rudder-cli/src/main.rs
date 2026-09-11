@@ -928,7 +928,9 @@ fn config_set_api_key(argv_value: Option<&str>) -> Result<CmdResult, RudderError
 async fn config_test() -> Result<CmdResult, RudderError> {
     let base = resolve_base_url();
     let model = rudder_core::config::resolve_model();
-    let resolution = credential::resolve_api_key();
+    // The probe must reflect the credential generation will actually use:
+    // the cms chain (keychain `cms-api-key`) with the legacy BYO fallback.
+    let resolution = credential::resolve_image_api_key();
     let source = resolution.source.as_str();
     let Some(key) = resolution.key else {
         return Ok(CmdResult::new(

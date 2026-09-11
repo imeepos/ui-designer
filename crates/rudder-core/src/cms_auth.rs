@@ -8,9 +8,9 @@
 //! - Every answer is the envelope `{code, message, data}`; **code = 0 is the
 //!   only success signal**, the HTTP status carries transport semantics only.
 //!   Non-zero codes map to [`RudderError::ApiError`] with a `"CODE: message"`
-//!   summary (truncated to 200 chars, like `server_auth`); network/timeout
-//!   failures map to [`RudderError::ApiUnreachable`]; a 2xx body that does
-//!   not parse maps to [`RudderError::BadResponse`].
+//!   summary (truncated to 200 chars, same as the legacy auth client);
+//!   network/timeout failures map to [`RudderError::ApiUnreachable`]; a 2xx
+//!   body that does not parse maps to [`RudderError::BadResponse`].
 //! - Endpoints used here: `POST /v1/users/register`, `POST /v1/users/login`
 //!   (answers `Set-Cookie: cms_session=…`; wrong password 1001, disabled
 //!   account 1002, unauthenticated 1003, duplicate email 1000),
@@ -59,6 +59,7 @@ pub const CODE_UNAUTHENTICATED: i64 = 1003;
 const REGISTER_PATH: &str = "/v1/users/register";
 const LOGIN_PATH: &str = "/v1/users/login";
 const ME_PATH: &str = "/v1/me";
+const LOGOUT_PATH: &str = "/v1/users/logout";
 const APIKEYS_PATH: &str = "/v1/apikeys";
 /// Page size 1: login/account status only need the balance.
 const POINTS_ME_PATH: &str = "/v1/points/me?limit=1";
@@ -205,6 +206,28 @@ pub async fn account_status_in(
     let user = parse_user(ME_PATH, data)?;
     let balance = fetch_balance(&http, base, &cookie).await?;
     Ok(CmsAccount { user, balance })
+}
+
+/// Best-effort server-side sign-out: `POST /v1/users/logout` with the
+/// stored session cookie. Deliberately infallible in spirit — the call
+/// answers `Ok(())` even when the server is unreachable, the envelope is an
+/// error, or no cookie is stored, because the local keychain cleanup is what
+/// actually ends the session; the server call only shortens the cookie's
+/// server-side life.
+pub async fn logout(base: &str) {
+    if keychain_disabled() {
+        return;
+    }
+    let Ok(Some(cookie)) = load_cms_session_in(&CMS_SESSION_STORE) else {
+        return;
+    };
+    logout_in(base, &cookie).await;
+}
+
+/// [`logout`] with an explicit cookie (hermetic tests; no keychain read).
+pub async fn logout_in(base: &str, cookie: &str) {
+    let Ok(http) = http_client() else { return };
+    let _ = post_envelope(&http, base, LOGOUT_PATH, json!({}), Some(cookie)).await;
 }
 
 /// True when `err` is the cms "session invalid / not logged in" failure
@@ -400,7 +423,7 @@ async fn fetch_balance(http: &reqwest::Client, base: &str, cookie: &str) -> Resu
     Ok(points.balance)
 }
 
-/// Whitespace-flattened, 200-char-truncated summary (server_auth semantics).
+/// Whitespace-flattened, 200-char-truncated summary (legacy semantics).
 fn summarize_body(text: &str) -> String {
     let flat: String = text.chars().map(|c| if c.is_whitespace() { ' ' } else { c }).collect();
     let mut truncated: String = flat.chars().take(200).collect();
@@ -860,6 +883,25 @@ mod tests {
         assert_eq!(err.code(), "INVALID_ARG", "kill switch must stop login before network");
         let err = account_status("http://127.0.0.1:1").await.unwrap_err();
         assert_eq!(err.code(), "INVALID_ARG");
+    }
+
+    #[tokio::test]
+    async fn logout_posts_the_session_cookie_and_is_infallible() {
+        let server = MockServer::start(move |_req, _i| (200, env_ok(Value::Null)));
+        logout_in(&server.url(), COOKIE_PLAINTEXT).await;
+        let recorded = server.recorded();
+        assert_eq!(recorded.len(), 1, "exactly one logout POST");
+        assert_eq!(recorded[0].method, "POST");
+        assert_eq!(recorded[0].path, LOGOUT_PATH);
+        assert_eq!(
+            recorded[0].header("cookie"),
+            Some(session_cookie_header(COOKIE_PLAINTEXT).as_str()),
+            "the stored cookie rides the logout call"
+        );
+        assert!(recorded[0].header("authorization").is_none());
+
+        // An unreachable server must not turn sign-out into an error path.
+        logout_in("http://127.0.0.1:1", COOKIE_PLAINTEXT).await;
     }
 
     #[test]

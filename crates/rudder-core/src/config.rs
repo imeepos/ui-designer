@@ -14,9 +14,9 @@ use std::path::{Path, PathBuf};
 pub mod credential;
 
 pub use credential::{
-    clear_api_key, clear_session_token, resolve_api_key, resolve_session_token, set_api_key,
-    store_session_token, test_connection, ApiKeyResolution, ConnectionTestReport, KeySource,
-    KEYCHAIN_SESSION_ACCOUNT, SESSION_TOKEN_ENV,
+    clear_api_key, clear_cms_api_key, clear_cms_session, load_cms_api_key, load_cms_session,
+    resolve_api_key, resolve_image_api_key, set_api_key, store_cms_api_key, store_cms_session,
+    test_connection, ApiKeyResolution, ConnectionTestReport, KeySource,
 };
 
 /// Every non-secret key accepted by [`Config::set`] / [`Config::get`]
@@ -50,9 +50,9 @@ pub struct Config {
     /// files without this field keep working via the serde default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
-    /// Non-sensitive self-hosted backend base override (session-token auth
-    /// lives here, not in `base_url`). Resolution: `RUDDER_SERVER_URL` env →
-    /// this field → `server_auth::DEFAULT_SERVER_URL`
+    /// Non-sensitive cms base override (cms account auth rides the session
+    /// cookie, not `base_url`). Resolution: `RUDDER_SERVER_URL` env →
+    /// this field → `cms_auth::DEFAULT_CMS_BASE_URL`
     /// (`resolve_server_base_url`). Empty/blank values never take effect.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_url: Option<String>,
@@ -227,11 +227,11 @@ pub fn resolve_base_url() -> String {
     crate::image::DEFAULT_BASE_URL.to_string()
 }
 
-/// Effective self-hosted backend base URL: `RUDDER_SERVER_URL` env →
-/// `config.json` `server_url` → `server_auth::DEFAULT_SERVER_URL`
+/// Effective cms base URL: `RUDDER_SERVER_URL` env → `config.json`
+/// `server_url` → `cms_auth::DEFAULT_CMS_BASE_URL`
 /// (`https://veren.top/api`). Trailing slashes stripped; blank values at any
 /// level fall through to the next one. Mirrors [`resolve_base_url`] so the
-/// auth client, the session probe and `config get` can all agree.
+/// cms account client and `config get` can all agree.
 pub fn resolve_server_base_url() -> String {
     if let Some(env_server) = credential::env_trimmed("RUDDER_SERVER_URL") {
         return env_server.trim_end_matches('/').to_string();
@@ -243,7 +243,7 @@ pub fn resolve_server_base_url() -> String {
     {
         return config_server;
     }
-    crate::server_auth::DEFAULT_SERVER_URL.to_string()
+    crate::cms_auth::DEFAULT_CMS_BASE_URL.to_string()
 }
 
 /// Effective image model name: `OPENAI_MODEL` env → `config.json` `model`
@@ -486,12 +486,12 @@ mod tests {
     fn resolve_server_base_url_env_then_config_then_default() {
         let _guard = BaseUrlEnvGuard::clear();
 
-        // Hermetic home: neither env nor config → the self-hosted backend.
+        // Hermetic home: neither env nor config → the cms default base.
         // (Never read the developer's real ~/Rudder/config.json here.)
         let empty = std::env::temp_dir().join(format!("rudder-srv-empty-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&empty).unwrap();
         BaseUrlEnvGuard::set("RUDDER_HOME", &empty.display().to_string());
-        assert_eq!(resolve_server_base_url(), crate::server_auth::DEFAULT_SERVER_URL);
+        assert_eq!(resolve_server_base_url(), crate::cms_auth::DEFAULT_CMS_BASE_URL);
 
         // config.json override applies when env is absent/empty.
         let dir = std::env::temp_dir().join(format!("rudder-srv-res-{}", uuid::Uuid::new_v4()));
@@ -522,7 +522,7 @@ mod tests {
         let cfg = Config::load();
         assert_eq!(cfg.quality.as_deref(), Some("low"), "legacy fields still load");
         assert_eq!(cfg.server_url.as_deref(), Some("   "));
-        assert_eq!(resolve_server_base_url(), crate::server_auth::DEFAULT_SERVER_URL);
+        assert_eq!(resolve_server_base_url(), crate::cms_auth::DEFAULT_CMS_BASE_URL);
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -530,8 +530,7 @@ mod tests {
     fn server_url_survives_disk_roundtrip() {
         let dir = std::env::temp_dir().join(format!("rudder-srt-rt-{}", uuid::Uuid::new_v4()));
         let path = dir.join("config.json");
-        let mut cfg = Config::default();
-        cfg.server_url = Some("https://server.example.com".into());
+        let cfg = Config { server_url: Some("https://server.example.com".into()), ..Config::default() };
         Config::save_to(Some(&path), &cfg).unwrap();
         let loaded = Config::load_from(Some(&path));
         assert_eq!(loaded.server_url.as_deref(), Some("https://server.example.com"));

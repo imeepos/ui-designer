@@ -130,4 +130,4 @@ Go 后端，让客户端**0 配置**：不再自备 baseUrl/apiKey/model，注�
 - API（前缀 `/api/v1`）：`auth/register|login|me|change-password`；`images/generations|edits`（OpenAI 兼容，`model` 服务端注入，Bearer=用户 JWT）；`models`（免费探测）；`usage`（余额+流水）；admin：`users` 列表/patch/充值/重置密码、`settings`（积分单价/注册开关/上游地址与密钥——只回尾 4 位）、`stats`、`generations`、`console`（内置 Web 管理台）。
 - 计费：每图 `credits_per_image` 积分（默认 10，admin 可配）；预扣（事务+行锁）→ 上游失败全额退款；admin 角色免计费；注册赠送可配。
 - 凭证纪律：上游密钥只存 Postgres `settings` 表；API/控制台仅显示尾 4 位；绝不写日志。
-- 客户端映射：桌面端/CLI `base` 默认 `https://veren.top/api`，Bearer 用**会话令牌**（env `RUDDER_SESSION_TOKEN` → 钥匙串 account `session-token`）；旧 BYO 链（`OPENAI_API_KEY`/钥匙串 `openai-api-key`）保留为 fallback。
+- 客户端映射：桌面端/CLI `base` 默认 `https://veren.top/api`（cms 服务）；账户链走 cms 会话 Cookie（登录后存钥匙串 account `cms-session`，登出即清），生图 Bearer 用钥匙串 account `cms-api-key`（登录时自动轮换 mint）；旧 BYO 链（`OPENAI_API_KEY`/钥匙串 `openai-api-key`）保留为 fallback。

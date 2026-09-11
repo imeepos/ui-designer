@@ -1,19 +1,17 @@
 //! Credential resolution + connectivity probe (docs/ARCHITECTURE.md §4,
 //! AGENTS.md credential discipline v2).
 //!
-//! - API key priority: **session-token chain first** (`RUDDER_SESSION_TOKEN`
-//!   env → OS keychain `session-token` account) → legacy chain
-//!   (`OPENAI_API_KEY` env → OS keychain `openai-api-key`) → none. Env wins
-//!   over the keychain within each chain so CI/proxy setups behave exactly as
-//!   before; Dock-launched desktop apps fall back to the keychain. The
-//!   session chain first keeps 0-配置 mode working (login once, token stored
-//!   in the keychain) while legacy users who stored a JWT via
-//!   `rudder config set api-key` keep working through the fallback.
+//! - API key priority for the image bearer: **cms chain first** (OS keychain
+//!   `cms-api-key` account, see [`resolve_image_api_key`]) → legacy chain
+//!   (`OPENAI_API_KEY` env → OS keychain `openai-api-key`) → none. The cms
+//!   account client ([`crate::cms_auth`]) mints and rotates the cms key at
+//!   login; legacy BYO users who stored a key via `rudder config set
+//!   api-key` keep working through the fallback.
 //! - The keychain is the ONLY persistent secret store (service
-//!   [`KEYCHAIN_SERVICE`]; accounts [`KEYCHAIN_ACCOUNT`] and
-//!   [`KEYCHAIN_SESSION_ACCOUNT`]); tokens must never reach plain files,
-//!   logs, or stdout. The one sanctioned display is the last 4 characters
-//!   ([`tail4`]).
+//!   [`KEYCHAIN_SERVICE`]; accounts [`KEYCHAIN_ACCOUNT`],
+//!   [`KEYCHAIN_CMS_API_KEY_ACCOUNT`] and [`KEYCHAIN_CMS_SESSION_ACCOUNT`]);
+//!   secrets must never reach plain files, logs, or stdout. The one
+//!   sanctioned display is the last 4 characters ([`tail4`]).
 //! - Set `RUDDER_KEYCHAIN=0|off|false|no` to ignore the keychain entirely
 //!   (hermetic tests, CI, shared machines).
 //! - [`test_connection`] probes `GET {base}/v1/models` (free call, no image
@@ -30,16 +28,12 @@ use std::time::Duration;
 pub const KEYCHAIN_SERVICE: &str = "rudder";
 /// Keychain account holding the gpt-image-2 API key (legacy BYO-key chain).
 pub const KEYCHAIN_ACCOUNT: &str = "openai-api-key";
-/// Keychain account holding the Rudder backend session token (0-配置 chain).
-pub const KEYCHAIN_SESSION_ACCOUNT: &str = "session-token";
 /// Keychain account holding the cms image API key (`cms-api-key`; minted by
 /// the cms account client, used as the image-generation Bearer credential).
 pub const KEYCHAIN_CMS_API_KEY_ACCOUNT: &str = "cms-api-key";
 /// Keychain account holding the cms session cookie value (`cms-session`;
 /// sent back as the `cms_session` cookie on cms account requests).
 pub const KEYCHAIN_CMS_SESSION_ACCOUNT: &str = "cms-session";
-/// Environment override for the backend session token (wins over keychain).
-pub const SESSION_TOKEN_ENV: &str = "RUDDER_SESSION_TOKEN";
 /// The models probe is a cheap GET, not a generation — short timeout.
 const TEST_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -51,8 +45,8 @@ const TEST_TIMEOUT: Duration = Duration::from_secs(15);
 /// Shared by both chains (session token + legacy API key).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeySource {
-    /// Environment variable (`RUDDER_SESSION_TOKEN` or `OPENAI_API_KEY`;
-    /// wins over the keychain within its chain).
+    /// Environment variable (`OPENAI_API_KEY`; wins over the keychain
+    /// within the legacy chain).
     Env,
     /// OS keychain entry ([`KEYCHAIN_SERVICE`] with either account).
     Keychain,
@@ -139,48 +133,10 @@ impl SecretStore for KeyringStore {
     }
 }
 
-/// OS keychain entry for the backend session token (same [`KEYCHAIN_SERVICE`],
-/// account [`KEYCHAIN_SESSION_ACCOUNT`]). Kept separate from
-/// [`KeyringStore`] so legacy API keys and session tokens never collide.
-pub struct SessionKeyringStore;
-
-impl SessionKeyringStore {
-    fn entry() -> Result<keyring::Entry> {
-        keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_SESSION_ACCOUNT)
-            .map_err(|err| RudderError::KeychainAccess { detail: err.to_string() })
-    }
-
-    fn into_error(err: keyring::Error) -> RudderError {
-        RudderError::KeychainAccess { detail: err.to_string() }
-    }
-}
-
-impl SecretStore for SessionKeyringStore {
-    fn get_password(&self) -> Result<Option<String>> {
-        match Self::entry()?.get_password() {
-            Ok(password) => Ok(Some(password)),
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(err) => Err(Self::into_error(err)),
-        }
-    }
-
-    fn set_password(&self, key: &str) -> Result<()> {
-        Self::entry()?.set_password(key).map_err(Self::into_error)
-    }
-
-    fn delete_password(&self) -> Result<()> {
-        match Self::entry()?.delete_credential() {
-            Ok(()) => Ok(()),
-            Err(keyring::Error::NoEntry) => Ok(()),
-            Err(err) => Err(Self::into_error(err)),
-        }
-    }
-}
-
 /// OS keychain entry bound to one explicit account under
 /// [`KEYCHAIN_SERVICE`]. Carries the cms accounts (`cms-api-key`,
 /// `cms-session`) so each keeps a distinct [`SecretStore`] like
-/// [`KeyringStore`] and [`SessionKeyringStore`]; entries never collide.
+/// [`KeyringStore`]; entries never collide.
 pub struct AccountKeyringStore {
     account: &'static str,
 }
@@ -281,32 +237,23 @@ pub fn keychain_disabled() -> bool {
         if matches!(value.trim().to_ascii_lowercase().as_str(), "0" | "off" | "false" | "no"))
 }
 
-/// Resolve the credential used as the image-API bearer token
-/// (docs/ARCHITECTURE.md §4): **session-token chain first**
-/// (`RUDDER_SESSION_TOKEN` env → OS keychain `session-token`), then the
-/// legacy chain (`OPENAI_API_KEY` env → OS keychain `openai-api-key`), then
-/// none. The session chain first keeps 0-配置 mode working after a desktop
-/// login, while legacy users who stored a JWT via `rudder config set
-/// api-key` still resolve through the fallback. With `RUDDER_KEYCHAIN`
-/// disabled only the env legs are consulted.
+/// Resolve the legacy BYO API-key credential: `OPENAI_API_KEY` env → OS
+/// keychain ([`KEYCHAIN_SERVICE`] / [`KEYCHAIN_ACCOUNT`]) → none. The cms
+/// image chain is resolved separately via [`resolve_image_api_key`] so the
+/// keychain accounts stay decoupled; this legacy leg remains the fallback
+/// for users who stored a key via `rudder config set api-key`. With
+/// `RUDDER_KEYCHAIN` disabled only the env leg is consulted.
 pub fn resolve_api_key() -> ApiKeyResolution {
     if keychain_disabled() {
-        if let Some(token) = non_empty_env(SESSION_TOKEN_ENV) {
-            return ApiKeyResolution { key: Some(token), source: KeySource::Env };
-        }
         return env_only_resolution();
-    }
-    let session = resolve_session_token_in(&SessionKeyringStore);
-    if session.key.is_some() {
-        return session;
     }
     resolve_api_key_in(&KeyringStore)
 }
 
 /// [`resolve_api_key`] against an explicit store (hermetic tests). Reads the
-/// legacy API-key chain only (`OPENAI_API_KEY` env → `store`); the
-/// session-token chain is resolved separately via
-/// [`resolve_session_token_in`] so the two keychain accounts stay decoupled.
+/// legacy API-key chain only (`OPENAI_API_KEY` env → `store`); the cms
+/// image chain is resolved separately via [`resolve_image_api_key_in`] so
+/// the keychain accounts stay decoupled.
 pub fn resolve_api_key_in(store: &dyn SecretStore) -> ApiKeyResolution {
     if let Some(key) = non_empty_env("OPENAI_API_KEY") {
         return ApiKeyResolution { key: Some(key), source: KeySource::Env };
@@ -319,37 +266,6 @@ pub fn resolve_api_key_in(store: &dyn SecretStore) -> ApiKeyResolution {
         .filter(|key| !key.is_empty());
     if let Some(key) = keychain_key {
         return ApiKeyResolution { key: Some(key), source: KeySource::Keychain };
-    }
-    ApiKeyResolution { key: None, source: KeySource::None }
-}
-
-/// Resolve the backend session token: `RUDDER_SESSION_TOKEN` env → OS
-/// keychain ([`KEYCHAIN_SERVICE`] / [`KEYCHAIN_SESSION_ACCOUNT`]) → none
-/// (0-配置 mode, AGENTS.md credential discipline). Env wins over the
-/// keychain so CI/staging can override a stored login.
-pub fn resolve_session_token() -> ApiKeyResolution {
-    if keychain_disabled() {
-        return match non_empty_env(SESSION_TOKEN_ENV) {
-            Some(token) => ApiKeyResolution { key: Some(token), source: KeySource::Env },
-            None => ApiKeyResolution { key: None, source: KeySource::None },
-        };
-    }
-    resolve_session_token_in(&SessionKeyringStore)
-}
-
-/// [`resolve_session_token`] against an explicit store (hermetic tests).
-pub fn resolve_session_token_in(store: &dyn SecretStore) -> ApiKeyResolution {
-    if let Some(token) = non_empty_env(SESSION_TOKEN_ENV) {
-        return ApiKeyResolution { key: Some(token), source: KeySource::Env };
-    }
-    let stored = store
-        .get_password()
-        .ok()
-        .flatten()
-        .map(|token| token.trim().to_string())
-        .filter(|token| !token.is_empty());
-    if let Some(token) = stored {
-        return ApiKeyResolution { key: Some(token), source: KeySource::Keychain };
     }
     ApiKeyResolution { key: None, source: KeySource::None }
 }
@@ -404,42 +320,6 @@ pub fn clear_api_key() -> Result<()> {
 
 /// [`clear_api_key`] against an explicit store (hermetic tests).
 pub fn clear_api_key_in(store: &dyn SecretStore) -> Result<()> {
-    store.delete_password()
-}
-
-/// Store the backend session token in the OS keychain (the only sanctioned
-/// persistence; the desktop login flow writes here after
-/// [`crate::server_auth::login`]/`register`).
-pub fn store_session_token(token: &str) -> Result<()> {
-    if keychain_disabled() {
-        return Err(RudderError::InvalidArg {
-            detail: "RUDDER_KEYCHAIN is disabled; export RUDDER_SESSION_TOKEN instead".into(),
-        });
-    }
-    store_session_token_in(&SessionKeyringStore, token)
-}
-
-/// [`store_session_token`] against an explicit store (hermetic tests).
-pub fn store_session_token_in(store: &dyn SecretStore, token: &str) -> Result<()> {
-    let token = token.trim();
-    if token.is_empty() {
-        return Err(RudderError::InvalidArg {
-            detail: "session token must not be empty".into(),
-        });
-    }
-    store.set_password(token)
-}
-
-/// Remove the stored session token (idempotent; absent token is a no-op).
-pub fn clear_session_token() -> Result<()> {
-    if keychain_disabled() {
-        return Ok(());
-    }
-    clear_session_token_in(&SessionKeyringStore)
-}
-
-/// [`clear_session_token`] against an explicit store (hermetic tests).
-pub fn clear_session_token_in(store: &dyn SecretStore) -> Result<()> {
     store.delete_password()
 }
 
@@ -709,7 +589,7 @@ mod tests {
         fn clear() -> EnvGuard {
             let lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
             let mut saved = Vec::new();
-            for name in ["OPENAI_API_KEY", "RUDDER_KEYCHAIN", SESSION_TOKEN_ENV] {
+            for name in ["OPENAI_API_KEY", "RUDDER_KEYCHAIN"] {
                 saved.push((name.to_string(), std::env::var(name).ok()));
                 std::env::remove_var(name);
             }
@@ -859,101 +739,7 @@ mod tests {
         assert_eq!(tail4(""), "");
     }
 
-    // -- session-token chain (0-配置 mode) -----------------------------------
-
-    #[test]
-    fn session_env_wins_over_session_keychain() {
-        let guard = EnvGuard::clear();
-        EnvGuard::set(SESSION_TOKEN_ENV, "session-env-token-0000");
-        let store = MemoryStore::with_key("session-chain-token-9999");
-        let resolved = resolve_session_token_in(&store);
-        assert_eq!(resolved.source, KeySource::Env);
-        assert_eq!(resolved.key.as_deref(), Some("session-env-token-0000"));
-        drop(guard);
-    }
-
-    #[test]
-    fn session_blank_env_falls_back_to_store_and_trims() {
-        let guard = EnvGuard::clear();
-        EnvGuard::set(SESSION_TOKEN_ENV, "   ");
-        let store = MemoryStore::with_key("  padded-session-token-1  ");
-        let resolved = resolve_session_token_in(&store);
-        assert_eq!(resolved.source, KeySource::Keychain);
-        assert_eq!(resolved.key.as_deref(), Some("padded-session-token-1"));
-        drop(guard);
-    }
-
-    #[test]
-    fn session_missing_everywhere_reports_none() {
-        let _guard = EnvGuard::clear();
-        let resolved = resolve_session_token_in(&MemoryStore::new());
-        assert_eq!(resolved.source, KeySource::None);
-        assert!(resolved.key.is_none());
-    }
-
-    #[test]
-    fn session_kill_switch_skips_keychain() {
-        let guard = EnvGuard::clear();
-        EnvGuard::set("RUDDER_KEYCHAIN", "0");
-        let resolved = resolve_session_token();
-        assert_eq!(resolved.source, KeySource::None);
-        assert!(resolved.key.is_none());
-        drop(guard);
-    }
-
-    #[test]
-    fn session_kill_switch_keeps_env() {
-        let guard = EnvGuard::clear();
-        EnvGuard::set("RUDDER_KEYCHAIN", "off");
-        EnvGuard::set(SESSION_TOKEN_ENV, "session-env-token-0000");
-        let resolved = resolve_session_token();
-        assert_eq!(resolved.source, KeySource::Env);
-        assert_eq!(resolved.key.as_deref(), Some("session-env-token-0000"));
-        drop(guard);
-    }
-
-    #[test]
-    fn session_token_roundtrip_on_memory_store() {
-        let store = MemoryStore::new();
-        store_session_token_in(&store, " round-trip-session-9 ").unwrap();
-        let resolved = resolve_session_token_in(&store);
-        assert_eq!(resolved.source, KeySource::Keychain);
-        assert_eq!(resolved.key.as_deref(), Some("round-trip-session-9"));
-
-        clear_session_token_in(&store).unwrap();
-        assert_eq!(resolve_session_token_in(&store).source, KeySource::None);
-    }
-
-    #[test]
-    fn session_clear_is_idempotent_and_blank_tokens_rejected() {
-        let store = MemoryStore::new();
-        clear_session_token_in(&store).unwrap(); // absent token: no-op
-        let err = store_session_token_in(&store, "   ").unwrap_err();
-        assert_eq!(err.code(), "INVALID_ARG");
-    }
-
-    #[test]
-    fn session_store_rejects_store_when_kill_switch_on() {
-        let guard = EnvGuard::clear();
-        EnvGuard::set("RUDDER_KEYCHAIN", "0");
-        assert!(store_session_token("fake-token-abcd").is_err());
-        assert!(clear_session_token().is_ok(), "clear stays a no-op like the api-key path");
-        drop(guard);
-    }
-
     // -- combined resolution priority ---------------------------------------
-
-    #[test]
-    fn combined_chain_prefers_session_env_over_api_key_env() {
-        let guard = EnvGuard::clear();
-        EnvGuard::set("RUDDER_KEYCHAIN", "0");
-        EnvGuard::set(SESSION_TOKEN_ENV, "session-env-token-0000");
-        EnvGuard::set("OPENAI_API_KEY", "env-key-0000");
-        let resolved = resolve_api_key();
-        assert_eq!(resolved.source, KeySource::Env);
-        assert_eq!(resolved.key.as_deref(), Some("session-env-token-0000"));
-        drop(guard);
-    }
 
     #[test]
     fn combined_chain_falls_back_to_legacy_api_key_env() {
@@ -967,9 +753,9 @@ mod tests {
     }
 
     #[test]
-    fn legacy_chain_still_resolves_without_session_token() {
+    fn legacy_chain_still_resolves_from_keychain_store() {
         // resolve_api_key_in stays the legacy-only chain: an api-key store
-        // entry resolves even with no session token anywhere.
+        // entry resolves through it directly.
         let _guard = EnvGuard::clear();
         let store = MemoryStore::with_key("chain-key-9999");
         let resolved = resolve_api_key_in(&store);
