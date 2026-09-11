@@ -28,3 +28,6 @@ src-tauri/gen/
 src-tauri/binaries/
 
 e2e/screenshots/
+
+# cms 本地实验残留的空平台库（P0 验证期真实实例产物，零数据行，非舵仓库资产）
+data/
