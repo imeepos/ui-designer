@@ -2939,6 +2939,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "dirs",
+ "reqwest 0.12.28",
  "rudder-core",
  "serde",
  "serde_json",

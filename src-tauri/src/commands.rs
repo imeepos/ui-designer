@@ -537,12 +537,13 @@ pub async fn update_component(
 // Record a frontend-generated image (openai SDK 直连, C2 裁决: Rust 只落盘)
 // ---------------------------------------------------------------------------
 
-/// One finished upstream call made by the frontend SDK: the image bytes plus
-/// the metadata the lineage record needs. Field names mirror the existing
-/// generate command inputs (`projectId` / `kind`+`target` unify the
-/// per-command `slug` / `name` parameters). `n` is always recorded as 1 —
-/// one command call persists exactly one image.
-#[derive(Debug, Clone, Deserialize)]
+/// One finished upstream call made by the frontend SDK: the image source
+/// plus the metadata the lineage record needs. Field names mirror the
+/// existing generate command inputs (`projectId` / `kind`+`target` unify
+/// the per-command `slug` / `name` parameters). `n` is always recorded as
+/// 1 — one command call persists exactly one image. `Debug` is manual and
+/// redacted: presigned URLs and payloads can never reach a log line.
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordImageInput {
     pub project_id: String,
@@ -552,7 +553,14 @@ pub struct RecordImageInput {
     #[serde(default)]
     pub target: String,
     /// Raw image bytes, standard base64 (the SDK `data[i].b64_json` value).
-    pub image_base64: String,
+    /// Mutually exclusive with [`RecordImageInput::image_url`].
+    #[serde(default)]
+    pub image_base64: Option<String>,
+    /// Presigned download URL (D1 实证: 上游回 `data[0].url` 而非 b64_json;
+    /// S3 无 CORS 头,字节下载必须由 Rust 完成). Mutually exclusive with
+    /// [`RecordImageInput::image_base64`] — exactly one must be given.
+    #[serde(default)]
+    pub image_url: Option<String>,
     /// Upstream endpoint the frontend called: `generations` | `edits`.
     pub endpoint: String,
     /// The exact prompt that was sent.
@@ -581,6 +589,47 @@ pub struct RecordImageInput {
     pub model: Option<String>,
 }
 
+impl std::fmt::Debug for RecordImageInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug = f.debug_struct("RecordImageInput");
+        debug
+            .field("projectId", &self.project_id)
+            .field("kind", &self.kind)
+            .field("target", &self.target)
+            .field(
+                "imageBase64",
+                &format!("<{} b64 chars>", self.image_base64.as_ref().map_or(0, |s| s.len())),
+            )
+            .field("imageUrl", &self.image_url.as_deref().map(redact_url))
+            .field("endpoint", &self.endpoint)
+            .field("prompt", &self.prompt)
+            .field("source", &self.source)
+            .field("templateId", &self.template_id)
+            .field("size", &self.size)
+            .field("quality", &self.quality)
+            .field("seed", &self.seed)
+            .field("thinking", &self.thinking)
+            .field("model", &self.model);
+        debug.finish()
+    }
+}
+
+/// Hard ceiling for one presigned-URL download (gpt-image-2 PNGs stay far
+/// below this; the cap only guards against hostile/misconfigured URLs).
+const IMAGE_URL_MAX_BYTES: u64 = 50 * 1024 * 1024;
+/// Total timeout for one presigned-URL download (fetch + full body).
+const IMAGE_URL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// Mask the query of a presigned URL: only `scheme://host/path` may reach a
+/// log/error — the signature lives in the query and must never leak
+/// (C2-RS 增补纪律).
+fn redact_url(url: &str) -> String {
+    match url.split_once('?') {
+        Some((base, _)) => format!("{base}?…"),
+        None => url.to_string(),
+    }
+}
+
 /// Decode the frontend's base64 image payload (rejected calls persist
 /// nothing — decoding happens before any project access).
 fn decode_image_base64(image_base64: &str) -> Result<Vec<u8>, RudderError> {
@@ -593,6 +642,110 @@ fn decode_image_base64(image_base64: &str) -> Result<Vec<u8>, RudderError> {
         return Err(RudderError::InvalidArg {
             detail: "imageBase64 decodes to zero bytes; send the SDK `b64_json` value".into(),
         });
+    }
+    Ok(bytes)
+}
+
+/// Resolve the image bytes from exactly one of `imageBase64` / `imageUrl`.
+/// The URL branch downloads server-side (reqwest, 120s timeout, 50 MB cap);
+/// every failure message carries only the redacted URL.
+async fn resolve_image_bytes(input: &RecordImageInput) -> Result<Vec<u8>, CommandError> {
+    let base64_payload = input
+        .image_base64
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let url = input
+        .image_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    match (base64_payload, url) {
+        (Some(_), Some(_)) | (None, None) => Err(CommandError::new(
+            codes::VALIDATION_ERROR,
+            "pass exactly one of imageBase64 / imageUrl",
+            "send the SDK `b64_json` value or the presigned `url`, never both, never neither",
+        )),
+        (Some(base64_payload), None) => {
+            decode_image_base64(base64_payload).map_err(into_command)
+        }
+        (None, Some(url)) => download_image_bytes(url).await,
+    }
+}
+
+fn oversized_download(redacted: &str) -> CommandError {
+    CommandError::new(
+        codes::API_ERROR,
+        format!(
+            "image download exceeds the {} byte limit: {redacted}",
+            IMAGE_URL_MAX_BYTES
+        ),
+        "pass imageBase64 instead",
+    )
+}
+
+/// Download the presigned image URL server-side: 120s total timeout, 50 MB
+/// cap (Content-Length pre-check + enforced during streaming), non-2xx and
+/// transport failures map onto `API_ERROR` with the query masked.
+async fn download_image_bytes(url: &str) -> Result<Vec<u8>, CommandError> {
+    let redacted = redact_url(url);
+    let client = reqwest::Client::builder()
+        .timeout(IMAGE_URL_TIMEOUT)
+        .build()
+        .map_err(|e| {
+            CommandError::new(
+                codes::API_ERROR,
+                format!("image download client error: {e}"),
+                "retry the download or pass imageBase64 instead",
+            )
+        })?;
+    let mut response = client.get(url).send().await.map_err(|e| {
+        let detail = if e.is_timeout() {
+            "timed out"
+        } else if e.is_connect() {
+            "connection failed"
+        } else {
+            "request failed"
+        };
+        CommandError::new(
+            codes::API_ERROR,
+            format!("image download failed ({detail}): {redacted}"),
+            "the presigned URL may have expired; retry or pass imageBase64 instead",
+        )
+    })?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(CommandError::new(
+            codes::API_ERROR,
+            format!("image download failed (HTTP {status}): {redacted}"),
+            "the presigned URL may have expired; re-run the generation or pass imageBase64",
+        ));
+    }
+    if let Some(len) = response.content_length() {
+        if len > IMAGE_URL_MAX_BYTES {
+            return Err(oversized_download(&redacted));
+        }
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|e| {
+        let detail = if e.is_timeout() { "timed out" } else { "was interrupted" };
+        CommandError::new(
+            codes::API_ERROR,
+            format!("image download {detail}: {redacted}"),
+            "retry the download or pass imageBase64 instead",
+        )
+    })? {
+        if bytes.len() as u64 + chunk.len() as u64 > IMAGE_URL_MAX_BYTES {
+            return Err(oversized_download(&redacted));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    if bytes.is_empty() {
+        return Err(CommandError::new(
+            codes::API_ERROR,
+            format!("image download returned zero bytes: {redacted}"),
+            "retry the download or pass imageBase64 instead",
+        ));
     }
     Ok(bytes)
 }
@@ -637,12 +790,12 @@ fn record_source(source: Option<&str>) -> Result<String, RudderError> {
 }
 
 /// The record seam the command runs on the blocking pool (hermetic for
-/// tests: takes the project root, not a project id).
+/// tests: takes the project root and the already-resolved image bytes).
 fn record_image_into_payload(
     root: &Path,
     input: &RecordImageInput,
+    bytes: Vec<u8>,
 ) -> Result<GeneratePayloadDto, CommandError> {
-    let bytes = decode_image_base64(&input.image_base64).map_err(into_command)?;
     let prompt = input.prompt.trim().to_string();
     if prompt.is_empty() {
         return Err(CommandError::from_core(&RudderError::InvalidArg {
@@ -678,18 +831,32 @@ fn record_image_into_payload(
     generate_payload(root, report)
 }
 
-/// Persist one image the frontend generated itself. Reuses the same
-/// persistence stage as the CLI's full `generate` flow and returns the same
-/// payload shape, so the canvas refresh path is unchanged.
+/// Resolve the image source (download/decode), then persist on the blocking
+/// pool. The async download never touches the filesystem.
+async fn record_image_resolved(
+    root: &Path,
+    input: RecordImageInput,
+) -> Result<GeneratePayloadDto, CommandError> {
+    let bytes = resolve_image_bytes(&input).await?;
+    let root = root.to_path_buf();
+    blocking("record", "retry the save", move || {
+        record_image_into_payload(&root, &input, bytes)
+    })
+    .await
+}
+
+/// Persist one image the frontend generated itself. Accepts either the SDK
+/// `b64_json` payload (`imageBase64`) or the presigned download URL
+/// (`imageUrl`, fetched here because S3 sends no CORS headers to the
+/// webview). Reuses the same persistence stage as the CLI's full `generate`
+/// flow and returns the same payload shape, so the canvas refresh path is
+/// unchanged.
 #[tauri::command]
 pub async fn record_generated_image(
     input: RecordImageInput,
 ) -> Result<GeneratePayloadDto, CommandError> {
     let root = projects::find_project_root(&input.project_id).map_err(into_command)?;
-    blocking("record", "retry the save", move || {
-        record_image_into_payload(&root, &input)
-    })
-    .await
+    record_image_resolved(&root, input).await
 }
 
 // ---------------------------------------------------------------------------
@@ -1568,20 +1735,50 @@ mod tests {
         assert_eq!(input.project_id, "p1");
         assert_eq!(input.kind, "board");
         assert_eq!(input.target, "");
-        assert_eq!(input.image_base64, "aGk=");
+        assert_eq!(input.image_base64.as_deref(), Some("aGk="));
+        assert_eq!(input.image_url, None);
         assert_eq!(input.endpoint, "generations");
         assert_eq!(input.prompt, "板");
         assert!(input.source.is_none());
         assert!(input.template_id.is_none());
         assert!(input.size.is_none() && input.quality.is_none());
         assert!(input.seed.is_none() && input.thinking.is_none() && input.model.is_none());
+
+        // D1 增补: presigned-URL source (Rust fetches the bytes — the webview
+        // would hit S3's missing CORS headers).
+        let input: RecordImageInput = serde_json::from_str(
+            r#"{"projectId":"p1","kind":"board","target":"","imageUrl":"https://s3.example.com/x/y.png?X-Amz-Signature=sig","endpoint":"generations","prompt":"板"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            input.image_url.as_deref(),
+            Some("https://s3.example.com/x/y.png?X-Amz-Signature=sig")
+        );
+        assert_eq!(input.image_base64, None);
+    }
+
+    #[test]
+    fn record_debug_output_never_carries_payload_or_presigned_query() {
+        let img = b64(FAKE_PNG);
+        let mut input = record_input();
+        input.image_url = Some(
+            "https://s3.example.com/b/p.png?X-Amz-Signature=SIG123&X-Amz-Expires=60".into(),
+        );
+        input.image_base64 = None;
+        let rendered = format!("{input:?}");
+        assert!(rendered.contains("?…"), "Debug must mask the query: {rendered}");
+        assert!(
+            !rendered.contains("SIG123"),
+            "Debug leaked the presigned signature: {rendered}"
+        );
+        assert!(!rendered.contains(&img), "Debug leaked the base64 payload");
     }
 
     #[test]
     fn record_generated_image_persists_candidate_lineage_and_payload() {
         let root = page_project("record-ok");
         let input = record_input();
-        let payload = record_image_into_payload(&root, &input).unwrap();
+        let payload = record_image_into_payload(&root, &input, FAKE_PNG.to_vec()).unwrap();
 
         // Decoded bytes land in the project storage exactly as sent.
         let candidate_file = root.join("pages/dashboard/candidates/0001.png");
@@ -1624,15 +1821,15 @@ mod tests {
         let root = page_project("record-badb64");
 
         let mut input = record_input();
-        input.image_base64 = "!!! not base64 !!!".into();
-        let err = record_image_into_payload(&root, &input).unwrap_err();
+        input.image_base64 = Some("!!! not base64 !!!".into());
+        let err = tauri::async_runtime::block_on(resolve_image_bytes(&input)).unwrap_err();
         assert_eq!(err.code, codes::VALIDATION_ERROR);
         assert!(err.message.contains("base64"), "{}", err.message);
 
-        // An empty payload decodes to no image — rejected too.
+        // An empty payload counts as absent → "pass exactly one".
         let mut input = record_input();
-        input.image_base64 = String::new();
-        let err = record_image_into_payload(&root, &input).unwrap_err();
+        input.image_base64 = Some(String::new());
+        let err = tauri::async_runtime::block_on(resolve_image_bytes(&input)).unwrap_err();
         assert_eq!(err.code, codes::VALIDATION_ERROR);
 
         // Nothing was persisted by the rejected calls.
@@ -1649,28 +1846,28 @@ mod tests {
         let mut input = record_input();
         input.kind = "banner".into();
         assert_eq!(
-            record_image_into_payload(&root, &input).unwrap_err().code,
+            record_image_into_payload(&root, &input, FAKE_PNG.to_vec()).unwrap_err().code,
             codes::VALIDATION_ERROR
         );
 
         let mut input = record_input();
         input.endpoint = "chat".into();
         assert_eq!(
-            record_image_into_payload(&root, &input).unwrap_err().code,
+            record_image_into_payload(&root, &input, FAKE_PNG.to_vec()).unwrap_err().code,
             codes::VALIDATION_ERROR
         );
 
         let mut input = record_input();
         input.source = Some("magic".into());
         assert_eq!(
-            record_image_into_payload(&root, &input).unwrap_err().code,
+            record_image_into_payload(&root, &input, FAKE_PNG.to_vec()).unwrap_err().code,
             codes::VALIDATION_ERROR
         );
 
         let mut input = record_input();
         input.prompt = "   ".into();
         assert_eq!(
-            record_image_into_payload(&root, &input).unwrap_err().code,
+            record_image_into_payload(&root, &input, FAKE_PNG.to_vec()).unwrap_err().code,
             codes::VALIDATION_ERROR
         );
 
@@ -1678,10 +1875,130 @@ mod tests {
         let mut input = record_input();
         input.target = "nope".into();
         assert_eq!(
-            record_image_into_payload(&root, &input).unwrap_err().code,
+            record_image_into_payload(&root, &input, FAKE_PNG.to_vec()).unwrap_err().code,
             codes::NOT_FOUND
         );
 
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    // -----------------------------------------------------------------------
+    // C2-RS 增补: imageUrl 预签名 URL 下载路径 (D1 部署实证: 上游回 data[0].url)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn redact_url_keeps_only_scheme_host_path_and_masks_the_query() {
+        assert_eq!(
+            redact_url(
+                "https://s3.example.com/bucket/img.png?X-Amz-Signature=abc123&X-Amz-Expires=60"
+            ),
+            "https://s3.example.com/bucket/img.png?…"
+        );
+        // A plain URL without a query survives unchanged.
+        assert_eq!(
+            redact_url("https://s3.example.com/plain.png"),
+            "https://s3.example.com/plain.png"
+        );
+    }
+
+    #[test]
+    fn record_image_source_is_exactly_one_of_base64_or_url() {
+        // Both given → rejected.
+        let mut input = record_input();
+        input.image_url = Some("https://s3.example.com/x.png?sig=s".into());
+        let err = tauri::async_runtime::block_on(resolve_image_bytes(&input)).unwrap_err();
+        assert_eq!(err.code, codes::VALIDATION_ERROR);
+
+        // Neither given → rejected.
+        let mut input = record_input();
+        input.image_base64 = None;
+        let err = tauri::async_runtime::block_on(resolve_image_bytes(&input)).unwrap_err();
+        assert_eq!(err.code, codes::VALIDATION_ERROR);
+
+        // Blank strings count as absent (frontend sends "" not null).
+        let mut input = record_input();
+        input.image_base64 = Some("   ".into());
+        let err = tauri::async_runtime::block_on(resolve_image_bytes(&input)).unwrap_err();
+        assert_eq!(err.code, codes::VALIDATION_ERROR);
+    }
+
+    /// One-shot HTTP server for the URL-download tests — deliberately CORS-less,
+    /// exactly the wall a webview fetch would hit; here Rust does the fetch.
+    fn one_shot_image_server(status: u16, body: &'static [u8]) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else { return };
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf);
+            let reason = if status == 200 { "OK" } else { "Forbidden" };
+            let head = format!(
+                "HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(head.as_bytes());
+            let _ = stream.write_all(body);
+        });
+        format!(
+            "http://127.0.0.1:{port}/bucket/presigned.png?X-Amz-Signature=SIG123&X-Amz-Expires=60"
+        )
+    }
+
+    #[test]
+    fn record_generated_image_downloads_url_bytes_and_persists_them() {
+        let root = page_project("record-url");
+        let mut input = record_input();
+        input.image_base64 = None;
+        input.image_url = Some(one_shot_image_server(200, b"url-fake-png-bytes"));
+
+        let payload = tauri::async_runtime::block_on(record_image_resolved(&root, input)).unwrap();
+
+        // The downloaded bytes — fetched by Rust, not the webview — landed
+        // in project storage and the payload refreshes the canvas.
+        let candidate_file = root.join("pages/dashboard/candidates/0001.png");
+        assert_eq!(std::fs::read(&candidate_file).unwrap(), b"url-fake-png-bytes");
+        assert_eq!(payload.candidates.len(), 1);
+        assert_eq!(payload.candidates[0].id, "0001");
+        let stored = store::load_project(&root).unwrap();
+        assert_eq!(stored.page("dashboard").unwrap().generations.len(), 1);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn record_generated_image_download_failure_maps_to_api_error_and_masks_url() {
+        let root = page_project("record-url-403");
+        let mut input = record_input();
+        input.image_base64 = None;
+        input.image_url = Some(one_shot_image_server(403, b"denied"));
+
+        let err = tauri::async_runtime::block_on(record_image_resolved(&root, input)).unwrap_err();
+        assert_eq!(err.code, codes::API_ERROR);
+        assert!(err.message.contains("403"), "{}", err.message);
+        // The presigned query never survives into the error envelope.
+        assert!(err.message.contains("?…"), "{}", err.message);
+        assert!(
+            !err.message.contains("SIG123"),
+            "error leaked the signature: {}",
+            err.message
+        );
+
+        // Connection failures keep the code and the same masking.
+        let mut input = record_input();
+        input.image_base64 = None;
+        input.image_url =
+            Some("http://127.0.0.1:9/bucket/p.png?X-Amz-Signature=SIG123".into());
+        let err = tauri::async_runtime::block_on(record_image_resolved(&root, input)).unwrap_err();
+        assert_eq!(err.code, codes::API_ERROR);
+        assert!(
+            !err.message.contains("SIG123"),
+            "error leaked the signature: {}",
+            err.message
+        );
+
+        // Nothing was persisted by the failed downloads.
+        let stored = store::load_project(&root).unwrap();
+        assert!(stored.page("dashboard").unwrap().generations.is_empty());
         std::fs::remove_dir_all(&root).ok();
     }
 
