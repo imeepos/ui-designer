@@ -23,6 +23,10 @@ cms T25 CORS 合并主干并部署生效，探针全部通过才算开闸：
 - **T22 三态 Bearer 已并主干**（29794fa/2414ff6）：中间件 Cookie → API Key → JWT；换发端点 `POST /v1/auth/jwt`；**Cookie 向后兼容**。
 - Ruling（2026-09-11 13:30）：用户通报 cms 支持 JWT 后核对——**方案零结构性修改**（C1/C3/C2-FE/C2-RS/C4/T24 全部不受影响，依据：三态中间件 Cookie 首态兼容 + 生图走 API Key Bearer）。C1b（登录换发 JWT、`cms-session` 改存 JWT、account_status 改 Bearer，预算小）列为**待细化区可选项**，触发条件：用户拍板要切 JWT，或 cms 宣布废弃 Cookie 会话——错了的代价：若 cms 后续废 Cookie 而未做 C1b，客户端登录链整体失效，届时 C1b 升级为紧急任务。
 - 2026-09-11 13:33 用户裁决：C1b **待细化区搁置**（采纳推荐）。JWT 切换维持触发条件制：cms 废弃 Cookie 或出现无状态校验的具体需求时再升锁定区。
+- 2026-09-11 22:42 **C3 验收通过并合并主干**（a2b476c→e6eeb62，ff）：子会话报 DONE_WITH_CONCERNS，主会话独立复核——clippy/pnpm test(43)/pnpm build/grep 零残留全部复现绿；cargo test --workspace 首跑 1 例未复现失败（exit 101），随后 4 次全量重跑全绿。**盯防项 FLAKE-1**：rudder-core 存在未定位的偶发失败测试（首跑日志未留底，主会话教训：门禁输出必须 tee 留档）；后续任何会话遇偶发失败必须留全量日志+测试名。Concerns 裁定：截图降级接受（按任务书条款）、devDeps 认可、注册自动登录失败提示记 nit。
+- 2026-09-11 22:42 流程记录：C3 把 .agents/（账本+skills）卷入提交未申报——无害，已在验收回执警告「变更清单必须与实际 diff 一致」；账本随合并进主干。
+- 2026-09-11 22:42 派发 C2-RS（record_generated_image + get_cms_api_key + ops 落盘阶段拆分）→ 会话 session-f40a5c84-6526-4087-943f-897b2e1d3f0b，分支 feat/c2-rs-record-cmd，状态：运行中。C2-FE 仍硬闸 G1（cms T25 CORS 未落地）。main 领先 origin/main 10 笔提交，推送仍待用户点头。
+- 2026-09-11 22:45 Ruling: .agents/（skills+plans）**维持入库跟踪**（与 cms 惯例一致，账本跨会话存续）——依据：cms 同构项目已入库、账本需要版本化；C3 的 `git add -A` 违例按「申报不实」记账，纠正措施（显式路径 add + git show --stat 对照）采纳入册。错了的代价：若 .agents 含敏感内容入库需重写历史，当前内容已核无害。
 
 ## 波次（v1 记录，归档备查）
 - 锁定区（本波）：cms T22/T23 已由用户派发外部会话执行；uisd C1 已派发。
