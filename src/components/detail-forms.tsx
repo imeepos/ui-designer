@@ -202,7 +202,17 @@ export function AddPageForm({ onAdded }: { onAdded?: () => void }) {
             setSlug(event.target.value);
             setError(null);
           }}
-          onBlur={() => setSlug((prev) => slugifyHint(prev))}
+          onBlur={() => {
+            // Findings M7: only rewrite the input when the slugifier can
+            // produce a valid result; otherwise keep the user's text and
+            // surface the format reason instead of silently clearing it.
+            const hint = slugifyHint(slug);
+            if (slug.trim() && !hint) {
+              setError(t("form.error.slugFormat"));
+              return;
+            }
+            setSlug(hint);
+          }}
           placeholder={t("form.page.slugPlaceholder")}
           className="font-mono text-xs"
           autoFocus
@@ -280,7 +290,15 @@ export function AddComponentForm({ onAdded }: { onAdded?: () => void }) {
             setName(event.target.value);
             setNameError(null);
           }}
-          onBlur={() => setName((prev) => slugifyHint(prev))}
+          onBlur={() => {
+            // Same no-silent-clear rule as the page slug (findings M7).
+            const hint = slugifyHint(name);
+            if (name.trim() && !hint) {
+              setNameError(t("form.error.nameFormat"));
+              return;
+            }
+            setName(hint);
+          }}
           placeholder={t("form.component.namePlaceholder")}
           className="font-mono text-xs"
           autoFocus
