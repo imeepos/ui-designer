@@ -2934,7 +2934,7 @@ dependencies = [
 
 [[package]]
 name = "rudder-app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -2950,7 +2950,7 @@ dependencies = [
 
 [[package]]
 name = "rudder-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2963,7 +2963,7 @@ dependencies = [
 
 [[package]]
 name = "rudder-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

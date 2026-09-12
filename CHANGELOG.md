@@ -2,21 +2,24 @@
 
 本文件记录「舵 Rudder」各版本的可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## Unreleased
+## 0.2.0 — 2026-09-12
 
-### 收官：删除自建服务端，文档对齐 cms 对接口径
+### 客户端全面对接 cms：账户、生图与计费（重大变更）
 
-- 删除自建 Go 服务端目录 `server/`（Go 源码、systemd 单元、`deploy.sh`、adminui、`bin/` 二进制）：生产入口已切换 cms（138:8800），旧 rudder-server 停用。
-- ARCHITECTURE §11 改写为「cms 服务对接」：基址与路由映射（veren.top `/api/` → cms `/v1/...`）、凭证链（注册/登录 → 自助 API Key → 生图 Bearer；会话 Cookie 存钥匙串 `cms-session`）、cms points 域按次扣点、上游配置走 cms 管理面（sensitive 加密）。
-- PRD 边界同步：不自建服务端，账号与按次计费由外部 cms 服务承载。
+- 桌面端账户区改接 cms 服务：注册/登录（Cookie 会话存钥匙串 `cms-session`，失效引导重登）、自助 API Key 创建/吊销、点数余额展示与生成后自动刷新；删除 baseUrl/apiKey/model 手动配置与自建会话令牌链（`session-token`/`RUDDER_SESSION_TOKEN`）。
+- 生图链路改为前端 openai@7.13.0 SDK 直连 cms 网关（默认 `https://veren.top/api`）：generations 与 edits（多参考图、锚点在前）同链路；响应 b64_json/URL 双形态分流，URL 形由 Rust 侧下载落盘（预签名地址日志打码）。
+- 按次计费由 cms points 域承载：余额不足返回 402 给专属文案与引导，成功扣点、失败退还，流水可追溯。
+- 生图凭证解析优先级：环境变量 `OPENAI_API_KEY` > 钥匙串 cms API Key > 旧钥匙串 BYO 兜底。
+- 删除自建 Go 服务端 `server/`（v0.1.0 后曾短暂随客户端提供账户与计费，本版本起生产入口与客户端全面走 cms，旧部署停用保回滚）。
+- CLI：新增 cms 账户客户端（注册/登录/自助建 key/轮换/登出/余额）；新增 `record_generated_image` / `get_cms_api_key` / `update_board_brief` 桌面命令与 `get_generation_config` 只读配置镜像，支撑 SDK 直连的落盘与配置链路。
+- 质量防线：prompt 引擎 TS 移植版与 Rust 版 golden 对拍测试（防 CLI/桌面双源漂移）；修复测试环境变量跨模块竞争（共享 ENV_LOCK + 配置注入）。
 
-### 服务端上线：用户系统 + 按次计费 + 客户端 0 配置
+### 界面打磨
 
-- 新增 Go 后端 `server/`（rudder-server）：用户注册/登录（JWT）、按次积分计费（默认每图 10 积分，可配）、gpt-image-2 上游代理、管理 API 与内置 Web 管理台（`/api/v1/admin/console`）。
-- 计费规则：生成前预扣（事务+行锁）、上游失败全额退款并记录流水；`n` 张按倍数计费；admin 角色免计费；注册赠送积分可配；积分不足返回 402 `INSUFFICIENT_CREDITS`。
-- 管理能力（admin 登录后）：配置每图积分单价、注册开关、注册赠送、上游 Base URL / 模型 / API Key（密钥只存服务端，仅显示尾 4 位）；用户列表/搜索/禁用启用/充值扣减/重置密码；统计面板与最近生成审计。
-- 部署：43.240.223.138（Ubuntu 22.04）systemd 常驻，nginx 挂载 `https://veren.top/api/v1/`，Postgres 复用服务器 docker 实例（库 `rudder`）；`server/deploy.sh` 一键交叉编译部署。已全链路验证：注册→充值→generations/edits 真实生图→扣费/退款→流水。
-- 客户端改造：桌面端设置删除 baseUrl/apiKey/model 手动配置，改为「账户」区（登录/注册/积分/退出）；默认 API 基址 `https://veren.top/api`，Bearer 使用会话令牌（钥匙串 `session-token`，env `RUDDER_SESSION_TOKEN` 可覆盖）；旧 BYO 链保留为 fallback；新增 `NO_SESSION` 错误码与登录引导文案，i18n 中英双语 268 键 parity。
+- 向导生成等待态补齐进度条、耗时与取消钮（与重生成抽屉同姿态），取消即时回空态、无后台孤儿作业。
+- 导航当前态改缃色指示：向导段标题三态（完成=苍青对勾 / 当前=缃色圆点+加粗 / 未来=muted 轮廓）；左菜单当前项=缃色圆点+加粗（替换原苍青底色块）。
+- THEME §5 改写为「向导三段+工作台」新 IA 口径（原四步步条条款退役）；字阶表新增 30px 数据型大数字档。
+- 细节一致性：候选编号与锚点标记提至 11px 微字下限；日期按界面语言显示 locale；slug 非法输入不再被静默清空（保留原文并提示格式原因）；设置行内错误带原因 hint 双行展示（与 toast 同源）；内嵌舵轮线稿 favicon 消除控制台 404；清理卡片悬停操作钮死代码（现行落点：候选卡放大镜、左菜单行悬停删除、重生成抽屉）。
 
 ### CLI 项目在桌面端可见：共享项目目录登记表（缺陷修复）
 

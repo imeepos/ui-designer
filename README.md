@@ -13,7 +13,7 @@ AI 成套 UI 设计工作室：用 gpt-image-2 把「设计系统总板 → 功�
 cargo install --path crates/rudder-cli
 
 # 桌面端（macOS aarch64）：下载 .dmg 拖入「应用程序」即可
-# （随 Release 提供 Rudder_0.1.0_aarch64.dmg）
+# （随 Release 提供 Rudder_0.2.0_aarch64.dmg）
 ```
 
 凭证（解析优先级：环境变量 → OS 钥匙串，绝不写入普通文件/日志）：
