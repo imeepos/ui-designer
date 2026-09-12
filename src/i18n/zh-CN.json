@@ -286,7 +286,7 @@
       "export": "正在导出资产包…"
     },
     "elapsed": "{{seconds}}s",
-    "etaNote": "真实生成约 30 秒~3 分钟，最长约 3 分钟。"
+    "etaNote": "生成中，约需 30 秒~3 分钟"
   },
   "export": {
     "dialog": {

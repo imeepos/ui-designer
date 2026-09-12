@@ -286,7 +286,7 @@
       "export": "Exporting asset bundle…"
     },
     "elapsed": "{{seconds}}s",
-    "etaNote": "Real generations take ~30s–3min, up to 3 minutes at most."
+    "etaNote": "Generating, usually 30 seconds to 3 minutes"
   },
   "export": {
     "dialog": {
