@@ -92,7 +92,7 @@ export function LeftMenu({
           className={cn(
             "flex min-w-0 flex-1 items-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-left font-mono text-xs transition-colors duration-150 ease-out",
             selected
-              ? "border-primary/60 bg-primary/10 font-medium text-foreground"
+              ? "font-semibold text-foreground"
               : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
           )}
         >
@@ -101,9 +101,13 @@ export function LeftMenu({
             title={picked ? t("workspace.picked") : undefined}
             className={cn(
               "size-1.5 shrink-0 rounded-full",
-              picked && "bg-primary",
-              !picked && candidateCount > 0 && "border border-primary/70",
-              candidateCount === 0 && !picked && "border border-border",
+              selected
+                ? "bg-accent"
+                : cn(
+                    picked && "bg-primary",
+                    !picked && candidateCount > 0 && "border border-primary/70",
+                    candidateCount === 0 && !picked && "border border-border",
+                  ),
             )}
           />
           <span className="truncate">{id}</span>
@@ -192,11 +196,14 @@ export function LeftMenu({
         className={cn(
           "flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1.5 text-left text-xs transition-colors duration-150 ease-out",
           state.view === "overview"
-            ? "border-primary/60 bg-primary/10 font-medium text-foreground"
+            ? "font-semibold text-foreground"
             : "text-foreground hover:bg-muted/60",
         )}
       >
         <Compass className="size-3.5 shrink-0 text-muted-foreground" />
+        {state.view === "overview" && (
+          <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-accent" />
+        )}
         <span className="min-w-0 flex-1 truncate">{t("workspace.overview")}</span>
         {project.anchor && <AnchorBadge className="scale-90" />}
       </button>
