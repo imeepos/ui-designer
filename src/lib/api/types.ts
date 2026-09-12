@@ -115,7 +115,7 @@ export interface BoardBrief {
  * Stored-board-brief amendment (`update_board_brief`): `undefined`/omitted
  * fields keep the stored value; present fields replace it (trimmed). The
  * SDK-direct board flow persists this before generating so the amendment
- * survives restarts (C2-FE 偏差① — the old generate_board merged on disk).
+ * survives restarts (C2-FE deviation #1 — the old generate_board merged on disk).
  */
 export interface BoardBriefUpdate {
   brandBrief?: string;

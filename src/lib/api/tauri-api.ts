@@ -525,7 +525,7 @@ export class TauriApi implements ApiAdapter {
         ? `${merged.styleBrief} | ${brief.reference.trim()}`
         : brief.reference.trim();
     }
-    // C2-FE 偏差①: persist the amendment BEFORE the SDK call — the old
+    // C2-FE deviation #1: persist the amendment BEFORE the SDK call — the old
     // generate_board wrote project.json first, then generated. Without this
     // the amendment only lived in session state and was lost on restart.
     await this.updateBoardBrief(projectId, merged, options);
