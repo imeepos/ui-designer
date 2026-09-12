@@ -90,3 +90,7 @@
 - **元素计数精确**：导航 3 + 横幅 1 + 分类 5 + 产品卡 8 + 底栏 1，与 brief 完全一致。
 - 原三项 weakness 关闭：中英混排（模板自定）、负面清单不可配（project.negativeHints + explicit-negatives 行）、无 verbatim 标签（Labels 槽）。
 - 真实花费：low × 5（总板 4 候选 + 页面 1）≈ $0.06。
+
+## 遗留复验（2026-09-12，走查评审会话 P1）
+
+- 「VALIDATION_ERROR 文案过泛」（上文视觉终审节 P2 项）**关闭**：toast 层已注入 `{{detail}}`（src/state/toast.tsx:84-99），且全部表单路径被客户端字段级校验前置拦截（实测组件简报空 → 行内「请输入组件简报。」，无 toast）。残余风险 = detail 原文为英文、当前 UI 不可达，记盲区。证据：docs/plans/2026-09-12-ui-walkthrough-findings.md §5。
