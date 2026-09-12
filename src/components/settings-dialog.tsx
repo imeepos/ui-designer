@@ -25,9 +25,12 @@ type SettingsDialogProps = {
   onClose: () => void;
 };
 
+/** Inline form feedback: main message + optional weakened hint (findings M8). */
+type FormError = { message: string; hint?: string };
+
 type TestOutcome =
   | { ok: true; modelCount: number }
-  | { ok: false; message: string }
+  | { ok: false; message: string; hint?: string }
   | null;
 
 type AccountMode = "login" | "register";
@@ -48,15 +51,28 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
 
-  /** Localized copy for a cms/auth error (inline form feedback). */
-  const describeError = (error: unknown): string => {
+  /**
+   * Localized copy for a cms/auth error (inline form feedback). Same
+   * message+hint resolution as the error toast (state/toast.tsx) so the
+   * inline channel no longer drops the hint (findings M8).
+   */
+  const describeError = (error: unknown): FormError => {
     if (isApiError(error)) {
-      return t([`errors.${error.code}.message`, "errors.UNKNOWN.message"], {
-        detail: error.message,
-        defaultValue: error.message,
-      });
+      const params = { ...error.params, detail: error.message };
+      return {
+        message: t([`errors.${error.code}.message`, "errors.UNKNOWN.message"], {
+          ...params,
+          defaultValue: error.message,
+        }),
+        hint: error.hint
+          ? t([`errors.${error.code}.hint`, "errors.UNKNOWN.hint"], {
+              ...params,
+              defaultValue: error.hint,
+            })
+          : undefined,
+      };
     }
-    return error instanceof Error ? error.message : String(error);
+    return { message: error instanceof Error ? error.message : String(error) };
   };
 
   const [phase, setPhase] = useState<AccountPhase>("checking");
@@ -65,7 +81,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<FormError | null>(null);
   const [busy, setBusy] = useState<BusyKind | null>(null);
   const [testOutcome, setTestOutcome] = useState<TestOutcome>(null);
 
@@ -138,15 +154,15 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     const trimmedEmail = email.trim();
     const trimmedName = name.trim();
     if (!trimmedEmail) {
-      setFormError(t("settings.account.errorEmailRequired"));
+      setFormError({ message: t("settings.account.errorEmailRequired") });
       return;
     }
     if (kind === "register" && !trimmedName) {
-      setFormError(t("settings.account.errorNameRequired"));
+      setFormError({ message: t("settings.account.errorNameRequired") });
       return;
     }
     if (!password) {
-      setFormError(t("settings.account.errorPasswordRequired"));
+      setFormError({ message: t("settings.account.errorPasswordRequired") });
       return;
     }
 
@@ -212,7 +228,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       const result = await testConnection();
       setTestOutcome({ ok: true, modelCount: result.modelCount });
     } catch (error) {
-      setTestOutcome({ ok: false, message: describeError(error) });
+      setTestOutcome({ ok: false, ...describeError(error) });
     } finally {
       setBusy(null);
     }
@@ -384,9 +400,16 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                 {authInputs}
 
                 {formError && (
-                  <p className="text-xs text-destructive" data-testid="settings-account-error" role="alert">
-                    {formError}
-                  </p>
+                  <div
+                    className="flex flex-col gap-0.5 text-xs text-destructive"
+                    data-testid="settings-account-error"
+                    role="alert"
+                  >
+                    <p>{formError.message}</p>
+                    {formError.hint && (
+                      <p className="text-muted-foreground">{formError.hint}</p>
+                    )}
+                  </div>
                 )}
 
                 <Button
@@ -438,7 +461,16 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             >
               {testOutcome.ok
                 ? t("settings.connection.testOk", { count: testOutcome.modelCount })
-                : `${t("settings.connection.testFailed")} — ${testOutcome.message}`}
+                : (
+                  <>
+                    {`${t("settings.connection.testFailed")} — ${testOutcome.message}`}
+                    {testOutcome.hint && (
+                      <span className="mt-0.5 block text-muted-foreground">
+                        {testOutcome.hint}
+                      </span>
+                    )}
+                  </>
+                )}
             </p>
           )}
         </section>

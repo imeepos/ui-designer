@@ -146,4 +146,26 @@ describe("settings dialog account section (cms chain)", () => {
     expect(screen.getByTestId("settings-account-form")).toBeTruthy();
     expect(screen.queryByTestId("settings-account-user")).toBeNull();
   });
+
+  it("login failure: inline error shows message and hint as two lines (findings M8)", async () => {
+    loginMock.mockRejectedValue(
+      new ApiError(
+        "NOT_IMPLEMENTED",
+        "account sign-in needs the desktop shell",
+        "launch the Tauri app to sign in",
+      ),
+    );
+    renderDialog();
+    await screen.findByTestId("settings-account-form");
+    fillEmailAndPassword();
+    fireEvent.click(screen.getByTestId("settings-login"));
+
+    const error = await screen.findByTestId("settings-account-error");
+    await waitFor(() => {
+      expect(error.textContent).toContain("该能力尚未接入核心库");
+    });
+    // Hint comes from the same errors.* source as the toast (weakened line).
+    expect(error.textContent).toContain("当前为 Mock 预览");
+    expect(error.querySelectorAll("p")).toHaveLength(2);
+  });
 });
