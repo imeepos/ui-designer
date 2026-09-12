@@ -45,7 +45,7 @@ type AccountPhase = "checking" | "signedOut" | "signedIn" | "expired";
  * "Connection" section keeps the free /models probe.
  */
 export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const toast = useToast();
 
   /** Localized copy for a cms/auth error (inline form feedback). */
@@ -334,7 +334,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
 
               <p className="text-[11px] text-muted-foreground">
                 {t("settings.account.memberSince", {
-                  date: new Date(account.user.created_at * 1000).toLocaleDateString(),
+                  date: new Date(account.user.created_at * 1000).toLocaleDateString(i18n.language),
                 })}
               </p>
             </div>

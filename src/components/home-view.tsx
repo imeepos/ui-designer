@@ -15,7 +15,7 @@ const PAGE_SIZE = 8;
 
 /** Home: project cards (anchor thumbnail + size + counts) with search + pagination. */
 export function HomeView({ onCreate }: { onCreate: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { state, selectProject } = useStudio();
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(0);
@@ -116,7 +116,7 @@ export function HomeView({ onCreate }: { onCreate: () => void }) {
                   </span>
                   <span className="font-mono text-[11px] text-muted-foreground">
                     {t("home.created", {
-                      date: new Date(item.createdAt).toLocaleDateString(),
+                      date: new Date(item.createdAt).toLocaleDateString(i18n.language),
                     })}
                   </span>
                 </span>
