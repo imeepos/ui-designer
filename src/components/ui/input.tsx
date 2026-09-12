@@ -2,7 +2,7 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-/** THEME §4: inputs use 8px radius, 1px border, muted focus ring. */
+/** THEME §4: inputs use 6px radius (rounded-md), 1px border, muted focus ring. */
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   return (
     <input
