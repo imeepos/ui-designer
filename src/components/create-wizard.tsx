@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { SizePreset } from "@/lib/api/types";
 import { useStudio } from "@/state/studio";
 import { ArtImage } from "@/components/art-image";
-import { AnchorBadge } from "@/components/card-actions";
+import { AnchorBadge } from "@/components/anchor-badge";
 import { BriefField, CountPicker, QualityPicker } from "@/components/detail-forms";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

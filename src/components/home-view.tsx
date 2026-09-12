@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { useStudio } from "@/state/studio";
-import { AnchorBadge } from "@/components/card-actions";
+import { AnchorBadge } from "@/components/anchor-badge";
 import { CompassMark } from "@/components/icons";
 import { EmptyState } from "@/components/empty-state";
 import { ArtImage } from "@/components/art-image";

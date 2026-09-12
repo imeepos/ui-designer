@@ -5,7 +5,7 @@ import pkg from "../package.json";
 
 import { HelmMark } from "@/components/icons";
 import { LanguageSwitcher } from "@/components/language-switcher";
-import { AnchorBadge } from "@/components/card-actions";
+import { AnchorBadge } from "@/components/anchor-badge";
 import { CreateWizard } from "@/components/create-wizard";
 import { HomeView } from "@/components/home-view";
 import { WorkspaceView } from "@/components/workspace/workspace-view";

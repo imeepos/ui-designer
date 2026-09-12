@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next";
 import type { MenuGroupId } from "@/state/studio";
 import { menuUnlocked, useStudio } from "@/state/studio";
 import { useToast } from "@/state/toast";
-import { AnchorBadge } from "@/components/card-actions";
+import { AnchorBadge } from "@/components/anchor-badge";
 import { ApiError } from "@/lib/api/types";
 import { useConfirm } from "@/hooks/use-confirm";
 import { Input } from "@/components/ui/input";
