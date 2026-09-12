@@ -127,7 +127,7 @@ export function SwitchDialog({ mode, onClose }: { mode: SwitchMode; onClose: () 
                 >
                   <ZoomIn className="size-3.5" />
                 </button>
-                <span className="block truncate border-t px-2 py-1 font-mono text-[10px] text-muted-foreground">
+                <span className="block truncate border-t px-2 py-1 font-mono text-[11px] text-muted-foreground">
                   {candidate.id}
                 </span>
               </div>
