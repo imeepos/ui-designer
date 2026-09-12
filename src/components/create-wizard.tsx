@@ -7,6 +7,7 @@ import { useStudio } from "@/state/studio";
 import { ArtImage } from "@/components/art-image";
 import { AnchorBadge } from "@/components/anchor-badge";
 import { BriefField, CountPicker, QualityPicker } from "@/components/detail-forms";
+import { JobPanel } from "@/components/job-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -110,7 +111,7 @@ export function CreateWizard({ open, onClose }: { open: boolean; onClose: () => 
           <SectionTitle
             index={1}
             label={t("wizard.step.info")}
-            done={step > 1}
+            state={step > 1 ? "done" : "current"}
           />
           {step === 1 ? (
             <div className="flex flex-col gap-3">
@@ -223,7 +224,11 @@ export function CreateWizard({ open, onClose }: { open: boolean; onClose: () => 
         {/* Section 2: generate the overview (board + anchor), skippable */}
         {step >= 2 && (
           <section className="flex flex-col gap-3 border-t pt-4">
-            <SectionTitle index={2} label={t("wizard.step.overview")} done={anchor != null} />
+            <SectionTitle
+              index={2}
+              label={t("wizard.step.overview")}
+              state={anchor != null ? "done" : step === 2 ? "current" : "future"}
+            />
             <div className="grid gap-3 md:grid-cols-2">
               <div className="flex flex-col gap-2.5">
                 <BriefField
@@ -305,12 +310,7 @@ export function CreateWizard({ open, onClose }: { open: boolean; onClose: () => 
                 </Button>
               )}
             </div>
-            {boardJob && (
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Loader2 aria-hidden="true" className="size-3.5 animate-spin text-primary" />
-                {t("job.label.board")}
-              </p>
-            )}
+            {boardJob && <JobPanel job={boardJob} />}
             {project && project.boardCandidates.length > 0 && (
               <div className="grid grid-cols-4 gap-2" data-testid="wizard-candidates">
                 {project.boardCandidates.map((candidate) => {
@@ -336,7 +336,7 @@ export function CreateWizard({ open, onClose }: { open: boolean; onClose: () => 
                         className="aspect-square w-full"
                       />
                       {isAnchor && (
-                        <span className="flex items-center justify-center gap-1 py-0.5 text-[10px] font-medium text-primary">
+                        <span className="flex items-center justify-center gap-1 py-0.5 text-[11px] font-medium text-primary">
                           <Check className="size-3" />
                           {t("gallery.board.anchorBadge")}
                         </span>
@@ -360,7 +360,7 @@ export function CreateWizard({ open, onClose }: { open: boolean; onClose: () => 
         {/* Section 3: save -> enter the workspace */}
         {step >= 3 && (
           <section className="flex flex-col gap-2 border-t pt-4">
-            <SectionTitle index={3} label={t("wizard.step.save")} done={false} />
+            <SectionTitle index={3} label={t("wizard.step.save")} state="current" />
             <p className="text-xs text-muted-foreground">{t("wizard.saveHint")}</p>
             <div>
               <Button
@@ -381,26 +381,43 @@ export function CreateWizard({ open, onClose }: { open: boolean; onClose: () => 
   );
 }
 
+/** THEME §5 stepper tri-state: done=primary check · current=accent dot + bold · future=muted outline. */
+type SectionState = "done" | "current" | "future";
+
 function SectionTitle({
   index,
   label,
-  done,
+  state,
 }: {
   index: number;
   label: string;
-  done: boolean;
+  state: SectionState;
 }) {
   return (
-    <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+    <h3
+      data-testid={`wizard-section-${index}`}
+      data-section-state={state}
+      className={cn(
+        "flex items-center gap-2 text-sm font-medium text-foreground",
+        state === "current" && "font-bold",
+      )}
+    >
       <span
+        aria-hidden="true"
         className={cn(
-          "flex size-5 items-center justify-center rounded-full border font-mono text-[11px]",
-          done
-            ? "border-primary bg-primary text-primary-foreground"
-            : "border-border text-muted-foreground",
+          "flex size-5 shrink-0 items-center justify-center rounded-full font-mono text-[11px]",
+          state === "done" && "border border-primary bg-primary text-primary-foreground",
+          state === "current" && "border border-accent",
+          state === "future" && "border border-border text-muted-foreground",
         )}
       >
-        {done ? <Check className="size-3" /> : index}
+        {state === "done" ? (
+          <Check className="size-3" />
+        ) : state === "current" ? (
+          <span className="size-2 rounded-full bg-accent" />
+        ) : (
+          index
+        )}
       </span>
       {label}
     </h3>
