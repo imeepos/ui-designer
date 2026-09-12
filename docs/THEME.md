@@ -17,7 +17,7 @@
 | `--foreground` | 墨玄 #3A4247 | 雾白 #E9ECE8 | 墨玄 | 正文（纸底 ≈9.3:1） |
 | `--primary` | 苍青 #2C6E78 | 提亮苍青 #6FB4BD | 苍青（天水碧加深） | 主按钮/激活态/选中框/白描线稿 |
 | `--primary-foreground` | #FFFFFF | #0F1517 | — | 主按钮文字（≈5.8:1 / ≈7.8:1） |
-| `--accent`（缃色） | 缃色 #D9A514 | 缃色 #D9A514（原值保持） | 缃色 | 步条当前步、锚点徽标、焦点环 |
+| `--accent`（缃色） | 缃色 #D9A514 | 缃色 #D9A514（原值保持） | 缃色 | 向导当前段/左菜单当前项、锚点徽标、焦点环 |
 | `--accent-foreground` | #2A2410 | #1C1607 | — | 金底深字（≈6.9:1 / ≈7.5:1） |
 | `--destructive` | 朱砂 #C3402B | 朱砂·亮 #E08873 | 朱砂 | 删除/错误 |
 | `--seal`（v3.1） | #C3402B | #E08873 | 朱砂 | 品牌「舵」字印章专用（与 destructive 解耦，暂无 UI 消费点） |
@@ -35,7 +35,7 @@
 - 无衬线（正文）：`Inter, "PingFang SC", "Noto Sans SC", system-ui, sans-serif`。
 - **宋体展示字（v3 新增，`font-serif` 工具类）**：`"Noto Serif SC", "Songti SC", "STSong", "SimSun", serif`——用于**页题/品牌标题/空态标题**；工具高密度小标题仍走无衬线，避免满屏书卷气拖慢扫读。
 - 等宽（prompt/JSON/seed）：`"JetBrains Mono", ui-monospace`。
-- 字阶：12 / 13（默认正文）/ 14（强调）/ 18（区块题）/ 24（页题）；行高 1.5；标签可 `tracking-wide`。
+- 字阶：12 / 13（默认正文）/ 14（强调）/ 18（区块题）/ 24（页题）/ 30（数据型大数字，余额等大数值展示）；行高 1.5；标签可 `tracking-wide`。
 
 ## 4. 几何与间距
 
@@ -45,11 +45,11 @@
 
 ## 5. 组件姿态
 
-- Button：primary 实心苍青；secondary 纸灰反色；ghost 用于画廊 hover 操作（hover 走 muted，不走缃色）。
-- 步骤条（四步流程）：完成步=primary 苍青对勾，当前步=accent 缃色圆点+加粗，未来步=muted 置灰。
+- Button：primary 实心苍青；secondary 纸灰反色；ghost 用于画廊与浮层的次级操作钮（hover 走 muted，不走缃色）。
+- 导航当前态（IA＝向导三段 + 工作台）：向导段标题三态：完成段=苍青（primary）对勾✓；当前段=缃色（accent）圆点+段标题加粗；未来段=muted 轮廓。左菜单当前项=缃色（accent）圆点+加粗（不铺底色，替代旧 primary/10 底）。当前态圆点一律用 token 变量（`bg-accent`），禁止内联 hex。
 - 锚点徽标/血缘当前态：缃色底 + 深字（bg-accent）。
-- 卡片缩略图：1px border + hover 时 primary 描边 + 右上角浮现 ghost 操作（重生成/删除/放大）。
-- 生成中：骨架屏 + 一行 muted 文案（"生成中，约需 30~120 秒…"），可取消。
+- 卡片：1px border；hover=primary 描边 + 浮起 + 阴影 `0 8px 24px rgba(2,8,23,.08)`，150ms ease-out。卡片悬停不再浮现 ghost 三件套（重生成/删除/放大），现行落点：候选卡悬停仅放大镜一项（进灯箱）；删除走左菜单行悬停操作钮；重生成走详情区重生成抽屉。
+- 生成中：骨架屏 + 一行 muted 文案（"生成中，约需 30 秒~3 分钟"），可取消。
 - 空态插画规范（v3 增补帆舟）：居中细线插画 176px、1.5px 线宽、**primary 苍青单色白描**、下留白 24px；题材限**舵轮 / 罗盘 / 锚 / 帆舟**四选一（帆舟=墨航概念图主母题，`BoatMark`，首页项目空态默认用之）+ 一个 primary CTA；标题用 `font-serif`。
 - 品牌标识：页头保留舵轮线稿标（primary）；朱砂「舵」字方印仅出现在设计资产与文档插图；实现层若引入印章元素，一律用 `--seal` token（`bg-seal`/`text-seal`），不得挪用 destructive。
 
